@@ -1,4 +1,5 @@
 import { squadQualityForReputation } from './players';
+import { CATERING_SPEND, defaultFacilities, facilityUpkeepDelta, vipRate } from './stadium';
 import type { Rng } from './rng';
 import type { Accounting, Club, FinanceCategory, FinanceTotals, GameState, Player } from './types';
 import { hash01 } from './world';
@@ -64,25 +65,40 @@ export function tvMonthly(tier: number): number {
 }
 
 /** Příjmy, které klub dostane bez ohledu na sponzory: TV, vstupné a odměna za průměrné umístění. */
+/** Kapacita stadionu na začátku hry: investice do stadionu nemají snižovat běžné komerční příjmy. */
+function baseCapacity(club: Club): number {
+  return club.stadium.originalCapacity ?? club.stadium.capacity;
+}
+
 function baseIncome(club: Club, tier: number): number {
-  const tickets = Math.min(club.stadium.capacity, baseAttendance(club.reputation, tier)) * defaultTicketPrice(tier) * HOME_GAMES_PER_SEASON;
-  return tvMonthly(tier) * 12 + tickets + prizeMoney(tier, 8, 16);
+  const fans = Math.min(baseCapacity(club), baseAttendance(club.reputation, tier));
+  const tickets = fans * defaultTicketPrice(tier) * HOME_GAMES_PER_SEASON;
+  // Catering a VIP při běžném vybavení klubu této velikosti.
+  const f = defaultFacilities(club.reputation, tier);
+  const extras = (fans * CATERING_SPEND[f.catering] + f.vip * vipRate(tier)) * HOME_GAMES_PER_SEASON;
+  return tvMonthly(tier) * 12 + tickets + extras + prizeMoney(tier, 8, 16);
 }
 
 /**
  * Měsíční provoz: zaměstnanci, akademie, stadion, cestování, zdravotní péče. Nejméně tolik,
  * aby běžné příjmy pokryly nejvýš 85 % nákladů (kluby utratí, co dostanou z TV a vstupného).
  */
-export function operatingMonthly(club: Club, tier: number): number {
+function operatingBase(club: Club, tier: number): number {
   const wages = typicalPlayerCosts(club);
-  const own = baseWageBudget(club) * 0.6 + club.stadium.capacity * 25 + 100_000;
+  const own = baseWageBudget(club) * 0.6 + baseCapacity(club) * 25 + 100_000;
   const floor = baseIncome(club, tier) / 0.85 / 12 - wages;
-  return round1000(Math.max(own, floor));
+  return Math.max(own, floor);
+}
+
+/** Provoz včetně údržby rozšířeného stadionu a zázemí nad běžnou úroveň. */
+export function operatingMonthly(club: Club, tier: number): number {
+  const extraSeats = club.stadium.capacity - baseCapacity(club);
+  return round1000(operatingBase(club, tier) + extraSeats * 25 + facilityUpkeepDelta(club, tier));
 }
 
 /** Typické roční náklady klubu (platy hráčů a vedení, provoz). Měřítko pro rozpočty a počáteční hotovost. */
 export function annualCosts(club: Club, tier: number): number {
-  return (typicalPlayerCosts(club) + operatingMonthly(club, tier)) * 12;
+  return (typicalPlayerCosts(club) + operatingBase(club, tier)) * 12;
 }
 
 /** Odměna za konečné umístění (vyplácí se na konci sezóny). */
@@ -109,7 +125,10 @@ export function baseAttendance(reputation: number, tier: number): number {
 export function commercialMonthly(club: Club, tier: number): number {
   const costs = annualCosts(club, tier);
   const rest = costs * 0.88 - baseIncome(club, tier);
-  return round1000(Math.max(costs * 0.1, rest) / 12);
+  // Spokojení fanoušci kupují víc a sponzoři platí víc.
+  const fans = 0.92 + 0.16 * ((club.fanMood ?? 50) / 100);
+  const sponsor = club.sponsorDeal?.factor ?? 1;
+  return round1000((Math.max(costs * 0.1, rest) / 12) * fans * sponsor);
 }
 
 /** Výchozí rozpočet na odstupné: čtvrtina ročního mzdového rozpočtu. */
@@ -118,16 +137,17 @@ export function defaultTransferBudget(club: Club): number {
 }
 
 /** Návštěvnost domácího zápasu. */
-export function matchAttendance(rng: Rng, home: Club, away: Club, tier: number, homeForm: number): number {
+export function matchAttendance(rng: Rng, home: Club, away: Club, tier: number, homeForm: number, capacity = home.stadium.capacity, damaged = false): number {
   const priceFactor = Math.pow(defaultTicketPrice(tier) / Math.max(home.policy.ticketPrice, 1), 0.8);
   const opponentFactor = 1 + (away.reputation - 50) / 200;
   const formFactor = 1 + homeForm * 0.2;
-  const raw = baseAttendance(home.reputation, tier) * priceFactor * opponentFactor * formFactor * rng.normal(1, 0.08);
-  return Math.max(50, Math.min(home.stadium.capacity, Math.round(raw)));
+  const moodFactor = 0.85 + 0.3 * ((home.fanMood ?? 50) / 100);
+  const raw = baseAttendance(home.reputation, tier) * priceFactor * opponentFactor * formFactor * moodFactor * (damaged ? 0.9 : 1) * rng.normal(1, 0.08);
+  return Math.max(50, Math.min(capacity, Math.round(raw)));
 }
 
 export function emptyTotals(): FinanceTotals {
-  return { vstupne: 0, tv: 0, komercni: 0, pohar: 0, platy: 0, vedeni: 0, provoz: 0, prestupy: 0, dane: 0, vklad: 0 };
+  return { vstupne: 0, stadion: 0, tv: 0, komercni: 0, pohar: 0, ostatni: 0, uver: 0, platy: 0, vedeni: 0, provoz: 0, prestupy: 0, investice: 0, dane: 0, vklad: 0 };
 }
 
 export function book(state: GameState, clubId: string, category: FinanceCategory, amount: number, note: string): void {
@@ -151,6 +171,10 @@ export const CATEGORY_LABEL: Record<FinanceCategory, string> = {
   provoz: 'Provoz, zaměstnanci, akademie',
   prestupy: 'Přestupy (odstupné, agenti)',
   pohar: 'Pohár (prémie za postup)',
+  stadion: 'Catering, VIP a stadion',
+  ostatni: 'Mimořádné příjmy a výdaje',
+  investice: 'Investice do stadionu a zázemí',
+  uver: 'Úvěr (čerpání a splátky)',
   dane: 'Daň z příjmů',
   vklad: 'Vklady majitele',
 };
@@ -160,7 +184,7 @@ export const CATEGORY_LABEL: Record<FinanceCategory, string> = {
 export const TAX_RATE = 0.21;
 
 export function emptyAccounting(): Accounting {
-  return { amortization: 0, saleProfit: 0, writeOffs: 0, agentFees: 0 };
+  return { amortization: 0, saleProfit: 0, writeOffs: 0, agentFees: 0, buildingDepreciation: 0, interest: 0 };
 }
 
 export function ownerAccounting(state: GameState): Accounting {
@@ -192,7 +216,9 @@ export function profitAndLoss(totals: FinanceTotals, acc: Accounting = emptyAcco
     { label: CATEGORY_LABEL.vstupne, amount: totals.vstupne },
     { label: CATEGORY_LABEL.tv, amount: totals.tv },
     { label: CATEGORY_LABEL.komercni, amount: totals.komercni },
+    { label: CATEGORY_LABEL.stadion, amount: totals.stadion ?? 0 },
     { label: CATEGORY_LABEL.pohar, amount: totals.pohar },
+    { label: CATEGORY_LABEL.ostatni, amount: totals.ostatni ?? 0 },
     { label: 'Zisk z prodeje hráčů', amount: acc.saleProfit },
   ];
   const costs = [
@@ -202,6 +228,8 @@ export function profitAndLoss(totals: FinanceTotals, acc: Accounting = emptyAcco
     { label: 'Odpisy hráčských registrací', amount: -acc.amortization },
     { label: 'Odpis při uvolnění hráčů', amount: -acc.writeOffs },
     { label: 'Odměny agentům', amount: -acc.agentFees },
+    { label: 'Odpisy staveb a vybavení', amount: -(acc.buildingDepreciation ?? 0) },
+    { label: 'Úroky z úvěrů', amount: -(acc.interest ?? 0) },
   ];
   const beforeTax = [...revenues, ...costs].reduce((a, x) => a + x.amount, 0);
   return { revenues, costs, beforeTax: Math.round(beforeTax) };
@@ -214,8 +242,19 @@ export function balanceSheet(state: GameState) {
     .filter((p) => p.clubId === club.id)
     .reduce((a, p) => a + (p.bookValue ?? 0), 0);
   const cash = Math.max(0, club.finance.balance);
-  const debt = Math.max(0, -club.finance.balance);
-  return { cash, registrations: Math.round(registrations), debt, equity: Math.round(cash + registrations - debt) };
+  const overdraft = Math.max(0, -club.finance.balance);
+  const buildings = (club.finance.assets ?? []).reduce((a, x) => a + x.value, 0);
+  const loans = state.loans.reduce((a, l) => a + l.remaining, 0);
+  const debt = overdraft + loans;
+  return {
+    cash,
+    registrations: Math.round(registrations),
+    buildings: Math.round(buildings),
+    overdraft,
+    loans: Math.round(loans),
+    debt: Math.round(debt),
+    equity: Math.round(cash + registrations + buildings - debt),
+  };
 }
 
 /** Konec sezóny: daň z kladného výsledku po odečtení ztrát z minulých let. */
@@ -232,4 +271,45 @@ export function settleTax(state: GameState): number {
   }
   club.finance.lossCarry = -taxable;
   return 0;
+}
+
+// ---------- Úvěry ----------
+
+export const LOAN_RATE = 0.07;
+export const LOAN_MONTHS = 36;
+
+/** Nabídky banky: podle velikosti klubu, nejvýš jeden úvěr najednou. */
+export function loanOffers(state: GameState): number[] {
+  const club = state.clubs[state.owner.clubId];
+  if (state.loans.length) return [];
+  const yearly = annualCosts(club, 1);
+  return [0.1, 0.25, 0.5].map((k) => Math.round((yearly * k) / 1_000_000) * 1_000_000).filter((v) => v > 0);
+}
+
+export function annuity(principal: number, rate: number, months: number): number {
+  const r = rate / 12;
+  return Math.round((principal * r) / (1 - Math.pow(1 + r, -months)));
+}
+
+export function takeLoan(prev: GameState, amount: number): GameState {
+  if (!loanOffers(prev).includes(amount)) return prev;
+  const state = structuredClone(prev);
+  const payment = annuity(amount, LOAN_RATE, LOAN_MONTHS);
+  state.loans.push({ id: `u${++state.nextId}`, principal: amount, remaining: amount, rate: LOAN_RATE, payment, monthsLeft: LOAN_MONTHS });
+  book(state, state.owner.clubId, 'uver', amount, 'Čerpání úvěru od banky');
+  return state;
+}
+
+/** Měsíční splátka: úrok jde do nákladů, jistina snižuje dluh. */
+export function monthlyLoans(state: GameState): void {
+  const acc = ownerAccounting(state);
+  for (const loan of state.loans) {
+    const interest = Math.round((loan.remaining * loan.rate) / 12);
+    const principal = Math.min(loan.remaining, loan.payment - interest);
+    loan.remaining -= principal;
+    loan.monthsLeft -= 1;
+    acc.interest += interest;
+    book(state, state.owner.clubId, 'uver', -(principal + interest), 'Splátka úvěru');
+  }
+  state.loans = state.loans.filter((l) => l.remaining > 0 && l.monthsLeft > 0);
 }

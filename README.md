@@ -23,7 +23,7 @@ npm run build      # produkční sestavení do složky dist/
 | `app/` | Uživatelské rozhraní (React) |
 | `data/cz-zaklad/` | Datový balíček: soutěže a kluby české pyramidy (1. až 3. liga) |
 
-## Co umí verze 0.5
+## Co umí verze 0.6
 
 - Výběr klubu z 1. až 3. ligy a startovních podmínek (osobní kapitál majitele).
 - Týdenní tahy, celé sezóny se 4 soutěžemi (1. liga, 2. liga, ČFL, MSFL), postupy a sestupy včetně pravidel pro B-týmy.
@@ -47,6 +47,11 @@ npm run build      # produkční sestavení do složky dist/
 - **Soutěže:** nadstavba 1. ligy (skupina o titul, o umístění a o záchranu), baráž o 1. ligu a domácí pohár s prémiemi.
 - **Účetnictví:** výsledovka s odpisy hráčských registrací a ziskem z prodejů, rozvaha, daň z příjmů 21 % s převodem ztrát.
 - **Pohodlí:** tlačítko „Do zápasu“ se souhrnem zápasu, grafy pozice v tabulce a zůstatku klubu.
+- **Stadion a zázemí:** nové tribuny, VIP skyboxy, catering a fanshop, vyhřívaný trávník (licence 1. ligy), tréninkové centrum, akademie, regenerace. Stavby trvají týdny, zapisují se do rozvahy a odepisují se.
+- **Situace k rozhodnutí:** 14 druhů (soustředění, prohřešky hráčů, prémie, sponzoři, protesty fanoušků, pokuty, talenty z akademie, zranění, dotace, nespokojení hráči, trávník, asistent trenéra, výběr generálního partnera) s dopadem na peníze, morálku a důvěru.
+- **Fanoušci a partneři:** nálada fanoušků ovlivňuje návštěvnost a komerční příjmy, smlouva s generálním partnerem (pevná, nebo s bonusy za výhry), příjmy z cateringu a VIP, úvěr od banky.
+- **Přestupy v lize:** ostatní kluby si během oken kupují hráče mezi sebou a podepisují volné hráče.
+- **Kalendář sezóny:** přestupní okna, podzim, zimní pauza, jaro, nadstavba, baráž a pohár na časové ose, aktuální fáze v horní liště.
 - **Smlouvy:** prodlužování, uvolnění hráče, odchody po skončení smlouvy (důležitým hráčům prodlužuje ředitel sám).
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.

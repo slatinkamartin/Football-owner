@@ -15,6 +15,8 @@ import {
 } from '../../engine';
 import { Badge } from '../components';
 import { findFixture } from './MatchDetail';
+import { Decisions } from './Decisions';
+import { SeasonCalendar } from '../SeasonCalendar';
 import { LineChart } from '../chart';
 import { PlayerLink } from '../nav';
 import { money } from '../format';
@@ -23,10 +25,12 @@ type Target = 'prestupy' | 'vedeni' | 'kadr';
 
 export function Overview({
   game,
+  onChange,
   onNavigate,
   onOpenMatch,
 }: {
   game: GameState;
+  onChange: (g: GameState) => void;
   onNavigate: (tab: Target) => void;
   onOpenMatch: (id: string) => void;
 }) {
@@ -44,6 +48,7 @@ export function Overview({
 
   return (
     <div className="grid">
+      <Decisions game={game} onChange={onChange} />
       <section className="card">
         <h2>Další zápas</h2>
         {next ? (
@@ -112,6 +117,8 @@ export function Overview({
       </section>
 
       <ToDo game={game} onNavigate={onNavigate} />
+
+      <SeasonCalendar game={game} />
 
       {game.timeline.length >= 2 && comp && (
         <section className="card wide">

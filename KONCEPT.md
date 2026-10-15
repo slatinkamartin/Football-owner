@@ -306,4 +306,6 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 
 **Verze 0.5 (hotovo):** karty hráčů a klubů s vývojem a kariérou, průběžný vývoj hráčů, forma a morálka, nadstavba 1. ligy, baráž, domácí pohár, výsledovka a rozvaha s odpisy a daní, tlačítko „Do zápasu“ a grafy.
 
-**Další krok:** stadion a zázemí, nebo spolumajitelé.
+**Verze 0.6 (hotovo):** stadion a zázemí, situace k rozhodnutí, nálada fanoušků, generální partner, úvěr, přestupy mezi kluby v lize, kalendář sezóny.
+
+**Další krok:** spolumajitelé (akcionáři, hlasování, valná hromada, dividendy), šedá zóna, média.

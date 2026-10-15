@@ -49,6 +49,8 @@ export interface DataPack {
 export interface Stadium {
   name: string;
   capacity: number;
+  /** Kapacita na začátku hry (měřítko běžných příjmů). */
+  originalCapacity?: number;
 }
 
 export interface Player {
@@ -227,11 +229,15 @@ export type FinanceCategory =
   | 'prestupy'
   | 'vedeni'
   | 'pohar'
+  | 'stadion'
+  | 'ostatni'
+  | 'investice'
+  | 'uver'
   | 'dane'
   | 'vklad';
 
-export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'tv', 'komercni', 'pohar', 'vklad'];
-export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'provoz', 'prestupy', 'dane'];
+export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'tv', 'komercni', 'pohar', 'ostatni', 'uver', 'vklad'];
+export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'provoz', 'prestupy', 'investice', 'dane'];
 
 /** Účetní položky sezóny (jen klub majitele). Na rozdíl od peněz rozkládají cenu hráče do let smlouvy. */
 export interface Accounting {
@@ -243,6 +249,10 @@ export interface Accounting {
   writeOffs: number;
   /** Odměny agentům (náklad, neodepisují se). */
   agentFees: number;
+  /** Odpisy staveb a vybavení. */
+  buildingDepreciation: number;
+  /** Úroky z úvěrů. */
+  interest: number;
 }
 
 export type FinanceTotals = Record<FinanceCategory, number>;
@@ -266,6 +276,8 @@ export interface ClubFinance {
   lastAccounting?: Accounting;
   /** Neuplatněná daňová ztráta z minulých let. */
   lossCarry?: number;
+  /** Stavby a vybavení (jen klub majitele). */
+  assets?: FixedAsset[];
   season: FinanceTotals;
   lastSeason?: FinanceTotals;
   /** Poslední transakce (jen u klubu hráče). */
@@ -294,6 +306,94 @@ export interface Club {
   staff: ClubStaff;
   policy: ClubPolicy;
   finance: ClubFinance;
+  facilities: Facilities;
+  /** Nálada fanoušků 0–100: ovlivňuje návštěvnost a příjmy od sponzorů. */
+  fanMood: number;
+  /** Smlouva s generálním partnerem na aktuální sezónu (jen klub majitele). */
+  sponsorDeal?: SponsorDeal;
+  /** Poškozený trávník do tohoto data (nižší návštěva, víc zranění). */
+  pitchDamagedUntil?: string;
+  /** Kolik ostatní kluby utratily za přestupy v aktuální sezóně. */
+  transferSpent?: number;
+}
+
+// ---------- Stadion a zázemí ----------
+
+export interface Facilities {
+  /** Počet VIP skyboxů. */
+  vip: number;
+  /** Úroveň cateringu a fanshopu 0–3 (útrata diváka na zápase). */
+  catering: number;
+  /** Vyhřívaný trávník (podmínka licence pro 1. ligu). */
+  heating: boolean;
+  /** Tréninkové centrum 1–5: rychlejší vývoj hráčů. */
+  training: number;
+  /** Akademie 1–5: počet a kvalita dorostenců. */
+  academy: number;
+  /** Regenerace a zdravotní péče 1–5: méně a kratší zranění. */
+  medical: number;
+}
+
+export type ProjectKind = 'kapacita' | 'vip' | 'catering' | 'vyhrivani' | 'trenink' | 'akademie' | 'medicina';
+
+export interface Project {
+  id: string;
+  kind: ProjectKind;
+  label: string;
+  cost: number;
+  start: string;
+  end: string;
+  /** Kolik míst / skyboxů přibude, nebo cílová úroveň. */
+  value: number;
+}
+
+/** Dlouhodobý majetek v rozvaze (stavby a vybavení), odepisovaný měsíčně. */
+export interface FixedAsset {
+  label: string;
+  value: number;
+  monthly: number;
+}
+
+export interface SponsorDeal {
+  name: string;
+  /** Násobek běžných komerčních příjmů. */
+  factor: number;
+  /** Bonus za každou ligovou výhru. */
+  winBonus: number;
+  season: number;
+}
+
+export interface Loan {
+  id: string;
+  principal: number;
+  remaining: number;
+  /** Roční úroková sazba. */
+  rate: number;
+  payment: number;
+  monthsLeft: number;
+}
+
+// ---------- Situace k rozhodnutí ----------
+
+export interface EventOption {
+  id: string;
+  label: string;
+  /** Srozumitelný popis důsledků. */
+  hint: string;
+}
+
+export interface GameEvent {
+  id: string;
+  template: string;
+  date: string;
+  /** Do kdy je třeba rozhodnout (jinak se použije výchozí volba). */
+  expires: string;
+  title: string;
+  text: string;
+  options: EventOption[];
+  defaultOption: string;
+  playerId?: string;
+  amount?: number;
 }
 
 export interface MatchResult {
@@ -427,7 +527,7 @@ export interface TimelinePoint {
   points: number;
 }
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 export interface GameState {
   version: typeof SAVE_VERSION;
@@ -445,6 +545,11 @@ export interface GameState {
   competitions: Record<string, Competition>;
   cups: Record<string, Cup>;
   timeline: TimelinePoint[];
+  projects: Project[];
+  events: GameEvent[];
+  /** Kdy naposledy nastala která situace. */
+  eventLog?: Record<string, string>;
+  loans: Loan[];
   /** Kluby mimo modelované soutěže (divize a níže). */
   pool: string[];
   news: NewsItem[];

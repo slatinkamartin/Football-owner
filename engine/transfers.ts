@@ -670,3 +670,85 @@ export function emergencyFill(state: GameState, rng: Rng, when: string): void {
     });
   }
 }
+
+// ---------- Přestupy mezi ostatními kluby ----------
+
+/** Pozice, kde má klub nejslabšího hráče základní sestavy (nebo nedostatek hráčů). */
+function weakestPosition(squad: Player[]): { position: Position; bar: number } {
+  const xi = bestEleven(squad);
+  let best: { position: Position; bar: number; score: number } = { position: 'MF', bar: 0, score: Infinity };
+  for (const pos of Object.keys(SQUAD_SHAPE) as Position[]) {
+    const starters = xi.filter((p) => p.position === pos);
+    const count = squad.filter((p) => p.position === pos).length;
+    const bar = starters.length ? Math.min(...starters.map((p) => p.overall)) : 0;
+    const score = bar - (SQUAD_SHAPE[pos] - count) * 5;
+    if (score < best.score) best = { position: pos, bar, score };
+  }
+  return { position: best.position, bar: best.bar };
+}
+
+/**
+ * Jednou týdně v přestupním okně: ostatní kluby kupují hráče od jiných klubů (nebo volné hráče),
+ * kteří by jim posílili nejslabší místo. Prodávají menší kluby větším, nejlepší hráč odchází jen výjimečně.
+ */
+export function aiDomesticTransfers(state: GameState, rng: Rng): void {
+  if (!transferWindow(state.date)) return;
+  const own = state.owner.clubId;
+  const byClub = new Map<string, Player[]>();
+  for (const p of Object.values(state.players)) {
+    const list = byClub.get(p.clubId);
+    if (list) list.push(p);
+    else byClub.set(p.clubId, [p]);
+  }
+  const clubs = Object.values(state.competitions).flatMap((c) => c.clubIds).filter((id) => id !== own);
+  const keys = keyPlayerIds(state);
+  const deals: string[] = [];
+
+  for (const buyerId of clubs) {
+    if (!rng.chance(0.22)) continue;
+    const buyer = state.clubs[buyerId];
+    const squad = byClub.get(buyerId) ?? [];
+    const { position, bar } = weakestPosition(squad);
+    const budget = buyer.policy.transferBudget * 1.2 - (buyer.transferSpent ?? 0);
+    const candidates = Object.values(state.players).filter((p) => {
+      if (p.position !== position || p.overall < bar + 2 || p.clubId === buyerId || p.clubId === own) return false;
+      if (playerAge(p, state.season) > 31) return false;
+      if (p.clubId === FREE) return true;
+      const seller = state.clubs[p.clubId];
+      if (!seller || seller.reserveOf === buyerId || buyer.reserveOf === p.clubId) return false;
+      if (seller.reputation > buyer.reputation + 3) return false;
+      if (buyer.reserveOf) return false;
+      return !keys.has(p.id) || rng.chance(0.15);
+    });
+    const affordable = candidates
+      .map((p) => ({ p, fee: p.clubId === FREE ? 0 : roundMoney(playerValue(state, p) * (0.95 + rng.next() * 0.35)) }))
+      .filter((x) => x.fee <= budget && x.p.overall - squadQualityForReputation(buyer.reputation) <= 10)
+      .sort((a, b) => b.p.overall - a.p.overall);
+    const pick = affordable[Math.min(affordable.length - 1, rng.int(0, 2))];
+    if (!pick) continue;
+
+    const { p, fee } = pick;
+    const sellerId = p.clubId;
+    const name = playerName(p);
+    executeTransfer(state, p, buyerId, fee, playerWage(p.overall, buyer.reputation), rng.int(2, 4));
+    buyer.transferSpent = (buyer.transferSpent ?? 0) + fee;
+    // Kupující se zbaví nejslabšího hráče na pozici, prodávající si doplní volného hráče.
+    const surplus = (byClub.get(buyerId) ?? []).filter((x) => x.position === position && x.id !== p.id).sort((a, b) => a.overall - b.overall);
+    if ((byClub.get(buyerId)?.length ?? 0) >= 25 && surplus[0]) surplus[0].clubId = FREE;
+    if (sellerId !== FREE) {
+      const replacement = Object.values(state.players)
+        .filter((x) => x.clubId === FREE && x.position === p.position && interest(state, x, sellerId).ok)
+        .sort((a, b) => b.overall - a.overall)[0];
+      if (replacement) executeTransfer(state, replacement, sellerId, 0, playerWage(replacement.overall, state.clubs[sellerId].reputation), 1 + rng.int(0, 1));
+      const sellerList = byClub.get(sellerId);
+      if (sellerList) byClub.set(sellerId, sellerList.filter((x) => x.id !== p.id));
+    }
+    byClub.set(buyerId, [...(byClub.get(buyerId) ?? []), p]);
+    if (fee >= 3_000_000 || (sellerId !== FREE && tierOf(state, buyerId) === 1)) {
+      deals.push(`${name}: ${clubLabel(state, sellerId)} → ${buyer.shortName}${fee ? ` za ${(fee / 1_000_000).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč` : ' zadarmo'}`);
+    }
+  }
+  if (deals.length) {
+    addNews(state, { kind: 'info', title: `Přestupy v lize: ${plural(deals.length, 'nový přestup', 'nové přestupy', 'nových přestupů')}`, text: deals.join(' · ') });
+  }
+}

@@ -29,6 +29,10 @@ export interface MatchSide {
   bonus?: number;
   style?: CoachStyle;
   youthFocus?: boolean;
+  /** Násobek rizika zranění (zázemí, stav trávníku). */
+  injuryRisk?: number;
+  /** Násobek délky zranění (kvalita regenerace a medicíny). */
+  recovery?: number;
 }
 
 export interface MatchOptions {
@@ -269,11 +273,12 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
       }
 
       // Zranění
-      if (rng.chance(0.11 / 90)) {
+      if (rng.chance((0.11 / 90) * (s.side.injuryRisk ?? 1))) {
         const hurt = rng.pick(s.onPitch);
         if (hurt) {
           const r = rng.next();
-          const days = r < 0.6 ? rng.int(5, 14) : r < 0.9 ? rng.int(15, 45) : rng.int(50, 120);
+          const baseDays = r < 0.6 ? rng.int(5, 14) : r < 0.9 ? rng.int(15, 45) : rng.int(50, 120);
+          const days = Math.max(3, Math.round(baseDays * (s.side.recovery ?? 1)));
           hurt.injuredUntil = addDays(date, days);
           hurt.injury = days <= 14 ? 'lehké zranění' : days <= 45 ? 'svalové zranění' : 'vážné zranění';
           events.push({ minute: Math.min(minute, 90), type: 'zraneni', clubId: s.side.id, playerId: hurt.id, note: `${hurt.injury}, asi ${Math.round(days / 7)} týd.` });

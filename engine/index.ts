@@ -11,3 +11,7 @@ export * from './world';
 export * from './competitions';
 export * from './development';
 export * from './match';
+export * from './events';
+export * from './facilities';
+export * from './phases';
+export * from './stadium';

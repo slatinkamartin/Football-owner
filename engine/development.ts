@@ -39,6 +39,8 @@ export function monthlyDevelopment(state: GameState, rng: Rng): void {
       const share = Math.min(1, p.minutes / (months * 300));
       yearly *= 0.6 + 0.8 * share;
       if (boosted.has(p.clubId)) yearly *= 1.2;
+      // Tréninkové centrum: úroveň 2 je běžná, každá úroveň navíc přidá 10 %.
+      yearly *= 0.8 + 0.1 * (state.clubs[p.clubId]?.facilities?.training ?? 2);
       if (p.overall >= p.potential) yearly = 0;
     }
     if (yearly !== 0 && rng.chance(Math.min(1, Math.abs(yearly) / 12))) {

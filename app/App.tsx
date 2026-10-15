@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { advanceToNextMatch, advanceWeek, competitionOf, formatDate, seasonLabel, startNegotiation, type GameState } from '../engine';
+import { advanceToNextMatch, advanceWeek, competitionOf, currentPhase, formatDate, seasonLabel, startNegotiation, type GameState } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance } from './screens/Finance';
@@ -13,10 +13,11 @@ import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
 import { People } from './screens/People';
 import { Squad } from './screens/Squad';
+import { Stadium } from './screens/Stadium';
 import { Transfers } from './screens/Transfers';
 import { Tables } from './screens/Tables';
 
-type Tab = 'prehled' | 'tabulky' | 'zapasy' | 'kadr' | 'prestupy' | 'vedeni' | 'finance' | 'hra';
+type Tab = 'prehled' | 'tabulky' | 'zapasy' | 'kadr' | 'prestupy' | 'vedeni' | 'stadion' | 'finance' | 'hra';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'prehled', label: 'Přehled' },
@@ -25,6 +26,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'kadr', label: 'Kádr' },
   { id: 'prestupy', label: 'Přestupy' },
   { id: 'vedeni', label: 'Vedení' },
+  { id: 'stadion', label: 'Stadion' },
   { id: 'finance', label: 'Finance' },
   { id: 'hra', label: 'Hra' },
 ];
@@ -78,6 +80,7 @@ export function App() {
 
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
+  const phase = currentPhase(game);
 
   return (
     <NavContext.Provider value={nav}>
@@ -90,6 +93,14 @@ export function App() {
               <div className="topbar-name">{club.name}</div>
               <div className="topbar-sub">
                 {formatDate(game.date, true)} · {comp?.name ?? 'mimo soutěž'} {seasonLabel(game.season)}
+              </div>
+              <div className={`phase-chip phase-${phase.tone}`}>
+                <strong>{phase.label}</strong> {phase.detail}
+                {game.events.length > 0 && (
+                  <button className="linkbtn events-link" onClick={() => setTab('prehled')}>
+                    · rozhodnutí: {game.events.length}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -128,12 +139,13 @@ export function App() {
       </div>
 
       <main>
-        {tab === 'prehled' && <Overview game={game} onNavigate={(t) => setTab(t)} onOpenMatch={setOpenMatch} />}
+        {tab === 'prehled' && <Overview game={game} onChange={update} onNavigate={(t) => setTab(t)} onOpenMatch={setOpenMatch} />}
         {tab === 'tabulky' && <Tables game={game} />}
         {tab === 'zapasy' && <Matches game={game} onOpenMatch={setOpenMatch} />}
         {tab === 'kadr' && <Squad game={game} onChange={update} />}
         {tab === 'prestupy' && <Transfers game={game} onChange={update} />}
         {tab === 'vedeni' && <People game={game} onChange={update} />}
+        {tab === 'stadion' && <Stadium game={game} onChange={update} />}
         {tab === 'finance' && <Finance game={game} onChange={update} />}
         {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
       </main>

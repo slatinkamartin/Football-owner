@@ -7,6 +7,11 @@ import {
   EXPENSE_CATEGORIES,
   formatShortDate,
   INCOME_CATEGORIES,
+  annuity,
+  loanOffers,
+  LOAN_MONTHS,
+  LOAN_RATE,
+  takeLoan,
   balanceSheet,
   profitAndLoss,
   TAX_RATE,
@@ -124,14 +129,14 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
         />
       </section>
 
-      <ProfitLoss game={game} />
+      <ProfitLoss game={game} onChange={onChange} />
 
       <Movements game={game} />
     </div>
   );
 }
 
-function ProfitLoss({ game }: { game: GameState }) {
+function ProfitLoss({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
   const club = game.clubs[game.owner.clubId];
   const f = club.finance;
   const now = profitAndLoss(f.season, f.accounting);
@@ -181,14 +186,53 @@ function ProfitLoss({ game }: { game: GameState }) {
             <tr className="subhead"><td colSpan={2}>Aktiva</td></tr>
             <tr><td>Peníze na účtu</td><td className="num">{money(bs.cash)}</td></tr>
             <tr><td className="wrap">Hráčské registrace (neodepsaná hodnota)</td><td className="num">{money(bs.registrations)}</td></tr>
+            <tr><td className="wrap">Stavby a vybavení (neodepsaná hodnota)</td><td className="num">{money(bs.buildings)}</td></tr>
             <tr className="subhead"><td colSpan={2}>Pasiva</td></tr>
-            <tr><td>Závazky (záporný zůstatek)</td><td className="num">{money(bs.debt)}</td></tr>
+            <tr><td>Úvěry</td><td className="num">{money(bs.loans)}</td></tr>
+            <tr><td>Záporný zůstatek účtu</td><td className="num">{money(bs.overdraft)}</td></tr>
             <tr className="total"><td>Vlastní kapitál</td><td className={`num ${bs.equity < 0 ? 'neg' : ''}`}>{money(bs.equity)}</td></tr>
           </tbody>
         </table>
-        <p className="muted small">Stadion a ostatní majetek zatím v rozvaze nejsou, přibudou se stavbou stadionu.</p>
+        <p className="muted small">Stavby se zapisují do majetku a odepisují 10–30 let podle druhu.</p>
       </section>
+
+      <Loans game={game} onTake={(amount) => onChange(takeLoan(game, amount))} />
     </>
+  );
+}
+
+function Loans({ game, onTake }: { game: GameState; onTake: (amount: number) => void }) {
+  const offers = loanOffers(game);
+  return (
+    <section className="card">
+      <h2>Úvěr od banky</h2>
+      {game.loans.map((l) => (
+        <dl key={l.id} className="kv">
+          <dt>Zbývá splatit</dt>
+          <dd>{money(l.remaining)}</dd>
+          <dt>Měsíční splátka</dt>
+          <dd>{money(l.payment)}</dd>
+          <dt>Zbývá měsíců</dt>
+          <dd>{l.monthsLeft}</dd>
+          <dt>Úrok</dt>
+          <dd>{Math.round(l.rate * 100)} % ročně</dd>
+        </dl>
+      ))}
+      {offers.length > 0 && (
+        <>
+          <p className="muted small">
+            Banka půjčí na {LOAN_MONTHS / 12} roky s úrokem {Math.round(LOAN_RATE * 100)} % ročně. Splácí se každý měsíc, úroky jsou náklad ve výsledovce. Najednou lze mít jeden úvěr.
+          </p>
+          <div className="buttons">
+            {offers.map((amount) => (
+              <button key={amount} onClick={() => onTake(amount)}>
+                Půjčit {money(amount)} <span className="muted small">(splátka {money(annuity(amount, LOAN_RATE, LOAN_MONTHS))})</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

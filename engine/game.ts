@@ -14,8 +14,12 @@ import {
   tvMonthly,
   emptyAccounting,
   monthlyAmortization,
+  monthlyLoans,
   settleTax,
 } from './finance';
+import { completeProjects, effectiveCapacity, licenseCheck, monthlyBuildingDepreciation } from './facilities';
+import { defaultFacilities, matchdayExtras } from './stadium';
+import { expireEvents, maybeCreateEvent } from './events';
 import { afterMatchday, allFixtures, baseSeasonDone, finalStandings, setupCup, startGroups, startPlayoffs } from './competitions';
 import { monthlyDevelopment, moraleNews, recordCareers, recordTimeline, recordTrend } from './development';
 import { doubleRoundRobin } from './fixtures';
@@ -43,7 +47,7 @@ import {
   staffLevelForReputation,
 } from './staff';
 import { computeTable, formScore } from './standings';
-import { aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
+import { aiDomesticTransfers, aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
 import { SAVE_VERSION, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
 import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
 
@@ -74,9 +78,11 @@ function createClub(def: ClubDef, tier: number): Club {
     city: def.city,
     region: def.region,
     reputation: def.reputation,
-    stadium: { ...def.stadium },
+    stadium: { ...def.stadium, originalCapacity: def.stadium.capacity },
     colors: def.colors,
     reserveOf: def.reserveOf,
+    facilities: defaultFacilities(def.reputation, tier),
+    fanMood: 50,
     staff: { coachId: '', directorId: '' },
     policy: { ticketPrice: defaultTicketPrice(tier), wageMultiplier: 1, transferBudget: 0 },
     finance: { balance: 0, monthsNegative: 0, season: emptyTotals(), transactions: [] },
@@ -127,6 +133,9 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
     staff: {},
     cups: {},
     timeline: [],
+    projects: [],
+    events: [],
+    loans: [],
     market: { proposals: [], offers: [], listed: [], spent: 0, earned: 0, history: [] },
     competitions: {},
     pool: [],
@@ -164,6 +173,8 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
 
   setupSeason(state, rng, false);
   state.owner.seasonGoal = realisticGoal(state, own.id);
+  // Hned na začátku: výběr generálního partnera.
+  maybeCreateEvent(state, rng);
   addNews(state, {
     kind: 'info',
     title: `Vítejte v ${own.name}`,
@@ -191,6 +202,7 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
   }
   state.market.spent = 0;
   state.market.earned = 0;
+  for (const club of Object.values(state.clubs)) club.transferSpent = 0;
   if (summerWindow) {
     runSummerWindow(state, rng);
     refreshFreeAgents(state, rng);
@@ -394,6 +406,7 @@ function endSeason(state: GameState, rng: Rng): void {
     m.to.clubIds.push(m.clubId);
     const club = state.clubs[m.clubId];
     club.reputation = Math.max(1, Math.min(99, club.reputation + (m.up ? 5 : -5)));
+    club.fanMood = Math.max(0, Math.min(100, club.fanMood + (m.up ? 15 : -15)));
     addNews(state, {
       kind: m.clubId === state.owner.clubId ? 'sezona' : 'info',
       title: `${club.name} ${m.up ? 'postupuje do' : 'sestupuje do'} soutěže ${m.to.name}`,
@@ -476,11 +489,15 @@ function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
   // Dorost: každý klub dostane dva mladé hráče z akademie.
   for (const comp of Object.values(state.competitions)) {
     for (const clubId of comp.clubIds) {
-      const quality = squadQualityForReputation(state.clubs[clubId].reputation) - 4;
-      for (let i = 0; i < 2; i++) {
+      // Akademie: lepší akademie dá víc a lepších dorostenců.
+      const academy = state.clubs[clubId].facilities?.academy ?? 3;
+      const quality = squadQualityForReputation(state.clubs[clubId].reputation) - 4 + (academy - 3) * 2;
+      const count = academy >= 4 ? 3 : academy >= 2 ? 2 : 1;
+      for (let i = 0; i < count; i++) {
         const position = rng.pick(['GK', 'DF', 'DF', 'MF', 'MF', 'FW'] as Position[]);
         const p = generatePlayer(rng, state, { clubId, position, season: nextSeason, quality, age: rng.int(17, 18) });
         p.wage = 8_000;
+        p.potential = Math.min(95, p.potential + Math.max(0, academy - 3) * 2);
         state.players[p.id] = p;
         if (clubId === state.owner.clubId) {
           addNews(state, { kind: 'info', title: `Z akademie přichází ${p.firstName} ${p.lastName} (${p.overall}, potenciál ${p.potential})` });
@@ -491,6 +508,12 @@ function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
 }
 
 // ---------- Průběh dne ----------
+
+/** Zázemí ovlivňuje zranění: lepší medicína = méně a kratší zranění, poškozený trávník = víc zranění. */
+function medicalFactors(club: Club, damaged: boolean): { injuryRisk: number; recovery: number } {
+  const m = club.facilities?.medical ?? 3;
+  return { injuryRisk: (1.25 - 0.08 * m) * (damaged ? 1.3 : 1), recovery: 1.2 - 0.07 * m };
+}
 
 function playMatchesOn(state: GameState, rng: Rng): void {
   const today = allFixtures(state).filter((x) => x.fixture.date === state.date && !x.fixture.result);
@@ -504,23 +527,32 @@ function playMatchesOn(state: GameState, rng: Rng): void {
     const away = state.clubs[f.awayId];
     if (comp && !tables.has(comp.id)) tables.set(comp.id, computeTable(comp, state));
     const form = comp ? formScore(tables.get(comp.id)!.find((r) => r.clubId === home.id)?.form ?? []) : 0;
-    const attendance = matchAttendance(rng, home, away, tier, form);
+    const damaged = !!home.pitchDamagedUntil && home.pitchDamagedUntil >= state.date;
+    const attendance = matchAttendance(rng, home, away, tier, form, effectiveCapacity(state, home), damaged);
     const homeCoach = coachOf(state, home.id);
     const awayCoach = coachOf(state, away.id);
     const involvesOwner = f.homeId === ownId || f.awayId === ownId;
     f.result = simulateMatch(
       rng,
-      { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus },
-      { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus },
+      { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus, ...medicalFactors(home, damaged) },
+      { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus, ...medicalFactors(away, false) },
       attendance,
       { date: state.date, season: state.season, detail: comp ? comp.id === ownCompId : involvesOwner },
     );
     book(state, home.id, 'vstupne', attendance * home.policy.ticketPrice, `Vstupné: ${home.shortName} – ${away.shortName}`);
+    book(state, home.id, 'stadion', matchdayExtras(home, attendance, tier), `Catering a VIP: ${home.shortName} – ${away.shortName}`);
     if (comp) {
       const hp = f.result.homeGoals > f.result.awayGoals ? 3 : f.result.homeGoals === f.result.awayGoals ? 1 : 0;
       const ap = f.result.awayGoals > f.result.homeGoals ? 3 : f.result.homeGoals === f.result.awayGoals ? 1 : 0;
       if (hp) book(state, home.id, 'platy', -hp * bonusPerPoint(home), `Prémie za ${hp === 3 ? 'výhru' : 'remízu'}: ${home.shortName} – ${away.shortName}`);
       if (ap) book(state, away.id, 'platy', -ap * bonusPerPoint(away), `Prémie za ${ap === 3 ? 'výhru' : 'remízu'}: ${home.shortName} – ${away.shortName}`);
+      // Nálada fanoušků podle výsledku, bonus generálního partnera za výhru.
+      for (const [club, pts] of [[home, hp], [away, ap]] as const) {
+        club.fanMood = Math.max(0, Math.min(100, club.fanMood + (pts === 3 ? 1.5 : pts === 0 ? -1.5 : 0)));
+        if (pts === 3 && club.sponsorDeal?.winBonus && club.sponsorDeal.season === state.season) {
+          book(state, club.id, 'komercni', club.sponsorDeal.winBonus, 'Bonus generálního partnera za výhru');
+        }
+      }
     }
     if (!involvesOwner) continue;
 
@@ -576,6 +608,14 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   state.owner.wallet += DIFFICULTY[state.owner.difficulty].monthlyIncome;
   monthlyDevelopment(state, rng);
   monthlyAmortization(state);
+  monthlyBuildingDepreciation(state);
+  monthlyLoans(state);
+  licenseCheck(state);
+  // Fanoušci: drahé vstupenky je štvou, jinak se nálada pomalu vrací k normálu.
+  for (const club of Object.values(state.clubs)) {
+    const ratio = club.policy.ticketPrice / defaultTicketPrice(tierOf(state, club.id));
+    club.fanMood = Math.max(0, Math.min(100, club.fanMood + (50 - club.fanMood) * 0.05 - Math.max(0, ratio - 1.1) * 8));
+  }
   recordTrend(state);
   moraleNews(state);
   const ownFinance = state.clubs[state.owner.clubId].finance;
@@ -616,6 +656,31 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   }
 }
 
+/** Zprávy o fázích sezóny klubu majitele: začátek ligy, zimní pauza, jaro, konec základní části. */
+function phaseNews(state: GameState): void {
+  const comp = competitionOf(state, state.owner.clubId);
+  if (!comp?.fixtures.length) return;
+  const dates = [...new Set(comp.fixtures.map((f) => f.date))].sort();
+  const autumn = dates.filter((d) => d < `${state.season + 1}-01-01`);
+  const spring = dates.filter((d) => d >= `${state.season + 1}-01-01`);
+  const fmt = (d: string) => d.split('-').slice(1).reverse().map(Number).join('. ') + '.';
+  if (autumn.length && state.date === addDays(autumn[0], -7)) {
+    addNews(state, { kind: 'sezona', title: `${comp.name} začíná za týden (${fmt(autumn[0])})` });
+  }
+  if (autumn.length && state.date === addDays(autumn[autumn.length - 1], 1)) {
+    addNews(state, { kind: 'sezona', title: 'Konec podzimní části', text: spring.length ? `Zimní pauza. Jaro začíná ${fmt(spring[0])}, zimní přestupní okno se otevře 8. 1.` : undefined });
+  }
+  if (spring.length && state.date === addDays(spring[0], -7)) {
+    addNews(state, { kind: 'sezona', title: `Jarní část začíná za týden (${fmt(spring[0])})` });
+  }
+  if (dates.length && state.date === addDays(dates[dates.length - 1], 1) && !comp.reservedDates) {
+    addNews(state, { kind: 'sezona', title: `${comp.name}: sezóna dohrána` });
+  }
+  if (state.date.slice(5) === '06-24') addNews(state, { kind: 'sezona', title: 'Za týden se otevře letní přestupní okno (1. 7.)' });
+  if (state.date.slice(5) === '08-24') addNews(state, { kind: 'sezona', title: 'Letní přestupní okno se zavře za týden (31. 8.)' });
+  if (state.date.slice(5) === '02-07') addNews(state, { kind: 'sezona', title: 'Zimní přestupní okno se zavře za týden (14. 2.)' });
+}
+
 function processDay(state: GameState, rng: Rng): void {
   const md = monthDay(state.date);
   // Kondice se každý den obnovuje.
@@ -632,6 +697,13 @@ function processDay(state: GameState, rng: Rng): void {
     emergencyFill(state, rng, 'před začátkem sezóny');
     addNews(state, { kind: 'sezona', title: `Začíná sezóna ${seasonLabel(state.season)}`, text: 'Přestupní okno je otevřené do 31. 8. Nezapomeňte stanovit cíl sezóny.' });
   }
+  completeProjects(state);
+  expireEvents(state);
+  if (dayOfWeek(state.date) === 1) {
+    maybeCreateEvent(state, rng);
+    aiDomesticTransfers(state, rng);
+  }
+  phaseNews(state);
   const window = transferWindow(state.date);
   if (md === '01-08') addNews(state, { kind: 'info', title: 'Otevřelo se zimní přestupní okno (do 14. 2.)' });
   if (window && md !== SEASON_START && (md.endsWith('-01') || md.endsWith('-15') || md === '01-08')) generateProposals(state);
@@ -723,7 +795,7 @@ const PACK_RULES: { id: string; rules: Partial<Competition> }[] = [
 
 export function migrateSave(saved: { version: number } & Record<string, unknown>): GameState | null {
   if (saved.version === SAVE_VERSION) return saved as unknown as GameState;
-  if (saved.version < 2 || saved.version > 4) return null;
+  if (saved.version < 2 || saved.version > 5) return null;
   const state = structuredClone(saved) as unknown as GameState;
   // Verze 5: forma a morálka, kariéra hráčů, pohár, baráž, nadstavba, účetnictví.
   for (const p of Object.values(state.players)) {
@@ -739,6 +811,31 @@ export function migrateSave(saved: { version: number } & Record<string, unknown>
   for (const def of PACK_RULES) {
     const comp = state.competitions[def.id];
     if (comp) Object.assign(comp, def.rules);
+  }
+  // Verze 6: stadion a zázemí, fanoušci, situace, úvěry.
+  state.projects ??= [];
+  state.events ??= [];
+  state.loans ??= [];
+  for (const club of Object.values(state.clubs)) {
+    club.facilities ??= defaultFacilities(club.reputation, tierOf(state, club.id));
+    club.fanMood ??= 50;
+    club.stadium.originalCapacity ??= club.stadium.capacity;
+  }
+  const acc = state.clubs[state.owner.clubId].finance.accounting;
+  if (acc) {
+    acc.buildingDepreciation ??= 0;
+    acc.interest ??= 0;
+  }
+  for (const club of Object.values(state.clubs)) {
+    for (const totals of [club.finance.season, club.finance.lastSeason]) {
+      if (!totals) continue;
+      for (const k of ['stadion', 'ostatni', 'investice', 'uver'] as const) totals[k] ??= 0;
+    }
+  }
+  if (saved.version === 5) {
+    state.version = SAVE_VERSION;
+    addNews(state, { kind: 'info', title: 'Nová verze hry', text: 'Přibyl stadion a zázemí, situace k rozhodnutí, nálada fanoušků, úvěry, přestupy mezi kluby v lize a kalendář sezóny.' });
+    return state;
   }
   if (saved.version === 4) {
     state.version = SAVE_VERSION;
