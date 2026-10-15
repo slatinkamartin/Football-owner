@@ -54,9 +54,31 @@ input {
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--card);
   min-width: 0;
 }
+textarea {
+  font: 13px ui-monospace, Menlo, Consolas, monospace;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  resize: vertical;
+  margin-bottom: 8px;
+}
+.button-like {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+.button-like:hover { border-color: var(--accent); }
+button:focus-visible, .button-like:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ok { color: var(--pos); margin-top: 10px; }
+.confirm { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 8px; background: var(--down); }
 input:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
 input[type='range'] { width: 100%; padding: 0; accent-color: var(--accent); }
 
@@ -76,12 +98,18 @@ td.wrap { white-space: normal; }
 
 .loading { padding: 40px; text-align: center; color: var(--muted); }
 
-.app { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; }
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-block: 0 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
 
 /* Horní lišta */
 .sticky-head {
   position: sticky;
-  top: 0;
+  top: env(safe-area-inset-top, 0px);
   z-index: 5;
   background: var(--bg);
   margin-bottom: 16px;

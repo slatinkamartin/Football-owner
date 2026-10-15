@@ -28,18 +28,17 @@ export async function deleteGame(): Promise<void> {
   }
 }
 
-export function exportGame(state: GameState): void {
-  const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `majitel-${state.clubs[state.owner.clubId].shortName}-${state.date}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+export function serializeGame(state: GameState): string {
+  return JSON.stringify(state);
 }
 
-export async function importGame(file: File): Promise<GameState> {
-  const data = JSON.parse(await file.text()) as GameState;
-  if (data?.version !== 1 || !data.clubs || !data.owner) throw new Error('Soubor není uložená hra Majitele.');
+export function parseGame(text: string): GameState {
+  let data: GameState;
+  try {
+    data = JSON.parse(text) as GameState;
+  } catch {
+    throw new Error('Záloha není platný text uložené hry. Zkopírujte ji znovu celou.');
+  }
+  if (data?.version !== 1 || !data.clubs || !data.owner) throw new Error('Tohle není uložená hra Majitele.');
   return data;
 }
