@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { competitionOf, computeTable, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
+import { averageRating, competitionOf, computeTable, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
 import { Chips, DataTable, useStoredState } from '../table';
 
 export function Tables({ game }: { game: GameState }) {
@@ -99,9 +99,22 @@ export function Tables({ game }: { game: GameState }) {
             { key: 'club', label: 'Klub', value: (p) => game.clubs[p.clubId].shortName, className: () => 'muted' },
             { key: 'pos', label: 'Poz.', value: (p) => ['GK', 'DF', 'MF', 'FW'].indexOf(p.position), render: (p) => POSITION_SHORT[p.position], className: () => 'muted' },
             { key: 'age', label: 'Věk', num: true, hideSm: true, value: (p) => playerAge(p, game.season) },
-            { key: 'apps', label: 'Zápasy', num: true, value: (p) => p.apps },
-            { key: 'goals', label: 'Góly', num: true, value: (p) => p.goals, render: (p) => <strong>{p.goals}</strong> },
-            { key: 'gpm', label: 'Góly/záp.', num: true, hideSm: true, value: (p) => (p.apps ? p.goals / p.apps : 0), render: (p) => (p.apps ? (p.goals / p.apps).toFixed(2) : '–') },
+            { key: 'apps', label: 'Záp.', num: true, value: (p) => p.apps },
+            { key: 'starts', label: 'Start', num: true, hideSm: true, title: 'Zápasy v základní sestavě', value: (p) => p.starts },
+            { key: 'minutes', label: 'Min.', num: true, hideSm: true, value: (p) => p.minutes },
+            { key: 'goals', label: 'G', num: true, title: 'Góly', value: (p) => p.goals, render: (p) => <strong>{p.goals}</strong> },
+            { key: 'assists', label: 'A', num: true, title: 'Asistence', value: (p) => p.assists },
+            { key: 'points', label: 'G+A', num: true, hideSm: true, value: (p) => p.goals + p.assists },
+            { key: 'yellows', label: 'ŽK', num: true, hideSm: true, value: (p) => p.yellows },
+            { key: 'reds', label: 'ČK', num: true, hideSm: true, value: (p) => p.reds },
+            {
+              key: 'avg',
+              label: 'Ø zn.',
+              num: true,
+              title: 'Průměrná známka (aspoň 3 hodnocené zápasy)',
+              value: (p) => (p.ratingCount >= 3 ? averageRating(p)! : 0),
+              render: (p) => (p.ratingCount >= 3 ? averageRating(p)!.toFixed(2) : '–'),
+            },
           ]}
         />
       </section>

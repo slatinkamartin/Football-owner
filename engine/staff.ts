@@ -81,18 +81,6 @@ export function coachBonus(coach: Staff | undefined): number {
   return (coach.ability - 50) / 8 - (coach.youthFocus ? 0.5 : 0);
 }
 
-/** Násobky vstřelených a obdržených gólů podle stylu trenéra. */
-export function styleFactors(coach: Staff | undefined): [number, number] {
-  switch (coach?.style) {
-    case 'utocny':
-      return [1.12, 1.08];
-    case 'defenzivni':
-      return [0.88, 0.9];
-    default:
-      return [1, 1];
-  }
-}
-
 export function clubStrength(state: GameState, clubId: string, squads = playersByClub(state)): number {
   return teamStrength(squads.get(clubId) ?? []) + coachBonus(coachOf(state, clubId));
 }

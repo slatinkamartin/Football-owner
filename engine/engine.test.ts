@@ -82,6 +82,8 @@ describe('simulace zápasu', () => {
     let wins = 0;
     let losses = 0;
     for (let i = 0; i < 400; i++) {
+      // Mezi zápasy hráči regenerují a vyléčí se (v sezóně se o to stará kalendář).
+      for (const p of [...strong, ...weak]) Object.assign(p, { fitness: 100, injuredUntil: undefined, suspension: 0 });
       const r = simulateMatch(rng, { id: 'a', players: strong }, { id: 'b', players: weak }, 0);
       if (r.homeGoals > r.awayGoals) wins++;
       if (r.homeGoals < r.awayGoals) losses++;

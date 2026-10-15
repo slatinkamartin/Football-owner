@@ -302,4 +302,6 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 
 **Verze 0.3 (hotovo):** ekonomika kalibrovaná podle české ligy (hodnoty, platy, prémie, odměny za umístění, strukturální ztráta), zahraniční kupci, řazení a filtrování všech tabulek.
 
-**Další krok:** zápasový engine se střelami a xG, sestavy a rotace, zranění, karty, střídání a náhled zápasu.
+**Verze 0.4 (hotovo):** zápasový engine se střelami a xG, sestavy a rotace, kondice, zranění, karty a tresty, střídání, známky hráčů a náhled zápasu.
+
+**Další krok:** hloubka hráčů a soutěží (forma a morálka, detail hráče a soupeře, nadstavba, baráž a pohár), potom stadion nebo spolumajitelé.

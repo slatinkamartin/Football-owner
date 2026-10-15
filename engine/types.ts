@@ -61,8 +61,24 @@ export interface Player {
   wage: number;
   /** Rok, kdy smlouva končí (30. 6.). */
   contractUntil: number;
+  /** Statistiky v aktuální sezóně. */
   goals: number;
   apps: number;
+  starts: number;
+  minutes: number;
+  assists: number;
+  yellows: number;
+  reds: number;
+  /** Součet a počet známek (průměr = ratingSum / ratingCount). */
+  ratingSum: number;
+  ratingCount: number;
+  /** Kondice 0–100. Po zápase klesá, každý den se obnovuje. */
+  fitness: number;
+  /** Zraněný do tohoto data (včetně). */
+  injuredUntil?: string;
+  injury?: string;
+  /** Počet zápasů klubu, které hráč ještě nesmí hrát kvůli kartám. */
+  suspension: number;
 }
 
 // ---------- Lidé ----------
@@ -218,7 +234,55 @@ export interface MatchResult {
   homeGoals: number;
   awayGoals: number;
   attendance: number;
-  scorers: { playerId: string; clubId: string; minute: number }[];
+  scorers: { playerId: string; clubId: string; minute: number; assistId?: string; penalty?: boolean }[];
+  /** Podrobnosti (sestavy, statistiky, události). Ukládají se jen pro soutěž klubu majitele. */
+  detail?: MatchDetail;
+}
+
+export type MatchEventType = 'gol' | 'zluta' | 'cervena' | 'druha-zluta' | 'stridani' | 'zraneni';
+
+export interface MatchEvent {
+  minute: number;
+  type: MatchEventType;
+  clubId: string;
+  /** Hráč, kterého se událost týká (střelec, potrestaný, střídaný). */
+  playerId: string;
+  /** Asistence u gólu, nebo hráč, který přišel na hřiště. */
+  otherId?: string;
+  note?: string;
+}
+
+export interface MatchPlayerLine {
+  id: string;
+  name: string;
+  position: Position;
+  minutes: number;
+  rating?: number;
+  started: boolean;
+}
+
+export interface TeamMatchStats {
+  formation: string;
+  lineup: MatchPlayerLine[];
+  bench: MatchPlayerLine[];
+  xg: number;
+  shots: number;
+  onTarget: number;
+  possession: number;
+  corners: number;
+  fouls: number;
+  offsides: number;
+  yellows: number;
+  reds: number;
+  saves: number;
+}
+
+export interface MatchDetail {
+  home: TeamMatchStats;
+  away: TeamMatchStats;
+  events: MatchEvent[];
+  /** Hráč zápasu. */
+  potm?: string;
 }
 
 export interface Fixture {
@@ -254,6 +318,8 @@ export interface NewsItem {
   kind: 'info' | 'vysledek' | 'varovani' | 'sezona';
   title: string;
   text?: string;
+  /** Zápas, ke kterému se zpráva vztahuje (otevře náhled). */
+  fixtureId?: string;
 }
 
 export interface SeasonRecord {
@@ -262,7 +328,7 @@ export interface SeasonRecord {
   ownerClub: { competitionId: string; position: number; points: number };
 }
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface GameState {
   version: typeof SAVE_VERSION;

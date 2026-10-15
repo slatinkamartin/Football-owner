@@ -4,6 +4,8 @@ import {
   playerValue,
   playerAge,
   playerName,
+  averageRating,
+  formatShortDate,
   POSITION_LABEL,
   POSITION_SHORT,
   releaseCost,
@@ -27,6 +29,7 @@ const ORDER: Position[] = ['GK', 'DF', 'MF', 'FW'];
 type Props = { game: GameState; onChange: (g: GameState) => void };
 
 export function Squad({ game, onChange }: Props) {
+  const isInjured = (p: Player) => !!p.injuredUntil && p.injuredUntil >= game.date;
   const [open, setOpen] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const apply = (r: ActionResult) => {
@@ -42,12 +45,13 @@ export function Squad({ game, onChange }: Props) {
   const value = squad.reduce((s, p) => s + playerValue(game, p), 0);
   const expiring = squad.filter((p) => contractExpiring(game, p)).length;
   const selected = open ? squad.find((p) => p.id === open) : undefined;
-  const [filter, setFilter] = useStoredState('filtr:kadr', { position: '' as Position | '', expiring: false, listed: false, text: '' });
+  const [filter, setFilter] = useStoredState('filtr:kadr', { position: '' as Position | '', expiring: false, listed: false, unavailable: false, text: '' });
   const rows = squad.filter(
     (p) =>
       (!filter.position || p.position === filter.position) &&
       (!filter.expiring || contractExpiring(game, p)) &&
       (!filter.listed || game.market.listed.includes(p.id)) &&
+      (!filter.unavailable || isInjured(p) || p.suspension > 0) &&
       (!filter.text || playerName(p).toLowerCase().includes(filter.text.toLowerCase())),
   );
   const panel = useRef<HTMLElement>(null);
@@ -99,6 +103,10 @@ export function Squad({ game, onChange }: Props) {
             allLabel="všechny pozice"
           />
           <label className="check">
+            <input id="sq-unavailable" type="checkbox" checked={filter.unavailable} onChange={(e) => setFilter({ ...filter, unavailable: e.target.checked })} />
+            <span>zranění a stopky</span>
+          </label>
+          <label className="check">
             <input id="sq-expiring" type="checkbox" checked={filter.expiring} onChange={(e) => setFilter({ ...filter, expiring: e.target.checked })} />
             <span>končí smlouva</span>
           </label>
@@ -136,8 +144,33 @@ export function Squad({ game, onChange }: Props) {
             { key: 'pot', label: 'Pot.', num: true, value: (p) => p.potential, className: () => 'muted' },
             { key: 'wage', label: 'Plat/měs.', num: true, hideSm: true, value: (p) => p.wage, render: (p) => money(p.wage) },
             { key: 'contract', label: 'Smlouva', num: true, value: (p) => p.contractUntil, className: (p) => (contractExpiring(game, p) ? 'neg' : '') },
-            { key: 'apps', label: 'Záp.', num: true, hideSm: true, value: (p) => p.apps },
-            { key: 'goals', label: 'Góly', num: true, hideSm: true, value: (p) => p.goals },
+            {
+              key: 'status',
+              label: 'Stav',
+              value: (p) => (isInjured(p) ? 0 : p.suspension > 0 ? 1 : 2) * 1000 + p.fitness,
+              render: (p) =>
+                isInjured(p) ? (
+                  <Badge tone="bad">zraněn do {formatShortDate(p.injuredUntil!)}</Badge>
+                ) : p.suspension > 0 ? (
+                  <Badge tone="warn">stop {p.suspension}</Badge>
+                ) : (
+                  <span className={p.fitness < 75 ? 'neg' : 'muted'}>{Math.round(p.fitness)} %</span>
+                ),
+            },
+            { key: 'minutes', label: 'Min.', num: true, hideSm: true, value: (p) => p.minutes, title: 'Odehrané minuty v sezóně' },
+            { key: 'goals', label: 'G/A', num: true, value: (p) => p.goals * 100 + p.assists, render: (p) => `${p.goals}/${p.assists}`, title: 'Góly / asistence' },
+            { key: 'cards', label: 'ŽK/ČK', num: true, hideSm: true, value: (p) => p.yellows + p.reds * 3, render: (p) => `${p.yellows}/${p.reds}` },
+            {
+              key: 'avg',
+              label: 'Ø zn.',
+              num: true,
+              title: 'Průměrná známka',
+              value: (p) => averageRating(p) ?? 0,
+              render: (p) => {
+                const avg = averageRating(p);
+                return avg ? <span className={avg >= 7.2 ? 'pos' : avg < 6.2 ? 'neg' : ''}>{avg.toFixed(2)}</span> : <span className="muted">–</span>;
+              },
+            },
             { key: 'value', label: 'Hodnota', num: true, value: (p) => playerValue(game, p), render: (p) => money(playerValue(game, p)) },
           ]}
         />

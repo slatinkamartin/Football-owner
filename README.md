@@ -23,11 +23,14 @@ npm run build      # produkční sestavení do složky dist/
 | `app/` | Uživatelské rozhraní (React) |
 | `data/cz-zaklad/` | Datový balíček: soutěže a kluby české pyramidy (1. až 3. liga) |
 
-## Co umí verze 0.3
+## Co umí verze 0.4
 
 - Výběr klubu z 1. až 3. ligy a startovních podmínek (osobní kapitál majitele).
 - Týdenní tahy, celé sezóny se 4 soutěžemi (1. liga, 2. liga, ČFL, MSFL), postupy a sestupy včetně pravidel pro B-týmy.
-- Simulace zápasů (Poissonův model podle síly sestavy), tabulky, střelci, návštěvnost.
+- **Zápasový engine:** simulace po minutách, střely s xG, góly a asistence, fauly, žluté a červené karty, zranění, až 5 střídání, známky hráčů a hráč zápasu. Trenér skládá sestavu podle formace (4-3-3, 4-4-2, 5-3-2), kvality a kondice a hráče rotuje.
+- **Náhled zápasu:** sestavy, střídání, karty, xG, střely, držení míče, rohy, fauly, průběh zápasu a známky.
+- **Kondice, zranění a tresty:** stopka za červenou kartu a za každou 4. žlutou, zranění na dny až měsíce.
+- Tabulky, statistiky hráčů (zápasy, minuty, góly, asistence, karty, průměrná známka), návštěvnost.
 - Finance klubu: vstupné, TV peníze, komerční příjmy, platy, provoz, přestupy. Bankrot = konec hry.
 - Rozhodnutí majitele: cena vstupenek, mzdový rozpočet, rozpočet na přestupy, vklad vlastního kapitálu.
 - **Vedení:** hlavní trenér a sportovní ředitel se schopnostmi a povahou (ambice, ego, loajalita), důvěra ve majitele, nábor z volných kandidátů, odvolání s odstupným, rezignace.

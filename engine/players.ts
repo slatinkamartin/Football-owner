@@ -23,6 +23,14 @@ export function squadQualityForReputation(reputation: number): number {
   return 25 + reputation * 0.5;
 }
 
+export function emptySeasonStats() {
+  return { goals: 0, apps: 0, starts: 0, minutes: 0, assists: 0, yellows: 0, reds: 0, ratingSum: 0, ratingCount: 0 };
+}
+
+export function averageRating(p: Player): number | undefined {
+  return p.ratingCount ? p.ratingSum / p.ratingCount : undefined;
+}
+
 export function newId(state: Pick<GameState, 'nextId'>, prefix: string): string {
   state.nextId += 1;
   return `${prefix}${state.nextId}`;
@@ -49,8 +57,9 @@ export function generatePlayer(
     clubId: opts.clubId,
     wage: 0,
     contractUntil: opts.season + rng.int(1, 4),
-    goals: 0,
-    apps: 0,
+    ...emptySeasonStats(),
+    fitness: 100,
+    suspension: 0,
   };
 }
 

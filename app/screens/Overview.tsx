@@ -14,16 +14,28 @@ import {
   type GameState,
 } from '../../engine';
 import { Badge } from '../components';
+import { findFixture } from './MatchDetail';
 import { money } from '../format';
 
 type Target = 'prestupy' | 'vedeni' | 'kadr';
 
-export function Overview({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target) => void }) {
+export function Overview({
+  game,
+  onNavigate,
+  onOpenMatch,
+}: {
+  game: GameState;
+  onNavigate: (tab: Target) => void;
+  onOpenMatch: (id: string) => void;
+}) {
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
   const table = comp ? computeTable(comp, game) : [];
   const position = table.findIndex((r) => r.clubId === club.id);
   const row = table[position];
+  const last = comp?.fixtures
+    .filter((f) => f.result && (f.homeId === club.id || f.awayId === club.id))
+    .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
   const next = comp?.fixtures
     .filter((f) => !f.result && (f.homeId === club.id || f.awayId === club.id))
     .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
@@ -47,6 +59,22 @@ export function Overview({ game, onNavigate }: { game: GameState; onNavigate: (t
           <p className="muted">V této sezóně už klub nehraje.</p>
         )}
       </section>
+
+      {last && (
+        <section className="card">
+          <h2>Poslední zápas</h2>
+          <div className="match-big">
+            <span className={last.homeId === club.id ? 'own' : ''}>{game.clubs[last.homeId].shortName}</span>
+            <span>{last.result!.homeGoals}:{last.result!.awayGoals}</span>
+            <span className={last.awayId === club.id ? 'own' : ''}>{game.clubs[last.awayId].shortName}</span>
+          </div>
+          <p className="muted">
+            {formatDate(last.date, true)}
+            {last.result!.detail && <> · xG {last.result!.detail.home.xg.toFixed(1)} : {last.result!.detail.away.xg.toFixed(1)}</>}
+          </p>
+          <button onClick={() => onOpenMatch(last.id)}>Náhled zápasu</button>
+        </section>
+      )}
 
       <section className="card">
         <h2>Tabulka</h2>
@@ -92,6 +120,11 @@ export function Overview({ game, onNavigate }: { game: GameState; onNavigate: (t
               <div>
                 <strong>{n.title}</strong>
                 {n.text && <p>{n.text}</p>}
+                {n.fixtureId && findFixture(game, n.fixtureId) && (
+                  <button className="linkbtn" onClick={() => onOpenMatch(n.fixtureId!)}>
+                    Náhled zápasu
+                  </button>
+                )}
               </div>
             </li>
           ))}
@@ -136,6 +169,10 @@ function ToDo({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target)
   if (game.market.negotiation && !['hotovo', 'neuspech'].includes(game.market.negotiation.stage)) {
     items.push({ text: 'Rozjednaný přestup čeká na vaši nabídku', tab: 'prestupy', tone: 'warn' });
   }
+  const injured = squadOf(game, own).filter((p) => p.injuredUntil && p.injuredUntil >= game.date).length;
+  const banned = squadOf(game, own).filter((p) => p.suspension > 0).length;
+  if (injured) items.push({ text: `Zranění hráči: ${injured}`, tab: 'kadr', tone: injured >= 4 ? 'bad' : 'warn' });
+  if (banned) items.push({ text: `Hráči se stopkou: ${banned}`, tab: 'kadr', tone: 'warn' });
   const expiring = squadOf(game, own).filter((p) => contractExpiring(game, p)).length;
   if (expiring && game.date.slice(5) >= '01-01' && game.date.slice(5) < '06-20') {
     items.push({ text: `Končící smlouvy: ${expiring}`, tab: 'kadr', tone: 'neutral' });

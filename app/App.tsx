@@ -4,6 +4,7 @@ import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance } from './screens/Finance';
 import { GameMenu } from './screens/GameMenu';
+import { MatchDetail } from './screens/MatchDetail';
 import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
@@ -30,6 +31,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('prehled');
 
   const [outdated, setOutdated] = useState(false);
+  const [openMatch, setOpenMatch] = useState<string | null>(null);
 
   useEffect(() => {
     loadGame().then(({ game: saved, outdated: old }) => {
@@ -93,15 +95,17 @@ export function App() {
       </div>
 
       <main>
-        {tab === 'prehled' && <Overview game={game} onNavigate={(t) => setTab(t)} />}
+        {tab === 'prehled' && <Overview game={game} onNavigate={(t) => setTab(t)} onOpenMatch={setOpenMatch} />}
         {tab === 'tabulky' && <Tables game={game} />}
-        {tab === 'zapasy' && <Matches game={game} />}
+        {tab === 'zapasy' && <Matches game={game} onOpenMatch={setOpenMatch} />}
         {tab === 'kadr' && <Squad game={game} onChange={update} />}
         {tab === 'prestupy' && <Transfers game={game} onChange={update} />}
         {tab === 'vedeni' && <People game={game} onChange={update} />}
         {tab === 'finance' && <Finance game={game} onChange={update} />}
         {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
       </main>
+
+      {openMatch && <MatchDetail game={game} fixtureId={openMatch} onClose={() => setOpenMatch(null)} />}
 
       {game.gameOver && (
         <div className="overlay">

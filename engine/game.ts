@@ -17,6 +17,7 @@ import { doubleRoundRobin } from './fixtures';
 import { simulateMatch } from './match';
 import { POOL_TOWNS } from './names';
 import {
+  emptySeasonStats,
   generatePlayer,
   generateSquad,
   playerAge,
@@ -35,7 +36,6 @@ import {
   refreshStaffPool,
   seasonEndStaff,
   staffLevelForReputation,
-  styleFactors,
 } from './staff';
 import { computeTable, formScore } from './standings';
 import { aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
@@ -179,8 +179,8 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
     }
   }
   for (const p of Object.values(state.players)) {
-    p.goals = 0;
-    p.apps = 0;
+    Object.assign(p, emptySeasonStats());
+    p.suspension = 0;
   }
   state.market.spent = 0;
   state.market.earned = 0;
@@ -484,11 +484,13 @@ function playMatchesOn(state: GameState, rng: Rng): void {
       const attendance = matchAttendance(rng, home, away, comp.tier, form);
       const homeCoach = coachOf(state, home.id);
       const awayCoach = coachOf(state, away.id);
+      const ownComp = comp.clubIds.includes(state.owner.clubId);
       f.result = simulateMatch(
         rng,
-        { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach), style: styleFactors(homeCoach) },
-        { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach), style: styleFactors(awayCoach) },
+        { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus },
+        { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus },
         attendance,
+        { date: state.date, season: state.season, detail: ownComp },
       );
       book(state, home.id, 'vstupne', attendance * home.policy.ticketPrice, `Vstupné: ${home.shortName} – ${away.shortName}`);
       const hp = f.result.homeGoals > f.result.awayGoals ? 3 : f.result.homeGoals === f.result.awayGoals ? 1 : 0;
@@ -502,11 +504,23 @@ function playMatchesOn(state: GameState, rng: Rng): void {
         const gf = own ? f.result.homeGoals : f.result.awayGoals;
         const ga = own ? f.result.awayGoals : f.result.homeGoals;
         const verdict = gf > ga ? 'Výhra' : gf < ga ? 'Prohra' : 'Remíza';
+        const d = f.result.detail;
+        const xg = d ? ` xG ${d.home.xg.toFixed(1)} : ${d.away.xg.toFixed(1)}.` : '';
         addNews(state, {
           kind: 'vysledek',
           title: `${verdict}: ${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result.homeGoals}:${f.result.awayGoals}`,
-          text: `${comp.name}, ${f.round}. kolo. Návštěva ${attendance.toLocaleString('cs-CZ')} diváků.`,
+          text: `${comp.name}, ${f.round}. kolo. Návštěva ${attendance.toLocaleString('cs-CZ')} diváků.${xg}`,
+          fixtureId: f.id,
         });
+        for (const e of d?.events ?? []) {
+          if (e.clubId !== ownId) continue;
+          const p = state.players[e.playerId];
+          if (!p) continue;
+          if (e.type === 'zraneni') addNews(state, { kind: 'varovani', title: `Zranění: ${p.firstName} ${p.lastName}`, text: `${e.note}. Mimo hru do ${p.injuredUntil?.split('-').reverse().join('. ')}.`, fixtureId: f.id });
+          if ((e.type === 'cervena' || e.type === 'druha-zluta') && p.suspension > 0) {
+            addNews(state, { kind: 'varovani', title: `Červená karta: ${p.firstName} ${p.lastName}`, text: `Stop na ${p.suspension} ${p.suspension === 1 ? 'zápas' : 'zápasy'}.`, fixtureId: f.id });
+          }
+        }
       }
     }
   }
@@ -574,6 +588,14 @@ function monthlyFinance(state: GameState, rng: Rng): void {
 
 function processDay(state: GameState, rng: Rng): void {
   const md = monthDay(state.date);
+  // Kondice se každý den obnovuje.
+  for (const p of Object.values(state.players)) {
+    if (p.fitness < 100) p.fitness = Math.min(100, p.fitness + 5);
+    if (p.injuredUntil && p.injuredUntil < state.date) {
+      p.injuredUntil = undefined;
+      p.injury = undefined;
+    }
+  }
   if (md === SEASON_START) {
     state.season = Number(state.date.slice(0, 4));
     setupSeason(state, rng, true);
@@ -638,8 +660,21 @@ export function describeDate(state: GameState): string {
  */
 export function migrateSave(saved: { version: number } & Record<string, unknown>): GameState | null {
   if (saved.version === SAVE_VERSION) return saved as unknown as GameState;
-  if (saved.version !== 2) return null;
+  if (saved.version !== 2 && saved.version !== 3) return null;
   const state = structuredClone(saved) as unknown as GameState;
+  // Verze 4: statistiky hráčů, kondice, zranění a tresty.
+  for (const p of Object.values(state.players)) {
+    const goals = p.goals ?? 0;
+    const apps = p.apps ?? 0;
+    Object.assign(p, { ...emptySeasonStats(), goals, apps, starts: apps, minutes: apps * 85 });
+    p.fitness = 100;
+    p.suspension = 0;
+  }
+  if (saved.version === 3) {
+    state.version = SAVE_VERSION;
+    addNews(state, { kind: 'info', title: 'Nový zápasový engine', text: 'Zápasy mají sestavy, střely, xG, karty, zranění a střídání. Kliknutím na výsledek otevřete náhled zápasu.' });
+    return state;
+  }
   const squads = playersByClub(state);
   for (const club of Object.values(state.clubs)) setMarketWages(squads.get(club.id) ?? [], club);
   for (const club of Object.values(state.clubs)) {
