@@ -25,7 +25,7 @@ export function staffAge(s: Staff, season: number): number {
 }
 
 export function staffWage(ability: number, role: StaffRole): number {
-  const base = 25_000 * Math.pow(1.055, ability - 30);
+  const base = 25_000 * Math.pow(1.065, ability - 30);
   return Math.round((role === 'trener' ? base : base * 0.8) / 1000) * 1000;
 }
 

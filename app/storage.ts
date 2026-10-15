@@ -1,13 +1,14 @@
 import { del, get, set } from 'idb-keyval';
-import { SAVE_VERSION, type GameState } from '../engine';
+import { migrateSave, type GameState } from '../engine';
 
 const KEY = 'majitel:ulozena-hra';
 
 export async function loadGame(): Promise<{ game: GameState | null; outdated: boolean }> {
   try {
-    const saved = await get<GameState>(KEY);
+    const saved = await get<{ version: number } & Record<string, unknown>>(KEY);
     if (!saved) return { game: null, outdated: false };
-    return saved.version === SAVE_VERSION ? { game: saved, outdated: false } : { game: null, outdated: true };
+    const game = migrateSave(saved);
+    return { game, outdated: !game };
   } catch {
     return { game: null, outdated: false };
   }
@@ -34,12 +35,13 @@ export function serializeGame(state: GameState): string {
 }
 
 export function parseGame(text: string): GameState {
-  let data: GameState;
+  let data: { version: number } & Record<string, unknown>;
   try {
-    data = JSON.parse(text) as GameState;
+    data = JSON.parse(text);
   } catch {
     throw new Error('Záloha není platný text uložené hry. Zkopírujte ji znovu celou.');
   }
-  if (data?.version !== SAVE_VERSION || !data.clubs || !data.owner) throw new Error('Tohle není uložená hra Majitele.');
-  return data;
+  const game = data && typeof data.version === 'number' ? migrateSave(data) : null;
+  if (!game || !game.clubs || !game.owner) throw new Error('Tohle není uložená hra Majitele, nebo je z příliš staré verze.');
+  return game;
 }

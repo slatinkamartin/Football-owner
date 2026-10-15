@@ -182,6 +182,8 @@ export interface ClubFinance {
   balance: number;
   /** Počet po sobě jdoucích konců měsíce se záporným zůstatkem. */
   monthsNegative: number;
+  /** Zůstatek na začátku měsíce (pro výhled finančního ředitele). */
+  monthStartBalance?: number;
   season: FinanceTotals;
   lastSeason?: FinanceTotals;
   /** Poslední transakce (jen u klubu hráče). */
@@ -260,7 +262,7 @@ export interface SeasonRecord {
   ownerClub: { competitionId: string; position: number; points: number };
 }
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface GameState {
   version: typeof SAVE_VERSION;

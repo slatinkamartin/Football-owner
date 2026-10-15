@@ -97,22 +97,21 @@ export function teamStrength(players: Player[]): number {
   return avg - (11 - xi.length) * 4;
 }
 
-/** Orientační tržní hodnota v Kč. */
+export const CZK_PER_EUR = 25;
+
+/**
+ * Orientační tržní hodnota v Kč, kalibrovaná podle Transfermarktu pro českou ligu:
+ * hodnocení 80 asi 12 mil. €, 70 asi 2,4 mil. €, 60 asi 0,5 mil. €, 50 asi 100 tis. € (hráč 25–27 let).
+ */
 export function marketValue(p: Player, season: number): number {
   const age = playerAge(p, season);
-  const base = 40_000 * Math.pow(1.11, p.overall - 30);
-  const ageFactor = age <= 21 ? 1.5 : age <= 25 ? 1.3 : age <= 28 ? 1 : age <= 31 ? 0.6 : 0.3;
-  const potentialFactor = 1 + Math.max(0, p.potential - p.overall) / 40;
-  return Math.round((base * ageFactor * potentialFactor) / 10_000) * 10_000;
-}
-
-/** Rozdělí měsíční mzdový rozpočet mezi hráče podle jejich kvality. */
-export function assignWages(players: Player[], monthlyBudget: number): void {
-  const weights = players.map((p) => Math.pow(p.overall, 3));
-  const total = weights.reduce((a, b) => a + b, 0) || 1;
-  players.forEach((p, i) => {
-    p.wage = Math.max(5_000, Math.round((monthlyBudget * weights[i]) / total / 1000) * 1000);
-  });
+  const baseEur = 11_000_000 * Math.pow(5, (p.overall - 80) / 10);
+  const ageFactor =
+    age <= 21 ? 1.6 : age <= 24 ? 1.35 : age <= 27 ? 1.1 : age <= 29 ? 0.85 : age <= 31 ? 0.55 : age <= 33 ? 0.3 : 0.12;
+  const potentialFactor = 1 + Math.max(0, p.potential - p.overall) / 25;
+  const czk = baseEur * ageFactor * potentialFactor * CZK_PER_EUR;
+  const step = czk >= 10_000_000 ? 1_000_000 : czk >= 1_000_000 ? 100_000 : 10_000;
+  return Math.max(10_000, Math.round(czk / step) * step);
 }
 
 export function squadOf(state: GameState, clubId: string): Player[] {

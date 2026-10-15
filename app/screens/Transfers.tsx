@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Chips, DataTable, useStoredState } from '../table';
 import {
   acceptOffer,
   approveProposal,
@@ -10,7 +11,8 @@ import {
   formatShortDate,
   FREE,
   interest,
-  marketValue,
+  keyPlayerIds,
+  playerValue,
   offerFee,
   offerTerms,
   playerAge,
@@ -205,7 +207,7 @@ function Offers({ game, onResult, onReject }: { game: GameState; onResult: (r: A
                   <strong>{clubLabel(game, o.buyerId)}</strong> nabízí za <strong>{playerName(p)}</strong> {money(o.fee)}
                 </span>
                 <p className="muted small">
-                  Tržní hodnota {money(marketValue(p, game.season))}. Platí do {formatShortDate(o.expires)}.
+                  Tržní hodnota {money(playerValue(game, p))}. Platí do {formatShortDate(o.expires)}.
                 </p>
                 <p className="small">
                   <Badge tone={o.advice === 'prijmout' ? 'good' : 'warn'}>{o.advice === 'prijmout' ? 'Ředitel: přijmout' : 'Ředitel: odmítnout'}</Badge>{' '}
@@ -224,99 +226,119 @@ function Offers({ game, onResult, onReject }: { game: GameState; onResult: (r: A
   );
 }
 
+const SEARCH_DEFAULT = {
+  position: '' as Position | '',
+  competition: '',
+  minRating: '',
+  maxPrice: '',
+  minAge: '',
+  maxAge: '',
+  interestedOnly: true,
+};
+
 function Search({ game, onResult }: { game: GameState; onResult: (r: ActionResult) => void }) {
-  const [position, setPosition] = useState<Position | ''>('');
-  const [minRating, setMinRating] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
-  const [freeOnly, setFreeOnly] = useState(false);
-  const [interestedOnly, setInterestedOnly] = useState(true);
+  const [f, setF] = useStoredState('filtr:hledani', SEARCH_DEFAULT);
   const own = game.owner.clubId;
   const open = !!transferWindow(game.date);
+  const comps = Object.values(game.competitions).sort((a, b) => a.tier - b.tier);
 
-  const results = useMemo(() => {
-    const min = Number(minRating) || 0;
-    const max = maxPrice ? Number(maxPrice.replace(',', '.')) * 1_000_000 : Infinity;
+  const rows = useMemo(() => {
+    const keys = keyPlayerIds(game);
+    const compOf = new Map<string, string>();
+    for (const c of comps) for (const id of c.clubIds) compOf.set(id, c.id);
+    const min = Number(f.minRating) || 0;
+    const max = f.maxPrice ? Number(f.maxPrice.replace(',', '.')) * 1_000_000 : Infinity;
+    const minAge = Number(f.minAge) || 0;
+    const maxAge = Number(f.maxAge) || 99;
     return Object.values(game.players)
-      .filter((p) => p.clubId !== own && (!position || p.position === position) && (!freeOnly || p.clubId === FREE))
-      .map((p) => ({ p, view: scouted(game, p) }))
-      .filter((x) => x.view.overall >= min && (!interestedOnly || interest(game, x.p, own).ok))
-      .sort((a, b) => b.view.overall - a.view.overall)
-      .slice(0, 300)
-      .map((x) => ({ ...x, price: askingPrice(game, x.p) }))
+      .filter((p) => p.clubId !== own && (!f.position || p.position === f.position))
+      .filter((p) => !f.competition || (f.competition === 'volni' ? p.clubId === FREE : compOf.get(p.clubId) === f.competition))
+      .filter((p) => {
+        const age = playerAge(p, game.season);
+        return age >= minAge && age <= maxAge;
+      })
+      .map((p) => ({ p, view: scouted(game, p), age: playerAge(p, game.season) }))
+      .filter((x) => x.view.overall >= min && (!f.interestedOnly || interest(game, x.p, own).ok))
+      .map((x) => ({ ...x, price: askingPrice(game, x.p, keys) }))
       .filter((x) => x.price <= max)
-      .slice(0, 40);
-  }, [game, position, minRating, maxPrice, freeOnly, interestedOnly, own]);
+      .map((x) => ({ ...x, wage: wageDemand(game, x.p, own), compName: x.p.clubId === FREE ? 'volný' : (game.competitions[compOf.get(x.p.clubId) ?? '']?.name ?? '') }));
+  }, [game, f, own, comps]);
+
+  const set = (patch: Partial<typeof SEARCH_DEFAULT>) => setF({ ...f, ...patch });
 
   return (
     <section className="card">
-      <h2>Hledat hráče</h2>
+      <div className="row-between">
+        <h2>Hledat hráče</h2>
+        <button onClick={() => setF(SEARCH_DEFAULT)}>Zrušit filtry</button>
+      </div>
+      <div className="filters">
+        <Chips
+          options={(['GK', 'DF', 'MF', 'FW'] as Position[]).map((p) => ({ value: p, label: POSITION_LABEL[p] }))}
+          value={f.position}
+          onChange={(position) => set({ position })}
+          allLabel="všechny pozice"
+        />
+      </div>
       <div className="filters">
         <label>
-          <span>Pozice</span>
-          <select id="f-pos" value={position} onChange={(e) => setPosition(e.target.value as Position | '')}>
+          <span>Soutěž</span>
+          <select id="f-comp" value={f.competition} onChange={(e) => set({ competition: e.target.value })}>
             <option value="">všechny</option>
-            {(['GK', 'DF', 'MF', 'FW'] as Position[]).map((p) => <option key={p} value={p}>{POSITION_LABEL[p]}</option>)}
+            {comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="volni">volní hráči</option>
           </select>
         </label>
         <label>
           <span>Hodnocení od</span>
-          <input id="f-min" inputMode="numeric" value={minRating} placeholder="0" onChange={(e) => setMinRating(e.target.value)} />
+          <input id="f-min" inputMode="numeric" value={f.minRating} placeholder="0" onChange={(e) => set({ minRating: e.target.value })} />
+        </label>
+        <label>
+          <span>Věk od – do</span>
+          <span className="range">
+            <input id="f-age-min" inputMode="numeric" value={f.minAge} placeholder="16" onChange={(e) => set({ minAge: e.target.value })} />
+            <input id="f-age-max" inputMode="numeric" value={f.maxAge} placeholder="40" onChange={(e) => set({ maxAge: e.target.value })} />
+          </span>
         </label>
         <label>
           <span>Cena do (mil. Kč)</span>
-          <input id="f-max" inputMode="decimal" value={maxPrice} placeholder="bez limitu" onChange={(e) => setMaxPrice(e.target.value)} />
+          <input id="f-max" inputMode="decimal" value={f.maxPrice} placeholder="bez limitu" onChange={(e) => set({ maxPrice: e.target.value })} />
         </label>
         <label className="check">
-          <input id="f-free" type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} />
-          <span>jen volní hráči</span>
-        </label>
-        <label className="check">
-          <input id="f-interest" type="checkbox" checked={interestedOnly} onChange={(e) => setInterestedOnly(e.target.checked)} />
-          <span>jen hráči se zájmem o náš klub</span>
+          <input id="f-interest" type="checkbox" checked={f.interestedOnly} onChange={(e) => set({ interestedOnly: e.target.checked })} />
+          <span>jen se zájmem o náš klub</span>
         </label>
       </div>
-      <p className="muted small">Hodnocení cizích hráčů jsou odhady skautů (≈). Čím lepší sportovní ředitel, tím přesnější.</p>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Hráč</th>
-              <th>Poz.</th>
-              <th className="num">Věk</th>
-              <th>Klub</th>
-              <th className="num">Hodn.</th>
-              <th className="num hide-sm">Pot.</th>
-              <th className="num">Cena</th>
-              <th className="num hide-sm">Plat (nárok)</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {results.map(({ p, view, price }) => {
-              const want = interest(game, p, own);
-              return (
-                <tr key={p.id}>
-                  <td>{playerName(p)}</td>
-                  <td className="muted" title={POSITION_LABEL[p.position]}>{POSITION_SHORT[p.position]}</td>
-                  <td className="num">{playerAge(p, game.season)}</td>
-                  <td>{clubLabel(game, p.clubId)}</td>
-                  <td className="num"><span className="rating">≈{view.overall}</span></td>
-                  <td className="num hide-sm muted">≈{view.potential}</td>
-                  <td className="num">{price ? money(price) : 'zdarma'}</td>
-                  <td className="num hide-sm">{money(wageDemand(game, p, own))}</td>
-                  <td className="num">
-                    {want.ok ? (
-                      <button disabled={!open} onClick={() => onResult(startNegotiation(game, p.id))}>Jednat</button>
-                    ) : (
-                      <span className="muted small">nemá zájem</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <p className="muted small">Hodnocení cizích hráčů jsou odhady skautů (≈). Čím lepší sportovní ředitel, tím přesnější. Kliknutím na hlavičku sloupce změníte řazení.</p>
+      <DataTable
+        id="hledani"
+        rows={rows}
+        rowKey={(x) => x.p.id}
+        initialSort={{ key: 'ovr', dir: 'desc' }}
+        limit={50}
+        empty="Filtrům neodpovídá žádný hráč."
+        columns={[
+          { key: 'name', label: 'Hráč', value: (x) => x.p.lastName, render: (x) => playerName(x.p) },
+          { key: 'pos', label: 'Poz.', value: (x) => ['GK', 'DF', 'MF', 'FW'].indexOf(x.p.position), render: (x) => <span title={POSITION_LABEL[x.p.position]}>{POSITION_SHORT[x.p.position]}</span>, className: () => 'muted' },
+          { key: 'age', label: 'Věk', num: true, value: (x) => x.age },
+          { key: 'club', label: 'Klub', value: (x) => clubLabel(game, x.p.clubId) },
+          { key: 'comp', label: 'Soutěž', hideSm: true, value: (x) => x.compName, className: () => 'muted' },
+          { key: 'ovr', label: 'Hodn.', num: true, value: (x) => x.view.overall, render: (x) => <span className="rating">≈{x.view.overall}</span> },
+          { key: 'pot', label: 'Pot.', num: true, hideSm: true, value: (x) => x.view.potential, render: (x) => `≈${x.view.potential}`, className: () => 'muted' },
+          { key: 'price', label: 'Cena', num: true, value: (x) => x.price, render: (x) => (x.price ? money(x.price) : 'zdarma') },
+          { key: 'wage', label: 'Plat (nárok)', num: true, hideSm: true, value: (x) => x.wage, render: (x) => money(x.wage) },
+          {
+            key: 'act',
+            label: '',
+            render: (x) =>
+              interest(game, x.p, own).ok ? (
+                <button disabled={!open} onClick={() => onResult(startNegotiation(game, x.p.id))}>Jednat</button>
+              ) : (
+                <span className="muted small">nemá zájem</span>
+              ),
+          },
+        ]}
+      />
       {!open && <p className="muted small">Jednat lze jen v přestupním okně (1. 7. – 31. 8. a 8. 1. – 14. 2.).</p>}
     </section>
   );
@@ -324,23 +346,30 @@ function Search({ game, onResult }: { game: GameState; onResult: (r: ActionResul
 
 function History({ game }: { game: GameState }) {
   const own = game.owner.clubId;
-  const list = game.market.history.filter((h) => h.fromId === own || h.toId === own).slice(0, 15);
-  if (!list.length) return null;
+  const [dir, setDir] = useStoredState('filtr:prestupy-historie', { v: '' as '' | 'in' | 'out' });
+  const all = game.market.history.filter((h) => h.fromId === own || h.toId === own);
+  if (!all.length) return null;
+  const rows = all
+    .map((h, i) => ({ ...h, i, incoming: h.toId === own }))
+    .filter((h) => !dir.v || (dir.v === 'in' ? h.incoming : !h.incoming));
   return (
     <section className="card">
-      <h2>Přestupy klubu</h2>
-      <table>
-        <tbody>
-          {list.map((h, i) => (
-            <tr key={i}>
-              <td className="muted">{formatShortDate(h.date)}</td>
-              <td>{h.playerName}</td>
-              <td className="muted">{h.toId === own ? `z ${clubLabel(game, h.fromId)}` : `do ${clubLabel(game, h.toId)}`}</td>
-              <td className={`num ${h.toId === own ? 'neg' : 'pos'}`}>{h.fee ? money(h.toId === own ? -h.fee : h.fee) : 'zdarma'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="row-between">
+        <h2>Přestupy klubu</h2>
+        <Chips options={[{ value: 'in', label: 'příchody' }, { value: 'out', label: 'odchody' }]} value={dir.v} onChange={(v) => setDir({ v })} />
+      </div>
+      <DataTable
+        id="prestupy-historie"
+        rows={rows}
+        rowKey={(h) => String(h.i)}
+        initialSort={{ key: 'date', dir: 'desc' }}
+        columns={[
+          { key: 'date', label: 'Datum', value: (h) => h.date, render: (h) => formatShortDate(h.date), className: () => 'muted' },
+          { key: 'name', label: 'Hráč', value: (h) => h.playerName },
+          { key: 'club', label: 'Odkud / kam', value: (h) => clubLabel(game, h.incoming ? h.fromId : h.toId), render: (h) => (h.incoming ? `z ${clubLabel(game, h.fromId)}` : `do ${clubLabel(game, h.toId)}`) },
+          { key: 'fee', label: 'Odstupné', num: true, value: (h) => (h.incoming ? -h.fee : h.fee), render: (h) => (h.fee ? money(h.incoming ? -h.fee : h.fee) : 'zdarma'), className: (h) => (h.incoming ? 'neg' : 'pos') },
+        ]}
+      />
     </section>
   );
 }

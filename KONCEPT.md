@@ -300,4 +300,6 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 
 **Verze 0.2 (hotovo):** trenér a sportovní ředitel s vlastnostmi a důvěrou, cíl sezóny, rady trenérovi, přestupní okna, návrhy ředitele, vyjednávání o odstupném a smlouvě, nabídky na vlastní hráče, smlouvy a volní hráči.
 
-**Další krok:** stadion a zázemí, nebo spolumajitelé (podle rozhodnutí).
+**Verze 0.3 (hotovo):** ekonomika kalibrovaná podle české ligy (hodnoty, platy, prémie, odměny za umístění, strukturální ztráta), zahraniční kupci, řazení a filtrování všech tabulek.
+
+**Další krok:** zápasový engine se střelami a xG, sestavy a rotace, zranění, karty, střídání a náhled zápasu.

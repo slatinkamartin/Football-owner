@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   contractExpiring,
-  marketValue,
+  playerValue,
   playerAge,
   playerName,
   POSITION_LABEL,
@@ -19,6 +19,7 @@ import {
   type Position,
 } from '../../engine';
 import { Badge, Notice } from '../components';
+import { Chips, DataTable, useStoredState } from '../table';
 import { money } from '../format';
 
 const ORDER: Position[] = ['GK', 'DF', 'MF', 'FW'];
@@ -38,9 +39,17 @@ export function Squad({ game, onChange }: Props) {
     (a, b) => ORDER.indexOf(a.position) - ORDER.indexOf(b.position) || b.overall - a.overall,
   );
   const wages = squad.reduce((s, p) => s + p.wage, 0);
-  const value = squad.reduce((s, p) => s + marketValue(p, game.season), 0);
+  const value = squad.reduce((s, p) => s + playerValue(game, p), 0);
   const expiring = squad.filter((p) => contractExpiring(game, p)).length;
   const selected = open ? squad.find((p) => p.id === open) : undefined;
+  const [filter, setFilter] = useStoredState('filtr:kadr', { position: '' as Position | '', expiring: false, listed: false, text: '' });
+  const rows = squad.filter(
+    (p) =>
+      (!filter.position || p.position === filter.position) &&
+      (!filter.expiring || contractExpiring(game, p)) &&
+      (!filter.listed || game.market.listed.includes(p.id)) &&
+      (!filter.text || playerName(p).toLowerCase().includes(filter.text.toLowerCase())),
+  );
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (open) panel.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -82,37 +91,56 @@ export function Squad({ game, onChange }: Props) {
       )}
 
       <section className="card">
-        <div className="table-wrap">
-          <table className="clickable">
-            <thead>
-              <tr>
-                <th>Hráč</th><th>Poz.</th><th className="num">Věk</th>
-                <th className="num">Hodn.</th><th className="num">Pot.</th>
-                <th className="num hide-sm">Plat/měs.</th><th className="num">Smlouva</th>
-                <th className="num hide-sm">Záp.</th><th className="num hide-sm">Góly</th><th className="num hide-sm">Hodnota</th>
-              </tr>
-            </thead>
-            <tbody>
-              {squad.map((p) => (
-                  <tr key={p.id} className={open === p.id ? 'open-row' : ''} onClick={() => setOpen(open === p.id ? null : p.id)}>
-                    <td>
-                      {playerName(p)}{' '}
-                      {game.market.listed.includes(p.id) && <Badge tone="warn">na prodej</Badge>}
-                    </td>
-                    <td className="muted" title={POSITION_LABEL[p.position]}>{POSITION_SHORT[p.position]}</td>
-                    <td className="num">{playerAge(p, game.season)}</td>
-                    <td className="num"><span className="rating">{p.overall}</span></td>
-                    <td className="num muted">{p.potential}</td>
-                    <td className="num hide-sm">{money(p.wage)}</td>
-                    <td className={`num ${contractExpiring(game, p) ? 'neg' : ''}`}>{p.contractUntil}</td>
-                    <td className="num hide-sm">{p.apps}</td>
-                    <td className="num hide-sm">{p.goals}</td>
-                    <td className="num hide-sm">{money(marketValue(p, game.season))}</td>
-                  </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="filters">
+          <Chips
+            options={ORDER.map((pos) => ({ value: pos, label: POSITION_LABEL[pos] }))}
+            value={filter.position}
+            onChange={(position) => setFilter({ ...filter, position })}
+            allLabel="všechny pozice"
+          />
+          <label className="check">
+            <input id="sq-expiring" type="checkbox" checked={filter.expiring} onChange={(e) => setFilter({ ...filter, expiring: e.target.checked })} />
+            <span>končí smlouva</span>
+          </label>
+          <label className="check">
+            <input id="sq-listed" type="checkbox" checked={filter.listed} onChange={(e) => setFilter({ ...filter, listed: e.target.checked })} />
+            <span>na prodej</span>
+          </label>
+          <label>
+            <span>Hledat jméno</span>
+            <input id="sq-name" value={filter.text} placeholder="příjmení" onChange={(e) => setFilter({ ...filter, text: e.target.value })} />
+          </label>
         </div>
+        <DataTable
+          id="kadr"
+          rows={rows}
+          rowKey={(p) => p.id}
+          initialSort={{ key: 'pos', dir: 'asc' }}
+          onRowClick={(p) => setOpen(open === p.id ? null : p.id)}
+          rowClassName={(p) => (open === p.id ? 'open-row' : '')}
+          empty="Filtrům neodpovídá žádný hráč."
+          columns={[
+            {
+              key: 'name',
+              label: 'Hráč',
+              value: (p) => p.lastName,
+              render: (p) => (
+                <>
+                  {playerName(p)} {game.market.listed.includes(p.id) && <Badge tone="warn">na prodej</Badge>}
+                </>
+              ),
+            },
+            { key: 'pos', label: 'Poz.', value: (p) => ORDER.indexOf(p.position) * 100 + (100 - p.overall), render: (p) => <span title={POSITION_LABEL[p.position]}>{POSITION_SHORT[p.position]}</span>, className: () => 'muted' },
+            { key: 'age', label: 'Věk', num: true, value: (p) => playerAge(p, game.season) },
+            { key: 'ovr', label: 'Hodn.', num: true, value: (p) => p.overall, render: (p) => <span className="rating">{p.overall}</span> },
+            { key: 'pot', label: 'Pot.', num: true, value: (p) => p.potential, className: () => 'muted' },
+            { key: 'wage', label: 'Plat/měs.', num: true, hideSm: true, value: (p) => p.wage, render: (p) => money(p.wage) },
+            { key: 'contract', label: 'Smlouva', num: true, value: (p) => p.contractUntil, className: (p) => (contractExpiring(game, p) ? 'neg' : '') },
+            { key: 'apps', label: 'Záp.', num: true, hideSm: true, value: (p) => p.apps },
+            { key: 'goals', label: 'Góly', num: true, hideSm: true, value: (p) => p.goals },
+            { key: 'value', label: 'Hodnota', num: true, value: (p) => playerValue(game, p), render: (p) => money(playerValue(game, p)) },
+          ]}
+        />
       </section>
     </div>
   );

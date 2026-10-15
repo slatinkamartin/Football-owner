@@ -10,10 +10,12 @@ import {
   injectCapital,
   updatePolicy,
   wageBudgetMonthly,
+  type FinanceCategory,
   type FinanceTotals,
   type GameState,
 } from '../../engine';
 import { money } from '../format';
+import { Chips, DataTable, useStoredState } from '../table';
 
 export function Finance({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
   const club = game.clubs[game.owner.clubId];
@@ -84,11 +86,11 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
             value={Math.round(club.policy.wageMultiplier * 100)}
             onChange={(e) => onChange(updatePolicy(game, { wageMultiplier: Number(e.target.value) / 100 }))}
           />
-          <small className="muted">Vyšší platy přilákají v létě lepší hráče, ale stojí víc každý měsíc.</small>
+          <small className="muted">Strop pro platy hráčů, který hlídá sportovní ředitel. Vyšší rozpočet přiláká i hráče, kteří by jinak nepřišli. Platy ve smlouvách se změnou rozpočtu nemění.</small>
         </label>
 
         <label className="field">
-          <span>Rozpočet na letní posily (běžně {money(defaultTransferBudget(club))})</span>
+          <span>Rozpočet na odstupné za sezónu (běžně {money(defaultTransferBudget(club))})</span>
           <div className="inline-form">
             <input inputMode="decimal" value={transfer} onChange={(e) => setTransfer(e.target.value)} />
             <span>mil. Kč</span>
@@ -100,7 +102,7 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
             </button>
           </div>
           <small className="muted">
-            Sportovní ředitel ho utratí v letním přestupním okně (1. 7.). Teď nastaveno {money(club.policy.transferBudget)}.
+            Platí pro letní i zimní okno, polovina peněz z prodejů se do něj vrací. Teď nastaveno {money(club.policy.transferBudget)}.
           </small>
         </label>
       </section>
@@ -110,21 +112,44 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
         <Totals current={club.finance.season} last={club.finance.lastSeason} />
       </section>
 
-      <section className="card">
-        <h2>Poslední pohyby</h2>
-        <table>
-          <tbody>
-            {club.finance.transactions.slice(0, 20).map((t, i) => (
-              <tr key={i}>
-                <td className="muted">{formatShortDate(t.date)}</td>
-                <td className="wrap">{t.note}</td>
-                <td className={`num ${t.amount < 0 ? 'neg' : 'pos'}`}>{money(t.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      <Movements game={game} />
     </div>
+  );
+}
+
+function Movements({ game }: { game: GameState }) {
+  const club = game.clubs[game.owner.clubId];
+  const [filter, setFilter] = useStoredState('filtr:pohyby', { category: '' as FinanceCategory | '' });
+  const rows = club.finance.transactions
+    .map((t, i) => ({ ...t, i }))
+    .filter((t) => !filter.category || t.category === filter.category);
+  const used = [...new Set(club.finance.transactions.map((t) => t.category))];
+  return (
+    <section className="card wide">
+      <h2>Pohyby na účtu</h2>
+      <div className="filters">
+        <Chips
+          options={used.map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))}
+          value={filter.category}
+          onChange={(category) => setFilter({ category })}
+          allLabel="všechny"
+        />
+      </div>
+      <DataTable
+        id="pohyby"
+        rows={rows}
+        rowKey={(t) => String(t.i)}
+        initialSort={{ key: 'date', dir: 'desc' }}
+        limit={40}
+        empty="Žádné pohyby."
+        columns={[
+          { key: 'date', label: 'Datum', value: (t) => `${t.date}-${String(9999 - t.i).padStart(4, '0')}`, render: (t) => formatShortDate(t.date), className: () => 'muted' },
+          { key: 'note', label: 'Popis', value: (t) => t.note, className: () => 'wrap' },
+          { key: 'cat', label: 'Kategorie', hideSm: true, value: (t) => CATEGORY_LABEL[t.category], className: () => 'muted' },
+          { key: 'amount', label: 'Částka', num: true, value: (t) => t.amount, render: (t) => money(t.amount), className: (t) => (t.amount < 0 ? 'neg' : 'pos') },
+        ]}
+      />
+    </section>
   );
 }
 
@@ -133,7 +158,7 @@ function Totals({ current, last }: { current: FinanceTotals; last?: FinanceTotal
   const rows = (cats: typeof INCOME_CATEGORIES) =>
     cats.map((c) => (
       <tr key={c}>
-        <td>{CATEGORY_LABEL[c]}</td>
+        <td className="wrap">{CATEGORY_LABEL[c]}</td>
         <td className="num">{money(current[c])}</td>
         {last && <td className="num muted">{money(last[c])}</td>}
       </tr>

@@ -28,6 +28,7 @@ import {
 } from '../../engine';
 import { Badge, Meter, Notice } from '../components';
 import { money } from '../format';
+import { DataTable } from '../table';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
 
@@ -204,50 +205,39 @@ function Candidates({ game, onResult }: { game: GameState; onResult: (r: ActionR
         </div>
       </div>
       <p className="muted small">Nový člověk podepíše smlouvu na 2 roky, při nástupu dostane jeden měsíční plat jako bonus.</p>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Jméno</th>
-              <th className="num">Věk</th>
-              <th className="num">Schopnosti</th>
-              {role === 'trener' && <th className="hide-sm">Styl</th>}
-              <th className="num hide-sm">Ego</th>
-              <th className="num">Plat</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((s) => {
-              const interested = isInterested(s, club);
-              return (
-                <tr key={s.id}>
-                  <td>{s.firstName} {s.lastName}</td>
-                  <td className="num">{staffAge(s, game.season)}</td>
-                  <td className="num"><span className="rating">{s.ability}</span></td>
-                  {role === 'trener' && <td className="hide-sm">{STYLE_LABEL[s.style]}{s.youthFocus ? ', mladí' : ''}</td>}
-                  <td className="num hide-sm">{s.ego}</td>
-                  <td className="num">{money(s.wage)}</td>
-                  <td className="num">
-                    {!interested ? (
-                      <span className="muted small">nemá zájem</span>
-                    ) : pending === s.id ? (
-                      <span className="buttons end">
-                        <button className="primary" onClick={() => { setPending(null); onResult(hireStaff(game, s.id, 2)); }}>
-                          Potvrdit
-                        </button>
-                        <button onClick={() => setPending(null)}>Zpět</button>
-                      </span>
-                    ) : (
-                      <button onClick={() => setPending(s.id)}>Najmout</button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        id={`kandidati-${role}`}
+        rows={list}
+        rowKey={(s) => s.id}
+        initialSort={{ key: 'ability', dir: 'desc' }}
+        columns={[
+          { key: 'name', label: 'Jméno', value: (s) => s.lastName, render: (s) => `${s.firstName} ${s.lastName}` },
+          { key: 'age', label: 'Věk', num: true, value: (s) => staffAge(s, game.season) },
+          { key: 'ability', label: 'Schopnosti', num: true, value: (s) => s.ability, render: (s) => <span className="rating">{s.ability}</span> },
+          ...(role === 'trener'
+            ? [{ key: 'style', label: 'Styl', hideSm: true, value: (s: Staff) => STYLE_LABEL[s.style] + (s.youthFocus ? ', mladí' : '') }]
+            : []),
+          { key: 'ego', label: 'Ego', num: true, hideSm: true, value: (s) => s.ego },
+          { key: 'loyalty', label: 'Loajalita', num: true, hideSm: true, value: (s) => s.loyalty },
+          { key: 'wage', label: 'Plat', num: true, value: (s) => s.wage, render: (s) => money(s.wage) },
+          {
+            key: 'act',
+            label: '',
+            value: (s) => (isInterested(s, club) ? 1 : 0),
+            render: (s) =>
+              !isInterested(s, club) ? (
+                <span className="muted small">nemá zájem</span>
+              ) : pending === s.id ? (
+                <span className="buttons end">
+                  <button className="primary" onClick={() => { setPending(null); onResult(hireStaff(game, s.id, 2)); }}>Potvrdit</button>
+                  <button onClick={() => setPending(null)}>Zpět</button>
+                </span>
+              ) : (
+                <button onClick={() => setPending(s.id)}>Najmout</button>
+              ),
+          },
+        ]}
+      />
       {pending && current && (
         <p className="muted small">
           Současný {role === 'trener' ? 'trenér' : 'ředitel'} {current.firstName} {current.lastName} odejde, odstupné {money(severance(game, current))}.

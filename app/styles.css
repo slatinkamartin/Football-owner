@@ -341,3 +341,29 @@ tr.detail-row td { background: var(--bg); white-space: normal; padding: 12px; }
 
 .todo { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
 button.linklike { border: none; background: none; padding: 0; }
+
+/* Řazení a filtry */
+th button.sort {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+th.num button.sort { flex-direction: row-reverse; }
+th button.sort:hover, th button.sort.active { color: var(--accent); }
+.sort-arrow { font-size: 10px; opacity: 0.45; }
+th button.sort.active .sort-arrow { opacity: 1; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { padding: 4px 12px; border-radius: 999px; font-size: 13px; }
+.chips button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.filters .range { display: flex; gap: 6px; }
+.filters .range input { width: 64px; }
+.filters + .filters { margin-top: -2px; }

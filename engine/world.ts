@@ -1,3 +1,4 @@
+import { FOREIGN_CLUBS } from './names';
 import type { Competition, GameState, NewsItem } from './types';
 
 export const FREE = '';
@@ -19,8 +20,22 @@ export function plural(n: number, one: string, few: string, many: string): strin
   return `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
 }
 
+export const FOREIGN_PREFIX = 'zahr:';
+
+export function isForeign(id: string): boolean {
+  return id.startsWith(FOREIGN_PREFIX);
+}
+
+export function foreignClub(id: string) {
+  return FOREIGN_CLUBS.find((c) => FOREIGN_PREFIX + c.id === id);
+}
+
 export function clubLabel(state: GameState, id: string): string {
   if (id === FREE) return 'bez klubu';
+  if (isForeign(id)) {
+    const f = foreignClub(id);
+    return f ? `${f.name} (${f.country})` : 'zahraničí';
+  }
   return state.clubs[id]?.shortName ?? id;
 }
 
