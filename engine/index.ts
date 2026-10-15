@@ -5,3 +5,6 @@ export * from './game';
 export * from './pack';
 export * from './players';
 export * from './standings';
+export * from './staff';
+export * from './transfers';
+export * from './world';

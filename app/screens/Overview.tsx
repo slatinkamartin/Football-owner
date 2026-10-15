@@ -1,7 +1,24 @@
-import { competitionOf, computeTable, formatDate, formatShortDate, seasonLabel, type GameState } from '../../engine';
+import {
+  coachOf,
+  competitionOf,
+  computeTable,
+  contractExpiring,
+  directorOf,
+  formatDate,
+  formatShortDate,
+  goalLabel,
+  goalTarget,
+  seasonLabel,
+  squadOf,
+  transferWindow,
+  type GameState,
+} from '../../engine';
+import { Badge } from '../components';
 import { money } from '../format';
 
-export function Overview({ game }: { game: GameState }) {
+type Target = 'prestupy' | 'vedeni' | 'kadr';
+
+export function Overview({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target) => void }) {
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
   const table = comp ? computeTable(comp, game) : [];
@@ -64,6 +81,8 @@ export function Overview({ game }: { game: GameState }) {
         </dl>
       </section>
 
+      <ToDo game={game} onNavigate={onNavigate} />
+
       <section className="card wide">
         <h2>Zprávy</h2>
         <ul className="news">
@@ -100,5 +119,58 @@ export function Overview({ game }: { game: GameState }) {
         </section>
       )}
     </div>
+  );
+}
+
+function ToDo({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target) => void }) {
+  const own = game.owner.clubId;
+  const comp = competitionOf(game, own);
+  const coach = coachOf(game, own);
+  const director = directorOf(game, own);
+  const window = transferWindow(game.date);
+  const items: { text: string; tab: Target; tone: 'good' | 'warn' | 'bad' | 'neutral' }[] = [];
+  if (!coach) items.push({ text: 'Klub nemá hlavního trenéra', tab: 'vedeni', tone: 'bad' });
+  if (!director) items.push({ text: 'Klub nemá sportovního ředitele', tab: 'vedeni', tone: 'warn' });
+  if (game.market.offers.length) items.push({ text: `Nabídky na naše hráče: ${game.market.offers.length}`, tab: 'prestupy', tone: 'warn' });
+  if (window && game.market.proposals.length) items.push({ text: `Návrhy posil od ředitele: ${game.market.proposals.length}`, tab: 'prestupy', tone: 'neutral' });
+  if (game.market.negotiation && !['hotovo', 'neuspech'].includes(game.market.negotiation.stage)) {
+    items.push({ text: 'Rozjednaný přestup čeká na vaši nabídku', tab: 'prestupy', tone: 'warn' });
+  }
+  const expiring = squadOf(game, own).filter((p) => contractExpiring(game, p)).length;
+  if (expiring && game.date.slice(5) >= '01-01' && game.date.slice(5) < '06-20') {
+    items.push({ text: `Končící smlouvy: ${expiring}`, tab: 'kadr', tone: 'neutral' });
+  }
+  for (const role of ['trener', 'reditel'] as const) {
+    if (game.owner.trust[role] < 30) {
+      items.push({ text: `${role === 'trener' ? 'Trenér' : 'Ředitel'} ztrácí důvěru ve vedení`, tab: 'vedeni', tone: 'bad' });
+    }
+  }
+
+  return (
+    <section className="card">
+      <h2>Vedení klubu</h2>
+      <dl className="kv">
+        <dt>Cíl sezóny</dt>
+        <dd>{comp ? `${goalLabel(game.owner.seasonGoal, comp)}` : '–'}</dd>
+        <dt>Trenér</dt>
+        <dd>{coach ? `${coach.firstName} ${coach.lastName}` : 'neobsazeno'}</dd>
+        <dt>Sportovní ředitel</dt>
+        <dd>{director ? `${director.firstName} ${director.lastName}` : 'neobsazeno'}</dd>
+        <dt>Přestupní okno</dt>
+        <dd>{window ? 'otevřené' : 'zavřené'}</dd>
+      </dl>
+      {comp && <p className="muted small">Cíl znamená skončit do {goalTarget(game.owner.seasonGoal, comp)}. místa.</p>}
+      {items.length > 0 && (
+        <ul className="todo">
+          {items.map((it, i) => (
+            <li key={i}>
+              <button className="linklike" onClick={() => onNavigate(it.tab)}>
+                <Badge tone={it.tone}>{it.text}</Badge>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

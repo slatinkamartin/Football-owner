@@ -5,7 +5,7 @@ import { money, num } from '../format';
 
 const czPack = pack as DataPack;
 
-export function NewGame({ onStart }: { onStart: (game: GameState) => void }) {
+export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) => void; outdatedSave?: boolean }) {
   const [ownerName, setOwnerName] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('stredni');
   const [clubId, setClubId] = useState<string | null>(null);
@@ -21,6 +21,12 @@ export function NewGame({ onStart }: { onStart: (game: GameState) => void }) {
         <h1>Majitel</h1>
         <p>Kup fotbalový klub a dovedi ho z české pyramidy až do Evropy. Taktiku necháš trenérovi, ty rozhoduješ o penězích, lidech a směřování.</p>
       </header>
+
+      {outdatedSave && (
+        <p className="warning">
+          Hra dostala trenéry, ředitele a přestupy. Uloženou hru ze starší verze nejde načíst, začněte prosím novou.
+        </p>
+      )}
 
       <section className="card">
         <h2>Majitel</h2>

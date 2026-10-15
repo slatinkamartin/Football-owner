@@ -1,4 +1,4 @@
-import { addDays, formatDate, monthDay, roundDates, SEASON_END, SEASON_START, seasonLabel } from './calendar';
+import { addDays, dayOfWeek, formatDate, monthDay, roundDates, SEASON_END, SEASON_START, seasonLabel } from './calendar';
 import {
   annualRevenue,
   book,
@@ -25,8 +25,21 @@ import {
   squadQualityForReputation,
 } from './players';
 import { createRng, type Rng } from './rng';
+import {
+  coachBonus,
+  coachOf,
+  generateStaff,
+  monthlyStaff,
+  realisticGoal,
+  refreshStaffPool,
+  seasonEndStaff,
+  staffLevelForReputation,
+  styleFactors,
+} from './staff';
 import { computeTable, formScore } from './standings';
-import type { Club, ClubDef, Competition, DataPack, Difficulty, GameState, NewsItem, Player, Position } from './types';
+import { closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
+import { SAVE_VERSION, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
+import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
 
 export const START_SEASON = 2026;
 const MAX_SQUAD = 26;
@@ -45,21 +58,6 @@ export interface NewGameOptions {
   seed?: number;
 }
 
-// ---------- Dotazy ----------
-
-export function competitionOf(state: GameState, clubId: string): Competition | undefined {
-  return Object.values(state.competitions).find((c) => c.clubIds.includes(clubId));
-}
-
-export function tierOf(state: GameState, clubId: string): number {
-  return competitionOf(state, clubId)?.tier ?? 4;
-}
-
-function addNews(state: GameState, item: Omit<NewsItem, 'date'>): void {
-  state.news.unshift({ date: state.date, ...item });
-  state.news.length = Math.min(state.news.length, 300);
-}
-
 // ---------- Založení hry ----------
 
 function createClub(def: ClubDef, tier: number): Club {
@@ -73,6 +71,7 @@ function createClub(def: ClubDef, tier: number): Club {
     stadium: { ...def.stadium },
     colors: def.colors,
     reserveOf: def.reserveOf,
+    staff: { coachId: '', directorId: '' },
     policy: { ticketPrice: defaultTicketPrice(tier), wageMultiplier: 1, transferBudget: 0 },
     finance: { balance: 0, monthsNegative: 0, season: emptyTotals(), transactions: [] },
   };
@@ -83,22 +82,44 @@ function createClub(def: ClubDef, tier: number): Club {
 
 function fillSquad(state: GameState, rng: Rng, club: Club): void {
   const quality = squadQualityForReputation(club.reputation) + rng.normal(0, 1.5);
-  for (const p of generateSquad(rng, state, club.id, state.season, quality)) state.players[p.id] = p;
+  const squad = generateSquad(rng, state, club.id, state.season, quality);
+  for (const p of squad) state.players[p.id] = p;
+  assignWages(squad, wageBudgetMonthly(club));
+}
+
+/** Klub v soutěži musí mít trenéra; klub majitele i sportovního ředitele. */
+function ensureStaff(state: GameState, rng: Rng, club: Club): void {
+  const level = staffLevelForReputation(club.reputation);
+  if (!club.staff.coachId && club.id !== state.owner.clubId) {
+    const coach = generateStaff(rng, state, 'trener', level + rng.normal(0, 6), club.id);
+    state.staff[coach.id] = coach;
+    club.staff.coachId = coach.id;
+  }
 }
 
 export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
   const seed = opts.seed ?? Math.floor(Math.random() * 2 ** 31);
   const rng = createRng(seed);
   const state: GameState = {
-    version: 1,
+    version: SAVE_VERSION,
     packId: pack.id,
     seed,
     rngState: 0,
     date: `${START_SEASON}-${SEASON_START}`,
     season: START_SEASON,
-    owner: { name: opts.ownerName, clubId: opts.clubId, share: 1, wallet: DIFFICULTY[opts.difficulty].wallet, difficulty: opts.difficulty },
+    owner: {
+      name: opts.ownerName,
+      clubId: opts.clubId,
+      share: 1,
+      wallet: DIFFICULTY[opts.difficulty].wallet,
+      difficulty: opts.difficulty,
+      seasonGoal: 'stred',
+      trust: { trener: 60, reditel: 60 },
+    },
     clubs: {},
     players: {},
+    staff: {},
+    market: { proposals: [], offers: [], listed: [], spent: 0, earned: 0, history: [] },
     competitions: {},
     pool: [],
     news: [],
@@ -120,12 +141,25 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
   const own = state.clubs[opts.clubId];
   if (!own) throw new Error(`Neznámý klub ${opts.clubId}`);
   own.finance.balance = Math.round(annualRevenue(own.reputation) * DIFFICULTY[opts.difficulty].clubCash);
+  for (const role of ['trener', 'reditel'] as const) {
+    const s = generateStaff(rng, state, role, staffLevelForReputation(own.reputation) + rng.normal(0, 5), own.id);
+    state.staff[s.id] = s;
+    if (role === 'trener') own.staff.coachId = s.id;
+    else own.staff.directorId = s.id;
+  }
+  for (const club of Object.values(state.clubs)) ensureStaff(state, rng, club);
+  for (let i = 0; i < 40; i++) {
+    // Na začátku hry je na trhu víc volných hráčů.
+    refreshFreeAgents(state, rng);
+    if (Object.values(state.players).filter((p) => p.clubId === FREE).length >= 60) break;
+  }
 
   setupSeason(state, rng, false);
+  state.owner.seasonGoal = realisticGoal(state, own.id);
   addNews(state, {
     kind: 'info',
     title: `Vítejte v ${own.name}`,
-    text: `Stal jste se majitelem klubu. Sezóna ${seasonLabel(state.season)} začíná. Sportovní ředitel čeká na rozpočet na posily a trenér na první zápas.`,
+    text: `Stal jste se majitelem klubu. Sezóna ${seasonLabel(state.season)} začíná a přestupní okno je otevřené do 31. 8. Ve Vedení stanovte cíl sezóny, v Přestupech najdete návrhy sportovního ředitele.`,
   });
   state.rngState = rng.state();
   return state;
@@ -147,7 +181,18 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
     p.goals = 0;
     p.apps = 0;
   }
-  if (summerWindow) runSummerWindow(state, rng);
+  state.market.spent = 0;
+  state.market.earned = 0;
+  if (summerWindow) {
+    runSummerWindow(state, rng);
+    refreshFreeAgents(state, rng);
+    refreshStaffPool(state, rng);
+  } else {
+    refreshStaffPool(state, rng);
+  }
+  for (const comp of Object.values(state.competitions)) {
+    for (const id of comp.clubIds) ensureStaff(state, rng, state.clubs[id]);
+  }
 
   const squads = playersByClub(state);
   for (const comp of Object.values(state.competitions)) {
@@ -161,20 +206,23 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
       homeId: p.homeId,
       awayId: p.awayId,
     }));
+    // Platy ostatních klubů se přizpůsobí rozpočtu. V klubu majitele platí sjednané smlouvy.
     for (const id of comp.clubIds) {
-      assignWages(squads.get(id) ?? [], wageBudgetMonthly(state.clubs[id]));
+      if (id !== state.owner.clubId) assignWages(squads.get(id) ?? [], wageBudgetMonthly(state.clubs[id]));
     }
   }
+  generateProposals(state);
 }
 
 /**
- * Letní přestupní okno v první verzi: sportovní ředitel sám nahradí nejslabší hráče.
- * Kvalitu posil určuje rozpočet na přestupy a mzdový rozpočet, které schvaluje majitel.
+ * Letní přestupní okno ostatních klubů (zjednodušeně): nejslabší hráči odejdou mezi volné hráče
+ * a klub přivede nové. Kvalitu posil určuje rozpočet na přestupy a mzdový rozpočet.
  */
 function runSummerWindow(state: GameState, rng: Rng): void {
   const squads = playersByClub(state);
   for (const comp of Object.values(state.competitions)) {
     for (const clubId of comp.clubIds) {
+      if (clubId === state.owner.clubId) continue;
       const club = state.clubs[clubId];
       const squad = squads.get(clubId) ?? [];
       const budget = Math.max(0, club.policy.transferBudget);
@@ -193,7 +241,11 @@ function runSummerWindow(state: GameState, rng: Rng): void {
         leaving.add(weakest.id);
         remaining.splice(remaining.indexOf(weakest), 1);
       }
-      for (const id of leaving) delete state.players[id];
+      for (const id of leaving) {
+        const p = state.players[id];
+        if (playerAge(p, state.season) >= 33) delete state.players[id];
+        else p.clubId = FREE;
+      }
 
       // Příchody: doplnit pozice, kde chybí hráči, zbytek podle potřeby.
       const signings: Player[] = [];
@@ -208,24 +260,8 @@ function runSummerWindow(state: GameState, rng: Rng): void {
       }
       if (budget > 0) book(state, clubId, 'prestupy', -budget, 'Letní přestupní okno');
 
-      if (clubId === state.owner.clubId) {
-        const names = signings.map((p) => `${p.firstName} ${p.lastName} (${p.overall})`).join(', ');
-        addNews(state, {
-          kind: 'info',
-          title: 'Letní přestupní okno uzavřeno',
-          text: `Sportovní ředitel přivedl ${plural(signings.length, 'posilu', 'posily', 'posil')}: ${names}. Klub ${leaving.size === 1 ? 'opustil' : leaving.size < 5 ? 'opustili' : 'opustilo'} ${plural(leaving.size, 'hráč', 'hráči', 'hráčů')}.`,
-        });
-      }
     }
   }
-}
-
-function plural(n: number, one: string, few: string, many: string): string {
-  return `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
-}
-
-function clubLabel(state: GameState, id: string): string {
-  return state.clubs[id]?.shortName ?? id;
 }
 
 function isEligibleFor(state: GameState, clubId: string, targetTier: number, excluded: Set<string>): boolean {
@@ -355,6 +391,9 @@ function endSeason(state: GameState, rng: Rng): void {
       comp.clubIds = comp.clubIds.filter((id) => id !== out);
       state.pool.push(out);
       for (const p of squadOf(state, out)) delete state.players[p.id];
+      const outCoach = coachOf(state, out);
+      if (outCoach) outCoach.clubId = FREE;
+      state.clubs[out].staff.coachId = '';
       addNews(state, { kind: 'info', title: `${state.clubs[out].name} sestupuje do divize` });
     }
     while (comp.clubIds.length < comp.targetSize) {
@@ -366,18 +405,28 @@ function endSeason(state: GameState, rng: Rng): void {
       state.pool = state.pool.filter((id) => id !== club.id);
       comp.clubIds.push(club.id);
       fillSquad(state, rng, club);
+      ensureStaff(state, rng, club);
       addNews(state, { kind: 'info', title: `${club.name} postupuje z divize do soutěže ${comp.name}` });
     }
   }
 
+  seasonEndStaff(state, rng, ownIndex + 1, ownComp);
+  seasonEndContracts(state, rng);
   ageAndDevelopPlayers(state, rng);
 }
 
 function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
   const nextSeason = state.season + 1;
+  // Trenér, který dává šanci mladým, nebo velmi dobrý trenér, urychlí jejich vývoj.
+  const youthBoost = new Set(
+    Object.values(state.staff)
+      .filter((s) => s.role === 'trener' && s.clubId !== FREE && (s.youthFocus || s.ability >= 70))
+      .map((s) => s.clubId),
+  );
   for (const p of Object.values(state.players)) {
     const age = playerAge(p, nextSeason);
-    if (age <= 23) p.overall = Math.min(p.potential, p.overall + rng.int(1, 4));
+    const boost = youthBoost.has(p.clubId) && age <= 23 && rng.chance(0.6) ? 1 : 0;
+    if (age <= 23) p.overall = Math.min(p.potential, p.overall + rng.int(1, 4) + boost);
     else if (age <= 29) p.overall = Math.min(p.potential, p.overall + rng.int(-1, 2));
     else if (age <= 32) p.overall -= rng.int(0, 2);
     else p.overall -= rng.int(1, 4);
@@ -390,10 +439,7 @@ function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
         addNews(state, { kind: 'info', title: `${p.firstName} ${p.lastName} ukončil kariéru` });
       }
       delete state.players[p.id];
-      continue;
     }
-    // Smlouvy zatím prodlužuje sportovní ředitel automaticky.
-    if (p.contractUntil <= nextSeason) p.contractUntil = nextSeason + rng.int(1, 3);
   }
 
   // Dorost: každý klub dostane dva mladé hráče z akademie.
@@ -403,7 +449,11 @@ function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
       for (let i = 0; i < 2; i++) {
         const position = rng.pick(['GK', 'DF', 'DF', 'MF', 'MF', 'FW'] as Position[]);
         const p = generatePlayer(rng, state, { clubId, position, season: nextSeason, quality, age: rng.int(17, 18) });
+        p.wage = 8_000;
         state.players[p.id] = p;
+        if (clubId === state.owner.clubId) {
+          addNews(state, { kind: 'info', title: `Z akademie přichází ${p.firstName} ${p.lastName} (${p.overall}, potenciál ${p.potential})` });
+        }
       }
     }
   }
@@ -423,10 +473,12 @@ function playMatchesOn(state: GameState, rng: Rng): void {
       const away = state.clubs[f.awayId];
       const form = formScore(table.find((r) => r.clubId === home.id)?.form ?? []);
       const attendance = matchAttendance(rng, home, away, comp.tier, form);
+      const homeCoach = coachOf(state, home.id);
+      const awayCoach = coachOf(state, away.id);
       f.result = simulateMatch(
         rng,
-        { id: home.id, players: squads.get(home.id) ?? [] },
-        { id: away.id, players: squads.get(away.id) ?? [] },
+        { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach), style: styleFactors(homeCoach) },
+        { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach), style: styleFactors(awayCoach) },
         attendance,
       );
       book(state, home.id, 'vstupne', attendance * home.policy.ticketPrice, `Vstupné: ${home.shortName} – ${away.shortName}`);
@@ -447,7 +499,8 @@ function playMatchesOn(state: GameState, rng: Rng): void {
   }
 }
 
-function monthlyFinance(state: GameState): void {
+function monthlyFinance(state: GameState, rng: Rng): void {
+  monthlyStaff(state, rng);
   const squads = playersByClub(state);
   for (const comp of Object.values(state.competitions)) {
     for (const clubId of comp.clubIds) {
@@ -493,10 +546,19 @@ function processDay(state: GameState, rng: Rng): void {
   if (md === SEASON_START) {
     state.season = Number(state.date.slice(0, 4));
     setupSeason(state, rng, true);
-    addNews(state, { kind: 'sezona', title: `Začíná sezóna ${seasonLabel(state.season)}` });
+    emergencyFill(state, rng, 'před začátkem sezóny');
+    addNews(state, { kind: 'sezona', title: `Začíná sezóna ${seasonLabel(state.season)}`, text: 'Přestupní okno je otevřené do 31. 8. Nezapomeňte stanovit cíl sezóny.' });
   }
+  const window = transferWindow(state.date);
+  if (md === '01-08') addNews(state, { kind: 'info', title: 'Otevřelo se zimní přestupní okno (do 14. 2.)' });
+  if (window && md !== SEASON_START && (md.endsWith('-01') || md.endsWith('-15') || md === '01-08')) generateProposals(state);
+  if (window && dayOfWeek(state.date) === 1) generateOffers(state, rng);
   playMatchesOn(state, rng);
-  if (state.date.endsWith('-01')) monthlyFinance(state);
+  if (state.date.endsWith('-01')) monthlyFinance(state, rng);
+  if (md === '08-31' || md === '02-14') {
+    closeWindow(state, rng);
+    addNews(state, { kind: 'info', title: 'Přestupní okno se zavřelo' });
+  }
   if (md === SEASON_END) endSeason(state, rng);
 }
 

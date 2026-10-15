@@ -64,7 +64,7 @@ export function matchAttendance(
 }
 
 export function emptyTotals(): FinanceTotals {
-  return { vstupne: 0, tv: 0, komercni: 0, platy: 0, provoz: 0, prestupy: 0, vklad: 0 };
+  return { vstupne: 0, tv: 0, komercni: 0, platy: 0, vedeni: 0, provoz: 0, prestupy: 0, vklad: 0 };
 }
 
 export function book(
@@ -89,6 +89,7 @@ export const CATEGORY_LABEL: Record<FinanceCategory, string> = {
   tv: 'TV práva a odměny soutěže',
   komercni: 'Sponzoři a komerční příjmy',
   platy: 'Platy hráčů',
+  vedeni: 'Trenér a vedení (platy, odstupné)',
   provoz: 'Provoz klubu a stadionu',
   prestupy: 'Přestupy',
   vklad: 'Vklady majitele',

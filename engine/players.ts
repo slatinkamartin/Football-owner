@@ -14,6 +14,8 @@ export const POSITION_LABEL: Record<Position, string> = {
   FW: 'Útočník',
 };
 
+export const POSITION_SHORT: Record<Position, string> = { GK: 'BR', DF: 'OBR', MF: 'ZÁL', FW: 'ÚT' };
+
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 
 /** Průměrná kvalita kádru, kterou si klub s danou pověstí běžně může dovolit. */

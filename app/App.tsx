@@ -7,16 +7,20 @@ import { GameMenu } from './screens/GameMenu';
 import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
+import { People } from './screens/People';
 import { Squad } from './screens/Squad';
+import { Transfers } from './screens/Transfers';
 import { Tables } from './screens/Tables';
 
-type Tab = 'prehled' | 'tabulky' | 'zapasy' | 'kadr' | 'finance' | 'hra';
+type Tab = 'prehled' | 'tabulky' | 'zapasy' | 'kadr' | 'prestupy' | 'vedeni' | 'finance' | 'hra';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'prehled', label: 'Přehled' },
   { id: 'tabulky', label: 'Tabulky' },
   { id: 'zapasy', label: 'Zápasy' },
   { id: 'kadr', label: 'Kádr' },
+  { id: 'prestupy', label: 'Přestupy' },
+  { id: 'vedeni', label: 'Vedení' },
   { id: 'finance', label: 'Finance' },
   { id: 'hra', label: 'Hra' },
 ];
@@ -25,8 +29,13 @@ export function App() {
   const [game, setGame] = useState<GameState | null | undefined>(undefined);
   const [tab, setTab] = useState<Tab>('prehled');
 
+  const [outdated, setOutdated] = useState(false);
+
   useEffect(() => {
-    loadGame().then(setGame);
+    loadGame().then(({ game: saved, outdated: old }) => {
+      setOutdated(old);
+      setGame(saved);
+    });
   }, []);
 
   useEffect(() => {
@@ -45,7 +54,7 @@ export function App() {
   };
 
   if (game === undefined) return <div className="loading">Načítám…</div>;
-  if (game === null) return <NewGame onStart={(g) => { setTab('prehled'); update(g); }} />;
+  if (game === null) return <NewGame outdatedSave={outdated} onStart={(g) => { setTab('prehled'); update(g); }} />;
 
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
@@ -84,10 +93,12 @@ export function App() {
       </div>
 
       <main>
-        {tab === 'prehled' && <Overview game={game} />}
+        {tab === 'prehled' && <Overview game={game} onNavigate={(t) => setTab(t)} />}
         {tab === 'tabulky' && <Tables game={game} />}
         {tab === 'zapasy' && <Matches game={game} />}
-        {tab === 'kadr' && <Squad game={game} />}
+        {tab === 'kadr' && <Squad game={game} onChange={update} />}
+        {tab === 'prestupy' && <Transfers game={game} onChange={update} />}
+        {tab === 'vedeni' && <People game={game} onChange={update} />}
         {tab === 'finance' && <Finance game={game} onChange={update} />}
         {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
       </main>

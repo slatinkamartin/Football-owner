@@ -1,0 +1,258 @@
+import { useState } from 'react';
+import {
+  ADVICE_LABEL,
+  adviceAvailableFrom,
+  candidates,
+  competitionOf,
+  directorOf,
+  coachOf,
+  expectedPosition,
+  fireStaff,
+  formatDate,
+  giveAdvice,
+  goalLabel,
+  GOALS,
+  hireStaff,
+  isInterested,
+  ROLE_LABEL,
+  scoutingError,
+  setSeasonGoal,
+  severance,
+  staffAge,
+  STYLE_LABEL,
+  type ActionResult,
+  type Advice,
+  type GameState,
+  type Staff,
+  type StaffRole,
+} from '../../engine';
+import { Badge, Meter, Notice } from '../components';
+import { money } from '../format';
+
+type Props = { game: GameState; onChange: (g: GameState) => void };
+
+export function People({ game, onChange }: Props) {
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const apply = (r: ActionResult) => {
+    if (r.state !== game) onChange(r.state);
+    setMessage({ text: r.message, ok: r.ok });
+  };
+  const club = game.clubs[game.owner.clubId];
+  const comp = competitionOf(game, club.id);
+
+  return (
+    <div className="stack">
+      <Notice message={message?.text ?? null} ok={message?.ok} />
+      <div className="grid two">
+        <section className="card">
+          <h2>Cíl sezóny</h2>
+          <p className="muted">
+            Podle síly kádru a trenéra odpovídá klub zhruba {expectedPosition(game, club.id)}. místu. Cíl ovlivňuje důvěru trenéra a
+            ředitele: plnění ji zvyšuje, neúspěch snižuje.
+          </p>
+          <div className="choices">
+            {GOALS.map((g) => (
+              <button
+                key={g}
+                className={`choice ${game.owner.seasonGoal === g ? 'selected' : ''}`}
+                onClick={() => apply(setSeasonGoal(game, g))}
+              >
+                <strong>{goalLabel(g, comp)}</strong>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <AdviceCard game={game} onResult={apply} />
+      </div>
+
+      <div className="grid two">
+        <StaffCard game={game} role="trener" person={coachOf(game, club.id)} onResult={apply} />
+        <StaffCard game={game} role="reditel" person={directorOf(game, club.id)} onResult={apply} />
+      </div>
+
+      <Candidates game={game} onResult={apply} />
+    </div>
+  );
+}
+
+function AdviceCard({ game, onResult }: { game: GameState; onResult: (r: ActionResult) => void }) {
+  const coach = coachOf(game, game.owner.clubId);
+  const waitUntil = adviceAvailableFrom(game);
+  return (
+    <section className="card">
+      <h2>Rada trenérovi</h2>
+      <p className="muted">
+        Sestavu a taktiku určuje trenér. Můžete mu ale naznačit směr. Ješitný trenér radu nemusí přijmout a vztah se zhorší.
+      </p>
+      {!coach && <p className="warning">Klub nemá hlavního trenéra. Tým vede asistent a hraje slaběji.</p>}
+      {waitUntil && <p className="muted small">Další radu můžete dát od {formatDate(waitUntil)}.</p>}
+      <div className="buttons">
+        {(Object.keys(ADVICE_LABEL) as Advice[]).map((a) => (
+          <button key={a} disabled={!coach || !!waitUntil} onClick={() => onResult(giveAdvice(game, a))}>
+            {ADVICE_LABEL[a]}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StaffCard({
+  game,
+  role,
+  person,
+  onResult,
+}: {
+  game: GameState;
+  role: StaffRole;
+  person?: Staff;
+  onResult: (r: ActionResult) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const trust = game.owner.trust[role];
+  if (!person) {
+    return (
+      <section className="card">
+        <h2>{ROLE_LABEL[role]}</h2>
+        <p className="warning">
+          Pozice je neobsazená.{' '}
+          {role === 'trener'
+            ? 'Tým vede asistent a hraje slaběji.'
+            : 'Přestupy vyjednáváte sám, hůř a bez návrhů. Skauting je nepřesný.'}
+        </p>
+        <p className="muted">Vyberte si z kandidátů níže.</p>
+      </section>
+    );
+  }
+  const cost = severance(game, person);
+  return (
+    <section className="card">
+      <div className="row-between">
+        <h2>{ROLE_LABEL[role]}</h2>
+        <Badge tone={trust >= 60 ? 'good' : trust >= 35 ? 'warn' : 'bad'}>Důvěra {Math.round(trust)}</Badge>
+      </div>
+      <p className="person-name">
+        {person.firstName} {person.lastName} <span className="muted">· {staffAge(person, game.season)} let</span>
+      </p>
+      <dl className="kv meters">
+        <dt>{role === 'trener' ? 'Trenérské schopnosti' : 'Skauting a vyjednávání'}</dt>
+        <dd><Meter value={person.ability} /> {person.ability}</dd>
+        <dt>Ambice</dt>
+        <dd><Meter value={person.ambition} max={20} tone="good" /> {person.ambition}</dd>
+        <dt>Ego</dt>
+        <dd><Meter value={person.ego} max={20} tone="warn" /> {person.ego}</dd>
+        <dt>Loajalita</dt>
+        <dd><Meter value={person.loyalty} max={20} tone="good" /> {person.loyalty}</dd>
+        <dt>Důvěra ve vás</dt>
+        <dd><Meter value={trust} /> {Math.round(trust)}</dd>
+      </dl>
+      <dl className="kv">
+        {role === 'trener' ? (
+          <>
+            <dt>Styl hry</dt>
+            <dd>{STYLE_LABEL[person.style]}</dd>
+            <dt>Mladí hráči</dt>
+            <dd>{person.youthFocus ? 'dává jim šanci' : 'spoléhá na zkušené'}</dd>
+          </>
+        ) : (
+          <>
+            <dt>Přesnost skautů</dt>
+            <dd>±{scoutingError(game).toFixed(0)} bodů hodnocení</dd>
+          </>
+        )}
+        <dt>Plat</dt>
+        <dd>{money(person.wage)} měsíčně</dd>
+        <dt>Smlouva do</dt>
+        <dd>30. 6. {person.contractUntil}</dd>
+      </dl>
+      {trust < 25 && <p className="warning">Vztah je na bodu mrazu. Hrozí rezignace na konci sezóny.</p>}
+      {confirming ? (
+        <div className="confirm">
+          <strong>Odvolat? Odstupné {money(cost)}.</strong>
+          <div className="buttons">
+            <button className="danger" onClick={() => { setConfirming(false); onResult(fireStaff(game, role)); }}>
+              Ano, odvolat
+            </button>
+            <button onClick={() => setConfirming(false)}>Zrušit</button>
+          </div>
+        </div>
+      ) : (
+        <button className="danger" onClick={() => setConfirming(true)}>Odvolat</button>
+      )}
+    </section>
+  );
+}
+
+function Candidates({ game, onResult }: { game: GameState; onResult: (r: ActionResult) => void }) {
+  const [role, setRole] = useState<StaffRole>('trener');
+  const [pending, setPending] = useState<string | null>(null);
+  const club = game.clubs[game.owner.clubId];
+  const current = role === 'trener' ? coachOf(game, club.id) : directorOf(game, club.id);
+  const list = candidates(game, role);
+
+  return (
+    <section className="card">
+      <div className="row-between">
+        <h2>Volní kandidáti</h2>
+        <div className="segmented">
+          {(['trener', 'reditel'] as StaffRole[]).map((r) => (
+            <button key={r} className={role === r ? 'active' : ''} onClick={() => { setRole(r); setPending(null); }}>
+              {r === 'trener' ? 'Trenéři' : 'Sportovní ředitelé'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="muted small">Nový člověk podepíše smlouvu na 2 roky, při nástupu dostane jeden měsíční plat jako bonus.</p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Jméno</th>
+              <th className="num">Věk</th>
+              <th className="num">Schopnosti</th>
+              {role === 'trener' && <th className="hide-sm">Styl</th>}
+              <th className="num hide-sm">Ego</th>
+              <th className="num">Plat</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((s) => {
+              const interested = isInterested(s, club);
+              return (
+                <tr key={s.id}>
+                  <td>{s.firstName} {s.lastName}</td>
+                  <td className="num">{staffAge(s, game.season)}</td>
+                  <td className="num"><span className="rating">{s.ability}</span></td>
+                  {role === 'trener' && <td className="hide-sm">{STYLE_LABEL[s.style]}{s.youthFocus ? ', mladí' : ''}</td>}
+                  <td className="num hide-sm">{s.ego}</td>
+                  <td className="num">{money(s.wage)}</td>
+                  <td className="num">
+                    {!interested ? (
+                      <span className="muted small">nemá zájem</span>
+                    ) : pending === s.id ? (
+                      <span className="buttons end">
+                        <button className="primary" onClick={() => { setPending(null); onResult(hireStaff(game, s.id, 2)); }}>
+                          Potvrdit
+                        </button>
+                        <button onClick={() => setPending(null)}>Zpět</button>
+                      </span>
+                    ) : (
+                      <button onClick={() => setPending(s.id)}>Najmout</button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {pending && current && (
+        <p className="muted small">
+          Současný {role === 'trener' ? 'trenér' : 'ředitel'} {current.firstName} {current.lastName} odejde, odstupné {money(severance(game, current))}.
+        </p>
+      )}
+    </section>
+  );
+}

@@ -1,14 +1,15 @@
 import { del, get, set } from 'idb-keyval';
-import type { GameState } from '../engine';
+import { SAVE_VERSION, type GameState } from '../engine';
 
 const KEY = 'majitel:ulozena-hra';
 
-export async function loadGame(): Promise<GameState | null> {
+export async function loadGame(): Promise<{ game: GameState | null; outdated: boolean }> {
   try {
     const saved = await get<GameState>(KEY);
-    return saved?.version === 1 ? saved : null;
+    if (!saved) return { game: null, outdated: false };
+    return saved.version === SAVE_VERSION ? { game: saved, outdated: false } : { game: null, outdated: true };
   } catch {
-    return null;
+    return { game: null, outdated: false };
   }
 }
 
@@ -39,6 +40,6 @@ export function parseGame(text: string): GameState {
   } catch {
     throw new Error('Záloha není platný text uložené hry. Zkopírujte ji znovu celou.');
   }
-  if (data?.version !== 1 || !data.clubs || !data.owner) throw new Error('Tohle není uložená hra Majitele.');
+  if (data?.version !== SAVE_VERSION || !data.clubs || !data.owner) throw new Error('Tohle není uložená hra Majitele.');
   return data;
 }

@@ -55,6 +55,7 @@ export interface Player {
   position: Position;
   overall: number;
   potential: number;
+  /** Prázdný řetězec = volný hráč bez klubu. */
   clubId: string;
   /** Měsíční plat v Kč. */
   wage: number;
@@ -64,6 +65,97 @@ export interface Player {
   apps: number;
 }
 
+// ---------- Lidé ----------
+
+export type StaffRole = 'trener' | 'reditel';
+export type CoachStyle = 'utocny' | 'vyvazeny' | 'defenzivni';
+
+export interface Staff {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: StaffRole;
+  birthYear: number;
+  /** Odborné schopnosti 1–100 (trenér: vedení týmu; ředitel: skauting a vyjednávání). */
+  ability: number;
+  /** Povaha 1–20. */
+  ambition: number;
+  ego: number;
+  loyalty: number;
+  style: CoachStyle;
+  /** Trenér dává víc prostoru mladým (vlastní preference nebo na radu majitele). */
+  youthFocus: boolean;
+  /** Prázdný řetězec = bez angažmá. */
+  clubId: string;
+  /** Měsíční plat v Kč. */
+  wage: number;
+  contractUntil: number;
+}
+
+export type SeasonGoal = 'titul' | 'postup' | 'horni' | 'stred' | 'zachrana';
+
+export interface ClubStaff {
+  coachId: string;
+  directorId: string;
+}
+
+// ---------- Přestupy ----------
+
+export interface TransferProposal {
+  id: string;
+  playerId: string;
+  estimatedFee: number;
+  estimatedWage: number;
+  note: string;
+}
+
+export interface IncomingOffer {
+  id: string;
+  playerId: string;
+  buyerId: string;
+  fee: number;
+  expires: string;
+  advice: 'prijmout' | 'odmitnout';
+  note: string;
+}
+
+export interface Negotiation {
+  playerId: string;
+  /** Prázdný řetězec = volný hráč, jedná se rovnou s hráčem. */
+  sellerId: string;
+  stage: 'klub' | 'hrac' | 'hotovo' | 'neuspech';
+  askingFee: number;
+  minFee: number;
+  agreedFee: number;
+  minWage: number;
+  roundsLeft: number;
+  /** Poslední protinávrh protistrany (odstupné, nebo plat). */
+  counter?: number;
+  againstAdvice: boolean;
+  log: string[];
+}
+
+export interface TransferRecord {
+  date: string;
+  playerName: string;
+  fromId: string;
+  toId: string;
+  fee: number;
+}
+
+export interface Market {
+  proposals: TransferProposal[];
+  offers: IncomingOffer[];
+  negotiation?: Negotiation;
+  /** Hráči klubu majitele nabídnutí k prodeji. */
+  listed: string[];
+  /** Utraceno za odstupné v této sezóně. */
+  spent: number;
+  /** Polovina příjmů z prodejů se vrací do rozpočtu na přestupy. */
+  earned: number;
+  history: TransferRecord[];
+}
+
 export type FinanceCategory =
   | 'vstupne'
   | 'tv'
@@ -71,10 +163,11 @@ export type FinanceCategory =
   | 'platy'
   | 'provoz'
   | 'prestupy'
+  | 'vedeni'
   | 'vklad';
 
 export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'tv', 'komercni', 'vklad'];
-export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'provoz', 'prestupy'];
+export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'provoz', 'prestupy'];
 
 export type FinanceTotals = Record<FinanceCategory, number>;
 
@@ -99,7 +192,7 @@ export interface ClubPolicy {
   ticketPrice: number;
   /** Násobek běžného mzdového rozpočtu (0,7 až 1,5). */
   wageMultiplier: number;
-  /** Rozpočet na letní posily v Kč. */
+  /** Rozpočet na odstupné za posily na celou sezónu v Kč. */
   transferBudget: number;
 }
 
@@ -114,6 +207,7 @@ export interface Club {
   colors: [string, string];
   reserveOf?: string;
   generated?: boolean;
+  staff: ClubStaff;
   policy: ClubPolicy;
   finance: ClubFinance;
 }
@@ -147,6 +241,10 @@ export interface Owner {
   /** Osobní peníze majitele v Kč. */
   wallet: number;
   difficulty: Difficulty;
+  seasonGoal: SeasonGoal;
+  /** Důvěra trenéra a ředitele v majitele, 0–100. */
+  trust: { trener: number; reditel: number };
+  lastAdvice?: string;
 }
 
 export interface NewsItem {
@@ -162,8 +260,10 @@ export interface SeasonRecord {
   ownerClub: { competitionId: string; position: number; points: number };
 }
 
+export const SAVE_VERSION = 2;
+
 export interface GameState {
-  version: 1;
+  version: typeof SAVE_VERSION;
   packId: string;
   seed: number;
   rngState: number;
@@ -173,6 +273,8 @@ export interface GameState {
   owner: Owner;
   clubs: Record<string, Club>;
   players: Record<string, Player>;
+  staff: Record<string, Staff>;
+  market: Market;
   competitions: Record<string, Competition>;
   /** Kluby mimo modelované soutěže (divize a níže). */
   pool: string[];

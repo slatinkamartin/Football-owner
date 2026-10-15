@@ -28,15 +28,24 @@ function pickScorer(rng: Rng, xi: Player[]): Player | undefined {
   return xi[xi.length - 1];
 }
 
-export function simulateMatch(
-  rng: Rng,
-  home: { id: string; players: Player[] },
-  away: { id: string; players: Player[] },
-  attendance: number,
-): MatchResult {
-  const [lh, la] = expectedGoals(teamStrength(home.players), teamStrength(away.players));
-  const homeGoals = rng.poisson(lh);
-  const awayGoals = rng.poisson(la);
+export interface MatchSide {
+  id: string;
+  players: Player[];
+  /** Vliv trenéra na sílu týmu. */
+  bonus?: number;
+  /** Násobky vstřelených a obdržených gólů podle stylu hry. */
+  style?: [number, number];
+}
+
+export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attendance: number): MatchResult {
+  const [lh, la] = expectedGoals(
+    teamStrength(home.players) + (home.bonus ?? 0),
+    teamStrength(away.players) + (away.bonus ?? 0),
+  );
+  const [hs, hc] = home.style ?? [1, 1];
+  const [aws, awc] = away.style ?? [1, 1];
+  const homeGoals = rng.poisson(lh * hs * awc);
+  const awayGoals = rng.poisson(la * aws * hc);
   const homeXi = bestEleven(home.players);
   const awayXi = bestEleven(away.players);
   for (const p of [...homeXi, ...awayXi]) p.apps += 1;
