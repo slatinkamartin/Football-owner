@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { advanceWeek, competitionOf, formatDate, seasonLabel, type GameState } from '../engine';
+import { advanceToNextMatch, advanceWeek, competitionOf, formatDate, seasonLabel, startNegotiation, type GameState } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance } from './screens/Finance';
 import { GameMenu } from './screens/GameMenu';
 import { MatchDetail } from './screens/MatchDetail';
+import { ClubCard } from './screens/ClubCard';
+import { PlayerCard } from './screens/PlayerCard';
+import { NavContext, Sheet, type ModalRef } from './nav';
 import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
@@ -31,7 +34,10 @@ export function App() {
   const [tab, setTab] = useState<Tab>('prehled');
 
   const [outdated, setOutdated] = useState(false);
-  const [openMatch, setOpenMatch] = useState<string | null>(null);
+  const [modals, setModals] = useState<ModalRef[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
+  const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
   useEffect(() => {
     loadGame().then(({ game: saved, outdated: old }) => {
@@ -55,6 +61,18 @@ export function App() {
     setGame(null);
   };
 
+  const nav = {
+    open: openModal,
+    negotiate: (playerId: string) => {
+      if (!game) return;
+      const r = startNegotiation(game, playerId);
+      if (r.state !== game) update(r.state);
+      setNotice(r.ok ? null : r.message);
+      setModals([]);
+      setTab('prestupy');
+    },
+  };
+
   if (game === undefined) return <div className="loading">Načítám…</div>;
   if (game === null) return <NewGame outdatedSave={outdated} onStart={(g) => { setTab('prehled'); update(g); }} />;
 
@@ -62,6 +80,7 @@ export function App() {
   const comp = competitionOf(game, club.id);
 
   return (
+    <NavContext.Provider value={nav}>
     <div className="app">
       <div className="sticky-head">
         <header className="topbar">
@@ -79,9 +98,23 @@ export function App() {
               <span>Klub</span>
               <strong>{money(club.finance.balance)}</strong>
             </div>
-            <button className="primary" disabled={!!game.gameOver} onClick={() => update(advanceWeek(game))}>
-              Další týden ›
-            </button>
+            <div className="advance">
+              <button disabled={!!game.gameOver} onClick={() => update(advanceWeek(game))}>
+                Týden ›
+              </button>
+              <button
+                className="primary"
+                disabled={!!game.gameOver}
+                title="Hrát do příštího zápasu vašeho klubu a ukázat jeho souhrn"
+                onClick={() => {
+                  const r = advanceToNextMatch(game);
+                  update(r.state);
+                  if (r.fixtureId && !r.state.gameOver) setModals([{ type: 'match', id: r.fixtureId }]);
+                }}
+              >
+                Do zápasu ›
+              </button>
+            </div>
           </div>
         </header>
 
@@ -105,7 +138,23 @@ export function App() {
         {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
       </main>
 
-      {openMatch && <MatchDetail game={game} fixtureId={openMatch} onClose={() => setOpenMatch(null)} />}
+      {notice && tab === 'prestupy' && (
+        <div className="toast" role="status">
+          {notice} <button className="linkbtn" onClick={() => setNotice(null)}>Zavřít</button>
+        </div>
+      )}
+
+      {modals.length > 0 && (() => {
+        const top = modals[modals.length - 1];
+        const close = () => setModals([]);
+        const back = modals.length > 1 ? () => setModals(modals.slice(0, -1)) : undefined;
+        if (top.type === 'match') return <MatchDetail game={game} fixtureId={top.id} onClose={close} onBack={back} />;
+        return (
+          <Sheet label={top.type === 'player' ? 'Karta hráče' : 'Karta klubu'} onClose={close} onBack={back}>
+            {top.type === 'player' ? <PlayerCard game={game} playerId={top.id} /> : <ClubCard game={game} clubId={top.id} />}
+          </Sheet>
+        );
+      })()}
 
       {game.gameOver && (
         <div className="overlay">
@@ -118,5 +167,6 @@ export function App() {
         </div>
       )}
     </div>
+    </NavContext.Provider>
   );
 }

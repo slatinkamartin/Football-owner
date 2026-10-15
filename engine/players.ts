@@ -27,6 +27,13 @@ export function emptySeasonStats() {
   return { goals: 0, apps: 0, starts: 0, minutes: 0, assists: 0, yellows: 0, reds: 0, ratingSum: 0, ratingCount: 0 };
 }
 
+/** Forma: průměr posledních známek převedený na bonus k výkonu (−2 až +2). */
+export function formBonus(p: Player): number {
+  if (!p.recent?.length) return 0;
+  const avg = p.recent.reduce((a, b) => a + b, 0) / p.recent.length;
+  return Math.max(-2, Math.min(2, (avg - 6.6) * 0.8));
+}
+
 export function averageRating(p: Player): number | undefined {
   return p.ratingCount ? p.ratingSum / p.ratingCount : undefined;
 }
@@ -60,6 +67,10 @@ export function generatePlayer(
     ...emptySeasonStats(),
     fitness: 100,
     suspension: 0,
+    morale: 60,
+    recent: [],
+    career: [],
+    transfers: [],
   };
 }
 

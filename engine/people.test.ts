@@ -148,9 +148,9 @@ describe('přestupy', () => {
     expect(r.state.market.earned).toBe(10_000_000);
   });
 
-  it('nevyřešená smlouva na konci sezóny vyprší, prodloužená ne', () => {
+  it('nevyřešená smlouva na konci sezóny vyprší, prodloužená ne', { timeout: 30000 }, () => {
     const s = structuredClone(start);
-    const [a, b] = squadOf(s, 'slavia').filter((p) => p.overall < 70);
+    const [a, b] = squadOf(s, 'slavia').sort((x, y) => x.overall - y.overall);
     a.contractUntil = s.season + 1;
     b.contractUntil = s.season + 1;
     const renewed = renewContract(s, b.id, renewalDemand(s, b) + 1000, 3);

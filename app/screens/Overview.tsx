@@ -15,6 +15,8 @@ import {
 } from '../../engine';
 import { Badge } from '../components';
 import { findFixture } from './MatchDetail';
+import { LineChart } from '../chart';
+import { PlayerLink } from '../nav';
 import { money } from '../format';
 
 type Target = 'prestupy' | 'vedeni' | 'kadr';
@@ -111,6 +113,19 @@ export function Overview({
 
       <ToDo game={game} onNavigate={onNavigate} />
 
+      {game.timeline.length >= 2 && comp && (
+        <section className="card wide">
+          <LineChart
+            title={`Pozice v tabulce v sezóně ${seasonLabel(game.season)}`}
+            points={[...game.timeline].sort((a, b) => a.round - b.round).map((t) => ({ label: `${t.round}. kolo`, value: t.position }))}
+            format={(v) => `${Math.round(v)}.`}
+            invert
+            min={1}
+            max={comp.clubIds.length}
+          />
+        </section>
+      )}
+
       <section className="card wide">
         <h2>Zprávy</h2>
         <ul className="news">
@@ -120,6 +135,9 @@ export function Overview({
               <div>
                 <strong>{n.title}</strong>
                 {n.text && <p>{n.text}</p>}
+                {n.playerId && game.players[n.playerId] && (
+                  <PlayerLink id={n.playerId}>Karta hráče</PlayerLink>
+                )}{' '}
                 {n.fixtureId && findFixture(game, n.fixtureId) && (
                   <button className="linkbtn" onClick={() => onOpenMatch(n.fixtureId!)}>
                     Náhled zápasu

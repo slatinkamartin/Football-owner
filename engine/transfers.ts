@@ -1,4 +1,4 @@
-import { book, playerWage, wageBudgetMonthly } from './finance';
+import { book, ownerAccounting, playerWage, wageBudgetMonthly } from './finance';
 import { FOREIGN_CLUBS } from './names';
 import { bestEleven, generatePlayer, marketValue, playerAge, SQUAD_SHAPE, squadOf, squadQualityForReputation } from './players';
 import type { Rng } from './rng';
@@ -133,7 +133,14 @@ export function executeTransfer(state: GameState, p: Player, toId: string, fee: 
     if (!isForeign(toId)) book(state, toId, 'prestupy', -fee, `Nákup: ${playerName(p)}`);
   }
   if (toId === own) state.market.spent += fee;
-  if (fromId === own) state.market.earned += fee * 0.5;
+  if (fromId === own) {
+    state.market.earned += fee * 0.5;
+    // Účetně: zisk = odstupné minus dosud neodepsaná hodnota registrace.
+    ownerAccounting(state).saleProfit += fee - (p.bookValue ?? 0);
+    p.bookValue = undefined;
+    p.amortization = undefined;
+  }
+  p.transfers = [...(p.transfers ?? []), { date: state.date, from: clubLabel(state, fromId), to: clubLabel(state, toId), fee }];
   state.market.history.unshift({ date: state.date, playerName: playerName(p), fromId, toId, fee });
   state.market.history.length = Math.min(state.market.history.length, 100);
   state.market.listed = state.market.listed.filter((id) => id !== p.id);
@@ -148,6 +155,16 @@ export function executeTransfer(state: GameState, p: Player, toId: string, fee: 
   p.clubId = toId;
   p.wage = wage;
   p.contractUntil = state.season + Math.max(1, years);
+  if (toId === own && fee > 0) {
+    p.bookValue = fee;
+    p.amortization = fee / monthsUntilContractEnd(state.date, p.contractUntil);
+  }
+}
+
+/** Počet měsíců do konce smlouvy (30. 6. roku contractUntil), nejméně 1. */
+export function monthsUntilContractEnd(date: string, contractUntil: number): number {
+  const [y, m] = date.split('-').map(Number);
+  return Math.max(1, (contractUntil - y) * 12 + (6 - m) + 1);
 }
 
 // ---------- Vyjednávání majitele ----------
@@ -250,6 +267,7 @@ export function offerTerms(prev: GameState, wage: number, years: number): Action
     executeTransfer(state, p, own, neg.agreedFee, value, clamp(years, 1, 5));
     const agentFee = value * 2;
     book(state, own, 'prestupy', -agentFee, `Odměna agentovi: ${playerName(p)}`);
+    ownerAccounting(state).agentFees += agentFee;
     neg.stage = 'hotovo';
     message = `${playerName(p)} podepsal smlouvu na ${plural(clamp(years, 1, 5), 'rok', 'roky', 'let')} za ${value.toLocaleString('cs-CZ')} Kč měsíčně.`;
     addNews(state, {
@@ -351,6 +369,7 @@ export function approveProposal(prev: GameState, proposalId: string): ActionResu
   else {
     executeTransfer(state, p, own, fee, minWage, 3);
     book(state, own, 'prestupy', -minWage * 2, `Odměna agentovi: ${playerName(p)}`);
+    ownerAccounting(state).agentFees += minWage * 2;
     state.owner.trust.reditel = clamp(state.owner.trust.reditel + 2, 0, 100);
     message = `Sportovní ředitel dotáhl přestup: ${playerName(p)} za ${fee.toLocaleString('cs-CZ')} Kč, plat ${minWage.toLocaleString('cs-CZ')} Kč měsíčně.`;
     addNews(state, { kind: 'info', title: `Posila: ${playerName(p)}`, text: message });
@@ -398,7 +417,7 @@ export function generateOffers(state: GameState, rng: Rng): void {
 
   squad.forEach((p, rank) => {
     if (state.market.offers.length >= 4 || state.market.offers.some((o) => o.playerId === p.id)) return;
-    const listed = state.market.listed.includes(p.id);
+    const listed = state.market.listed.includes(p.id) || (p.morale ?? 60) < 25;
     const value = playerValue(state, p);
 
     // Zahraničí: hlavní odbytiště pro nejlepší hráče české ligy.
@@ -514,6 +533,10 @@ export function releasePlayer(prev: GameState, playerId: string): ActionResult {
   const cost = releaseCost(state, p);
   if (cost > 0) book(state, p.clubId, 'platy', -cost, `Vyplacení smlouvy: ${playerName(p)}`);
   const player = state.players[playerId];
+  if (player.bookValue) ownerAccounting(state).writeOffs += player.bookValue;
+  player.bookValue = undefined;
+  player.amortization = undefined;
+  player.transfers = [...(player.transfers ?? []), { date: state.date, from: clubLabel(state, player.clubId), to: 'bez klubu', fee: 0 }];
   player.clubId = FREE;
   state.market.listed = state.market.listed.filter((id) => id !== playerId);
   state.market.offers = state.market.offers.filter((o) => o.playerId !== playerId);
@@ -536,12 +559,15 @@ export function renewContract(prev: GameState, playerId: string, wage: number, y
   if (!p || p.clubId !== prev.owner.clubId) return { state: prev, ok: false, message: 'Hráč nepatří do klubu.' };
   const gap = p.overall - squadQualityForReputation(prev.clubs[p.clubId].reputation);
   if (gap > 10) return { state: prev, ok: false, message: `${playerName(p)} chce odejít do lepšího klubu a smlouvu neprodlouží.` };
+  if ((p.morale ?? 60) < 25) return { state: prev, ok: false, message: `${playerName(p)} je nespokojený, protože málo hraje, a smlouvu teď neprodlouží.` };
   const demand = renewalDemand(prev, p);
   if (wage < demand) return { state: prev, ok: false, message: `${playerName(p)} chce aspoň ${demand.toLocaleString('cs-CZ')} Kč měsíčně.` };
   const state = structuredClone(prev);
   const player = state.players[playerId];
   player.wage = roundMoney(wage, 1_000);
   player.contractUntil = Math.max(player.contractUntil, state.season + clamp(years, 1, 5));
+  player.morale = Math.min(100, (player.morale ?? 60) + 10);
+  if (player.bookValue) player.amortization = player.bookValue / monthsUntilContractEnd(state.date, player.contractUntil);
   const message = `${playerName(player)} prodloužil smlouvu do roku ${player.contractUntil}.`;
   addNews(state, { kind: 'info', title: message });
   return { state, ok: true, message };

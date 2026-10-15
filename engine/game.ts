@@ -12,7 +12,12 @@ import {
   prizeMoney,
   setMarketWages,
   tvMonthly,
+  emptyAccounting,
+  monthlyAmortization,
+  settleTax,
 } from './finance';
+import { afterMatchday, allFixtures, baseSeasonDone, finalStandings, setupCup, startGroups, startPlayoffs } from './competitions';
+import { monthlyDevelopment, moraleNews, recordCareers, recordTimeline, recordTrend } from './development';
 import { doubleRoundRobin } from './fixtures';
 import { simulateMatch } from './match';
 import { POOL_TOWNS } from './names';
@@ -120,6 +125,8 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
     clubs: {},
     players: {},
     staff: {},
+    cups: {},
+    timeline: [],
     market: { proposals: [], offers: [], listed: [], spent: 0, earned: 0, history: [] },
     competitions: {},
     pool: [],
@@ -199,7 +206,11 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
   for (const comp of Object.values(state.competitions)) {
     const pairings = doubleRoundRobin(comp.clubIds, rng);
     const rounds = Math.max(0, ...pairings.map((p) => p.round));
-    const dates = roundDates(state.season, rounds);
+    // Nadstavba potřebuje dalších až 10 termínů po základní části.
+    const extra = comp.format === 'nadstavba' && comp.clubIds.length >= 12 ? 10 : 0;
+    const dates = roundDates(state.season, rounds + extra);
+    comp.groups = undefined;
+    comp.reservedDates = extra ? dates.slice(rounds) : undefined;
     comp.fixtures = pairings.map((p, i) => ({
       id: `${comp.id}-${state.season}-${i}`,
       round: p.round,
@@ -213,6 +224,12 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
     }
   }
   generateProposals(state);
+  state.timeline = [];
+  delete state.cups.baraz;
+  setupCup(state, rng);
+  const own = state.clubs[state.owner.clubId];
+  if (summerWindow) own.finance.lastAccounting = own.finance.accounting;
+  own.finance.accounting = emptyAccounting();
 }
 
 /**
@@ -304,7 +321,8 @@ function createPoolClub(state: GameState, rng: Rng, region: Club['region']): Clu
 
 /** Konec sezóny: tabulky, pověst, postupy a sestupy, stárnutí hráčů a mládež. */
 function endSeason(state: GameState, rng: Rng): void {
-  const tables = new Map(Object.values(state.competitions).map((c) => [c.id, computeTable(c, state)]));
+  recordCareers(state);
+  const tables = new Map(Object.values(state.competitions).map((c) => [c.id, finalStandings(c, state)]));
   const champions: Record<string, string> = {};
   for (const comp of Object.values(state.competitions)) {
     const table = tables.get(comp.id)!;
@@ -332,7 +350,10 @@ function endSeason(state: GameState, rng: Rng): void {
     season: state.season,
     champions,
     ownerClub: { competitionId: ownComp?.id ?? '', position: ownIndex + 1, points: ownTable[ownIndex]?.points ?? 0 },
+    cupWinner: state.cups.pohar?.winner,
   });
+  const tax = settleTax(state);
+  if (tax > 0) addNews(state, { kind: 'info', title: `Daň z příjmů za sezónu: ${tax.toLocaleString('cs-CZ')} Kč` });
 
   // Postupy a sestupy mezi úrovněmi.
   const comps = Object.values(state.competitions).sort((a, b) => a.tier - b.tier);
@@ -355,6 +376,18 @@ function endSeason(state: GameState, rng: Rng): void {
         moved.add(row.clubId);
       }
     }
+  }
+  // Baráž: vítěz z nižší soutěže si s poraženým vymění místo.
+  for (const t of state.cups.baraz?.ties ?? []) {
+    if (t.winner !== t.lower) continue;
+    const upperComp = comps.find((c) => c.clubIds.includes(t.upper));
+    const lowerComp = comps.find((c) => c.clubIds.includes(t.lower));
+    if (!upperComp || !lowerComp || moved.has(t.upper) || moved.has(t.lower)) continue;
+    const down = lowerCompFor(state, upperComp.tier, state.clubs[t.upper].region) ?? lowerComp;
+    moves.push({ clubId: t.lower, from: lowerComp, to: upperComp, up: true });
+    moves.push({ clubId: t.upper, from: upperComp, to: down, up: false });
+    moved.add(t.lower);
+    moved.add(t.upper);
   }
   for (const m of moves) {
     m.from.clubIds = m.from.clubIds.filter((id) => id !== m.clubId);
@@ -426,21 +459,10 @@ function endSeason(state: GameState, rng: Rng): void {
 
 function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
   const nextSeason = state.season + 1;
-  // Trenér, který dává šanci mladým, nebo velmi dobrý trenér, urychlí jejich vývoj.
-  const youthBoost = new Set(
-    Object.values(state.staff)
-      .filter((s) => s.role === 'trener' && s.clubId !== FREE && (s.youthFocus || s.ability >= 70))
-      .map((s) => s.clubId),
-  );
   for (const p of Object.values(state.players)) {
     const age = playerAge(p, nextSeason);
-    const boost = youthBoost.has(p.clubId) && age <= 23 && rng.chance(0.6) ? 1 : 0;
-    if (age <= 23) p.overall = Math.min(p.potential, p.overall + rng.int(1, 4) + boost);
-    else if (age <= 29) p.overall = Math.min(p.potential, p.overall + rng.int(-1, 2));
-    else if (age <= 32) p.overall -= rng.int(0, 2);
-    else p.overall -= rng.int(1, 4);
-    p.overall = Math.max(15, p.overall);
-    p.potential = Math.max(p.potential, p.overall);
+    // Hodnocení se vyvíjí průběžně každý měsíc. Mladým se občas ukáže vyšší nebo nižší potenciál.
+    if (age <= 21 && rng.chance(0.25)) p.potential = Math.max(p.overall, Math.min(97, p.potential + rng.pick([-3, -2, 2, 3, 4])));
 
     const retireChance = age >= 38 ? 1 : age >= 36 ? 0.6 : age >= 34 ? 0.25 : 0;
     if (rng.chance(retireChance)) {
@@ -471,56 +493,58 @@ function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
 // ---------- Průběh dne ----------
 
 function playMatchesOn(state: GameState, rng: Rng): void {
-  let squads: Map<string, Player[]> | undefined;
-  for (const comp of Object.values(state.competitions)) {
-    const today = comp.fixtures.filter((f) => f.date === state.date && !f.result);
-    if (today.length === 0) continue;
-    squads ??= playersByClub(state);
-    const table = computeTable(comp, state);
-    for (const f of today) {
-      const home = state.clubs[f.homeId];
-      const away = state.clubs[f.awayId];
-      const form = formScore(table.find((r) => r.clubId === home.id)?.form ?? []);
-      const attendance = matchAttendance(rng, home, away, comp.tier, form);
-      const homeCoach = coachOf(state, home.id);
-      const awayCoach = coachOf(state, away.id);
-      const ownComp = comp.clubIds.includes(state.owner.clubId);
-      f.result = simulateMatch(
-        rng,
-        { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus },
-        { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus },
-        attendance,
-        { date: state.date, season: state.season, detail: ownComp },
-      );
-      book(state, home.id, 'vstupne', attendance * home.policy.ticketPrice, `Vstupné: ${home.shortName} – ${away.shortName}`);
+  const today = allFixtures(state).filter((x) => x.fixture.date === state.date && !x.fixture.result);
+  if (!today.length) return;
+  const squads = playersByClub(state);
+  const tables = new Map<string, ReturnType<typeof computeTable>>();
+  const ownId = state.owner.clubId;
+  const ownCompId = competitionOf(state, ownId)?.id;
+  for (const { fixture: f, name, tier, cup, comp } of today) {
+    const home = state.clubs[f.homeId];
+    const away = state.clubs[f.awayId];
+    if (comp && !tables.has(comp.id)) tables.set(comp.id, computeTable(comp, state));
+    const form = comp ? formScore(tables.get(comp.id)!.find((r) => r.clubId === home.id)?.form ?? []) : 0;
+    const attendance = matchAttendance(rng, home, away, tier, form);
+    const homeCoach = coachOf(state, home.id);
+    const awayCoach = coachOf(state, away.id);
+    const involvesOwner = f.homeId === ownId || f.awayId === ownId;
+    f.result = simulateMatch(
+      rng,
+      { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus },
+      { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus },
+      attendance,
+      { date: state.date, season: state.season, detail: comp ? comp.id === ownCompId : involvesOwner },
+    );
+    book(state, home.id, 'vstupne', attendance * home.policy.ticketPrice, `Vstupné: ${home.shortName} – ${away.shortName}`);
+    if (comp) {
       const hp = f.result.homeGoals > f.result.awayGoals ? 3 : f.result.homeGoals === f.result.awayGoals ? 1 : 0;
       const ap = f.result.awayGoals > f.result.homeGoals ? 3 : f.result.homeGoals === f.result.awayGoals ? 1 : 0;
       if (hp) book(state, home.id, 'platy', -hp * bonusPerPoint(home), `Prémie za ${hp === 3 ? 'výhru' : 'remízu'}: ${home.shortName} – ${away.shortName}`);
       if (ap) book(state, away.id, 'platy', -ap * bonusPerPoint(away), `Prémie za ${ap === 3 ? 'výhru' : 'remízu'}: ${home.shortName} – ${away.shortName}`);
+    }
+    if (!involvesOwner) continue;
 
-      const ownId = state.owner.clubId;
-      if (f.homeId === ownId || f.awayId === ownId) {
-        const own = f.homeId === ownId;
-        const gf = own ? f.result.homeGoals : f.result.awayGoals;
-        const ga = own ? f.result.awayGoals : f.result.homeGoals;
-        const verdict = gf > ga ? 'Výhra' : gf < ga ? 'Prohra' : 'Remíza';
-        const d = f.result.detail;
-        const xg = d ? ` xG ${d.home.xg.toFixed(1)} : ${d.away.xg.toFixed(1)}.` : '';
-        addNews(state, {
-          kind: 'vysledek',
-          title: `${verdict}: ${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result.homeGoals}:${f.result.awayGoals}`,
-          text: `${comp.name}, ${f.round}. kolo. Návštěva ${attendance.toLocaleString('cs-CZ')} diváků.${xg}`,
-          fixtureId: f.id,
-        });
-        for (const e of d?.events ?? []) {
-          if (e.clubId !== ownId) continue;
-          const p = state.players[e.playerId];
-          if (!p) continue;
-          if (e.type === 'zraneni') addNews(state, { kind: 'varovani', title: `Zranění: ${p.firstName} ${p.lastName}`, text: `${e.note}. Mimo hru do ${p.injuredUntil?.split('-').reverse().join('. ')}.`, fixtureId: f.id });
-          if ((e.type === 'cervena' || e.type === 'druha-zluta') && p.suspension > 0) {
-            addNews(state, { kind: 'varovani', title: `Červená karta: ${p.firstName} ${p.lastName}`, text: `Stop na ${p.suspension} ${p.suspension === 1 ? 'zápas' : 'zápasy'}.`, fixtureId: f.id });
-          }
-        }
+    const own = f.homeId === ownId;
+    const gf = own ? f.result.homeGoals : f.result.awayGoals;
+    const ga = own ? f.result.awayGoals : f.result.homeGoals;
+    const verdict = gf > ga ? 'Výhra' : gf < ga ? 'Prohra' : 'Remíza';
+    const d = f.result.detail;
+    const xg = d ? ` xG ${d.home.xg.toFixed(1)} : ${d.away.xg.toFixed(1)}.` : '';
+    const roundLabel = cup ? cup.rounds[f.round - 1]?.name ?? '' : `${f.round}. kolo`;
+    addNews(state, {
+      kind: 'vysledek',
+      title: `${verdict}: ${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result.homeGoals}:${f.result.awayGoals}`,
+      text: `${name}, ${roundLabel}. Návštěva ${attendance.toLocaleString('cs-CZ')} diváků.${xg}`,
+      fixtureId: f.id,
+    });
+    if (comp) recordTimeline(state, f.round);
+    for (const e of d?.events ?? []) {
+      if (e.clubId !== ownId) continue;
+      const p = state.players[e.playerId];
+      if (!p) continue;
+      if (e.type === 'zraneni') addNews(state, { kind: 'varovani', title: `Zranění: ${p.firstName} ${p.lastName}`, text: `${e.note}. Mimo hru do ${p.injuredUntil?.split('-').reverse().join('. ')}.`, fixtureId: f.id, playerId: p.id });
+      if ((e.type === 'cervena' || e.type === 'druha-zluta') && p.suspension > 0) {
+        addNews(state, { kind: 'varovani', title: `Červená karta: ${p.firstName} ${p.lastName}`, text: `Stop na ${p.suspension} ${p.suspension === 1 ? 'zápas' : 'zápasy'}.`, fixtureId: f.id, playerId: p.id });
       }
     }
   }
@@ -550,6 +574,12 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   }
 
   state.owner.wallet += DIFFICULTY[state.owner.difficulty].monthlyIncome;
+  monthlyDevelopment(state, rng);
+  monthlyAmortization(state);
+  recordTrend(state);
+  moraleNews(state);
+  const ownFinance = state.clubs[state.owner.clubId].finance;
+  ownFinance.balanceHistory = [...(ownFinance.balanceHistory ?? []), { date: state.date, balance: ownFinance.balance }].slice(-60);
   // Volní hráči bez angažmá postupně slevují ze svých nároků.
   for (const p of Object.values(state.players)) {
     if (p.clubId === FREE) p.wage = Math.max(5_000, Math.round((p.wage * 0.92) / 1000) * 1000);
@@ -607,6 +637,11 @@ function processDay(state: GameState, rng: Rng): void {
   if (window && md !== SEASON_START && (md.endsWith('-01') || md.endsWith('-15') || md === '01-08')) generateProposals(state);
   if (window && dayOfWeek(state.date) === 1) generateOffers(state, rng);
   playMatchesOn(state, rng);
+  afterMatchday(state, rng);
+  for (const comp of Object.values(state.competitions)) {
+    if (comp.format === 'nadstavba' && !comp.groups && comp.reservedDates && baseSeasonDone(comp)) startGroups(state, comp, rng);
+  }
+  if (md === '06-08') startPlayoffs(state);
   if (state.date.endsWith('-01')) monthlyFinance(state, rng);
   if (md === '08-31' || md === '02-14') {
     closeWindow(state, rng);
@@ -617,15 +652,37 @@ function processDay(state: GameState, rng: Rng): void {
 
 /** Jeden tah: posun o týden. Vrací nový stav, původní se nemění. */
 export function advanceWeek(prev: GameState): GameState {
-  if (prev.gameOver) return prev;
+  return advanceDays(prev, 7).state;
+}
+
+/**
+ * Posun o dny. Volitelná podmínka `stop` ukončí posun po dni, kdy je splněná.
+ * Vrací nový stav a zápas klubu majitele, který se odehrál jako poslední.
+ */
+export function advanceDays(prev: GameState, days: number, stopAtOwnMatch = false): { state: GameState; fixtureId?: string } {
+  if (prev.gameOver) return { state: prev };
   const state = structuredClone(prev);
   const rng = createRng(state.rngState);
-  for (let i = 0; i < 7 && !state.gameOver; i++) {
+  const own = state.owner.clubId;
+  let fixtureId: string | undefined;
+  for (let i = 0; i < days && !state.gameOver; i++) {
     state.date = addDays(state.date, 1);
     processDay(state, rng);
+    const played = allFixtures(state).find(
+      (x) => x.fixture.date === state.date && x.fixture.result && (x.fixture.homeId === own || x.fixture.awayId === own),
+    );
+    if (played) {
+      fixtureId = played.fixture.id;
+      if (stopAtOwnMatch) break;
+    }
   }
   state.rngState = rng.state();
-  return state;
+  return { state, fixtureId };
+}
+
+/** Hrát do příštího zápasu klubu majitele (nejvýš 60 dní). */
+export function advanceToNextMatch(prev: GameState): { state: GameState; fixtureId?: string } {
+  return advanceDays(prev, 60, true);
 }
 
 // ---------- Rozhodnutí majitele ----------
@@ -658,10 +715,40 @@ export function describeDate(state: GameState): string {
  * Převod uložené hry ze starší verze. Verze 2 měla jinou ekonomiku: hráčům se přepočítají
  * platy podle nového trhu a volní hráči dostanou tržní nároky.
  */
+/** Pravidla soutěží, která přibyla po verzi 4 (pro převod starších uložených her). */
+const PACK_RULES: { id: string; rules: Partial<Competition> }[] = [
+  { id: 'cz1', rules: { relegate: 1, format: 'nadstavba', playoff: { vs: 'cz2', upper: [14, 15], lower: [3, 2] } } },
+  { id: 'cz2', rules: { promote: 1 } },
+];
+
 export function migrateSave(saved: { version: number } & Record<string, unknown>): GameState | null {
   if (saved.version === SAVE_VERSION) return saved as unknown as GameState;
-  if (saved.version !== 2 && saved.version !== 3) return null;
+  if (saved.version < 2 || saved.version > 4) return null;
   const state = structuredClone(saved) as unknown as GameState;
+  // Verze 5: forma a morálka, kariéra hráčů, pohár, baráž, nadstavba, účetnictví.
+  for (const p of Object.values(state.players)) {
+    p.morale ??= 60;
+    p.recent ??= [];
+    p.career ??= [];
+    p.transfers ??= [];
+  }
+  state.cups ??= {};
+  state.timeline ??= [];
+  const ownFinance = state.clubs[state.owner.clubId].finance;
+  ownFinance.accounting ??= emptyAccounting();
+  for (const def of PACK_RULES) {
+    const comp = state.competitions[def.id];
+    if (comp) Object.assign(comp, def.rules);
+  }
+  if (saved.version === 4) {
+    state.version = SAVE_VERSION;
+    addNews(state, {
+      kind: 'info',
+      title: 'Nová verze hry',
+      text: 'Přibyla forma a morálka hráčů, karty hráčů a klubů, výsledovka s odpisy a daní. Pohár, nadstavba 1. ligy a baráž začnou od příští sezóny.',
+    });
+    return state;
+  }
   // Verze 4: statistiky hráčů, kondice, zranění a tresty.
   for (const p of Object.values(state.players)) {
     const goals = p.goals ?? 0;
@@ -672,6 +759,7 @@ export function migrateSave(saved: { version: number } & Record<string, unknown>
   }
   if (saved.version === 3) {
     state.version = SAVE_VERSION;
+    state.cups = {};
     addNews(state, { kind: 'info', title: 'Nový zápasový engine', text: 'Zápasy mají sestavy, střely, xG, karty, zranění a střídání. Kliknutím na výsledek otevřete náhled zápasu.' });
     return state;
   }

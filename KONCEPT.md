@@ -304,4 +304,6 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 
 **Verze 0.4 (hotovo):** zápasový engine se střelami a xG, sestavy a rotace, kondice, zranění, karty a tresty, střídání, známky hráčů a náhled zápasu.
 
-**Další krok:** hloubka hráčů a soutěží (forma a morálka, detail hráče a soupeře, nadstavba, baráž a pohár), potom stadion nebo spolumajitelé.
+**Verze 0.5 (hotovo):** karty hráčů a klubů s vývojem a kariérou, průběžný vývoj hráčů, forma a morálka, nadstavba 1. ligy, baráž, domácí pohár, výsledovka a rozvaha s odpisy a daní, tlačítko „Do zápasu“ a grafy.
+
+**Další krok:** stadion a zázemí, nebo spolumajitelé.

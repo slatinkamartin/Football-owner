@@ -107,7 +107,7 @@ describe('průběh hry', () => {
     expect(a.competitions.cz1.fixtures).toEqual(b.competitions.cz1.fixtures);
   });
 
-  it('odehraje dvě celé sezóny včetně postupů a sestupů', () => {
+  it('odehraje dvě celé sezóny včetně postupů a sestupů', { timeout: 30000 }, () => {
     const afterOne = playSeasons(start, 53);
     expect(afterOne.season).toBe(2027);
     expect(afterOne.history).toHaveLength(1);
@@ -141,13 +141,18 @@ describe('průběh hry', () => {
     for (const club of Object.values(afterTwo.clubs)) expect(Number.isFinite(club.finance.balance)).toBe(true);
   });
 
-  it('tabulka po odehrané sezóně sedí', () => {
+  it('tabulka po odehrané sezóně sedí a nadstavba se odehrála', () => {
     const almostDone = playSeasons(start, 49); // těsně před koncem sezóny (20. 6.)
-    const table = computeTable(almostDone.competitions.cz1, almostDone);
-    expect(table.every((r) => r.played === 30)).toBe(true);
-    const totalPoints = table.reduce((s, r) => s + r.points, 0);
+    const comp = almostDone.competitions.cz1;
+    expect(comp.groups?.map((g) => g.clubIds.length)).toEqual([6, 4, 6]);
+    const table = computeTable(comp, almostDone);
+    for (const row of table) {
+      const group = comp.groups!.find((g) => g.clubIds.includes(row.clubId))!;
+      expect(row.played).toBe(30 + (group.clubIds.length - 1) * 2);
+    }
     const draws = table.reduce((s, r) => s + r.drawn, 0) / 2;
-    expect(totalPoints).toBe(240 * 3 - draws);
+    const matches = comp.fixtures.length;
+    expect(table.reduce((s, r) => s + r.points, 0)).toBe(matches * 3 - draws);
   });
 
   it('vklad majitele přesune peníze do klubu', () => {

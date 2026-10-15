@@ -8,3 +8,6 @@ export * from './standings';
 export * from './staff';
 export * from './transfers';
 export * from './world';
+export * from './competitions';
+export * from './development';
+export * from './match';

@@ -22,6 +22,7 @@ import {
 } from '../../engine';
 import { Badge, Notice } from '../components';
 import { Chips, DataTable, useStoredState } from '../table';
+import { PlayerLink, useNav } from '../nav';
 import { money } from '../format';
 
 const ORDER: Position[] = ['GK', 'DF', 'MF', 'FW'];
@@ -29,6 +30,7 @@ const ORDER: Position[] = ['GK', 'DF', 'MF', 'FW'];
 type Props = { game: GameState; onChange: (g: GameState) => void };
 
 export function Squad({ game, onChange }: Props) {
+  const nav = useNav();
   const isInjured = (p: Player) => !!p.injuredUntil && p.injuredUntil >= game.date;
   const [open, setOpen] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
@@ -88,7 +90,10 @@ export function Squad({ game, onChange }: Props) {
               {playerName(selected)}{' '}
               <span className="muted">· {POSITION_LABEL[selected.position].toLowerCase()}, {playerAge(selected, game.season)} let</span>
             </h2>
-            <button onClick={() => setOpen(null)}>Zavřít</button>
+            <span className="buttons">
+              <button onClick={() => nav.open({ type: 'player', id: selected.id })}>Karta hráče</button>
+              <button onClick={() => setOpen(null)}>Zavřít</button>
+            </span>
           </div>
           <PlayerActions key={selected.id} game={game} p={selected} onResult={apply} onToggle={() => onChange(toggleListed(game, selected.id))} />
         </section>
@@ -134,7 +139,8 @@ export function Squad({ game, onChange }: Props) {
               value: (p) => p.lastName,
               render: (p) => (
                 <>
-                  {playerName(p)} {game.market.listed.includes(p.id) && <Badge tone="warn">na prodej</Badge>}
+                  <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> {game.market.listed.includes(p.id) && <Badge tone="warn">na prodej</Badge>}
+                  {p.morale < 25 && <Badge tone="bad">nespokojený</Badge>}
                 </>
               ),
             },
@@ -156,6 +162,15 @@ export function Squad({ game, onChange }: Props) {
                 ) : (
                   <span className={p.fitness < 75 ? 'neg' : 'muted'}>{Math.round(p.fitness)} %</span>
                 ),
+            },
+            {
+              key: 'morale',
+              label: 'Mor.',
+              num: true,
+              hideSm: true,
+              title: 'Morálka (0–100)',
+              value: (p) => p.morale,
+              render: (p) => <span className={p.morale < 30 ? 'neg' : p.morale >= 75 ? 'pos' : ''}>{Math.round(p.morale)}</span>,
             },
             { key: 'minutes', label: 'Min.', num: true, hideSm: true, value: (p) => p.minutes, title: 'Odehrané minuty v sezóně' },
             { key: 'goals', label: 'G/A', num: true, value: (p) => p.goals * 100 + p.assists, render: (p) => `${p.goals}/${p.assists}`, title: 'Góly / asistence' },

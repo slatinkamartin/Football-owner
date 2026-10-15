@@ -7,6 +7,9 @@ import {
   EXPENSE_CATEGORIES,
   formatShortDate,
   INCOME_CATEGORIES,
+  balanceSheet,
+  profitAndLoss,
+  TAX_RATE,
   injectCapital,
   updatePolicy,
   wageBudgetMonthly,
@@ -16,6 +19,7 @@ import {
 } from '../../engine';
 import { money } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
+import { LineChart } from '../chart';
 
 export function Finance({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
   const club = game.clubs[game.owner.clubId];
@@ -108,12 +112,83 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
       </section>
 
       <section className="card">
-        <h2>Hospodaření v sezóně</h2>
+        <h2>Peněžní toky v sezóně</h2>
         <Totals current={club.finance.season} last={club.finance.lastSeason} />
       </section>
 
+      <section className="card wide">
+        <LineChart
+          title="Zůstatek klubu na začátku měsíce"
+          points={(club.finance.balanceHistory ?? []).map((h) => ({ label: `${h.date.slice(5, 7)}/${h.date.slice(2, 4)}`, value: h.balance }))}
+          format={(v) => money(v)}
+        />
+      </section>
+
+      <ProfitLoss game={game} />
+
       <Movements game={game} />
     </div>
+  );
+}
+
+function ProfitLoss({ game }: { game: GameState }) {
+  const club = game.clubs[game.owner.clubId];
+  const f = club.finance;
+  const now = profitAndLoss(f.season, f.accounting);
+  const last = f.lastSeason ? profitAndLoss(f.lastSeason, f.lastAccounting) : undefined;
+  const bs = balanceSheet(game);
+  const lines = (key: 'revenues' | 'costs') =>
+    now[key].map((l, i) => (
+      <tr key={l.label}>
+        <td className="wrap">{l.label}</td>
+        <td className="num">{money(l.amount)}</td>
+        {last && <td className="num muted">{money(last[key][i].amount)}</td>}
+      </tr>
+    ));
+  return (
+    <>
+      <section className="card">
+        <h2>Výsledovka</h2>
+        <p className="muted small">
+          Účetní pohled: cena koupeného hráče se rozkládá do let smlouvy (odpisy), u prodeje se počítá zisk proti zůstatkové hodnotě. Vklady majitele nejsou výnos.
+        </p>
+        <table>
+          <thead>
+            <tr><th /><th className="num">Tato sezóna</th>{last && <th className="num">Minulá</th>}</tr>
+          </thead>
+          <tbody>
+            <tr className="subhead"><td colSpan={3}>Výnosy</td></tr>
+            {lines('revenues')}
+            <tr className="subhead"><td colSpan={3}>Náklady</td></tr>
+            {lines('costs')}
+            <tr className="total">
+              <td>Výsledek před zdaněním</td>
+              <td className={`num ${now.beforeTax < 0 ? 'neg' : 'pos'}`}>{money(now.beforeTax)}</td>
+              {last && <td className={`num ${last.beforeTax < 0 ? 'neg' : 'pos'}`}>{money(last.beforeTax)}</td>}
+            </tr>
+          </tbody>
+        </table>
+        <p className="muted small">
+          Daň z příjmů {Math.round(TAX_RATE * 100)} % se platí na konci sezóny z kladného výsledku po odečtení ztrát z minulých let
+          {f.lossCarry ? ` (neuplatněná ztráta ${money(f.lossCarry)})` : ''}.
+        </p>
+      </section>
+
+      <section className="card">
+        <h2>Rozvaha</h2>
+        <table>
+          <tbody>
+            <tr className="subhead"><td colSpan={2}>Aktiva</td></tr>
+            <tr><td>Peníze na účtu</td><td className="num">{money(bs.cash)}</td></tr>
+            <tr><td className="wrap">Hráčské registrace (neodepsaná hodnota)</td><td className="num">{money(bs.registrations)}</td></tr>
+            <tr className="subhead"><td colSpan={2}>Pasiva</td></tr>
+            <tr><td>Závazky (záporný zůstatek)</td><td className="num">{money(bs.debt)}</td></tr>
+            <tr className="total"><td>Vlastní kapitál</td><td className={`num ${bs.equity < 0 ? 'neg' : ''}`}>{money(bs.equity)}</td></tr>
+          </tbody>
+        </table>
+        <p className="muted small">Stadion a ostatní majetek zatím v rozvaze nejsou, přibudou se stavbou stadionu.</p>
+      </section>
+    </>
   );
 }
 

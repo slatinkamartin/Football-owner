@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Chips, DataTable, useStoredState } from '../table';
+import { PlayerLink } from '../nav';
 import {
   acceptOffer,
   approveProposal,
@@ -92,7 +93,7 @@ function PlayerLine({ game, p }: { game: GameState; p: Player }) {
   const view = scouted(game, p);
   return (
     <span>
-      <strong>{playerName(p)}</strong>{' '}
+      <strong><PlayerLink id={p.id}>{playerName(p)}</PlayerLink></strong>{' '}
       <span className="muted">
         {POSITION_LABEL[p.position].toLowerCase()}, {playerAge(p, game.season)} let, {clubLabel(game, p.clubId)}, hodnocení{' '}
         {view.exact ? view.overall : `≈${view.overall}`} (potenciál {view.exact ? view.potential : `≈${view.potential}`})
@@ -204,7 +205,7 @@ function Offers({ game, onResult, onReject }: { game: GameState; onResult: (r: A
             return (
               <li key={o.id}>
                 <span>
-                  <strong>{clubLabel(game, o.buyerId)}</strong> nabízí za <strong>{playerName(p)}</strong> {money(o.fee)}
+                  <strong>{clubLabel(game, o.buyerId)}</strong> nabízí za <strong><PlayerLink id={p.id}>{playerName(p)}</PlayerLink></strong> {money(o.fee)}
                 </span>
                 <p className="muted small">
                   Tržní hodnota {money(playerValue(game, p))}. Platí do {formatShortDate(o.expires)}.
@@ -318,7 +319,7 @@ function Search({ game, onResult }: { game: GameState; onResult: (r: ActionResul
         limit={50}
         empty="Filtrům neodpovídá žádný hráč."
         columns={[
-          { key: 'name', label: 'Hráč', value: (x) => x.p.lastName, render: (x) => playerName(x.p) },
+          { key: 'name', label: 'Hráč', value: (x) => x.p.lastName, render: (x) => <PlayerLink id={x.p.id}>{playerName(x.p)}</PlayerLink> },
           { key: 'pos', label: 'Poz.', value: (x) => ['GK', 'DF', 'MF', 'FW'].indexOf(x.p.position), render: (x) => <span title={POSITION_LABEL[x.p.position]}>{POSITION_SHORT[x.p.position]}</span>, className: () => 'muted' },
           { key: 'age', label: 'Věk', num: true, value: (x) => x.age },
           { key: 'club', label: 'Klub', value: (x) => clubLabel(game, x.p.clubId) },

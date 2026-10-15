@@ -2,6 +2,7 @@ import { book } from './finance';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { newId, playersByClub, squadQualityForReputation, teamStrength } from './players';
 import { createRng, type Rng } from './rng';
+import { finalStandings } from './competitions';
 import { computeTable } from './standings';
 import type { Club, CoachStyle, Competition, GameState, SeasonGoal, Staff, StaffRole } from './types';
 import { addNews, clamp, competitionOf, FREE } from './world';
@@ -280,7 +281,7 @@ export function hireStaff(prev: GameState, staffId: string, years: number): Acti
 function ownPosition(state: GameState): { comp: Competition; position: number; played: number } | undefined {
   const comp = competitionOf(state, state.owner.clubId);
   if (!comp) return undefined;
-  const table = computeTable(comp, state);
+  const table = finalStandings(comp, state);
   const i = table.findIndex((r) => r.clubId === state.owner.clubId);
   return { comp, position: i + 1, played: table[i].played };
 }

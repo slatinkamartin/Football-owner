@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 import {
+  allFixtures,
   formatDate,
   POSITION_SHORT,
-  type Competition,
   type Fixture,
   type GameState,
   type MatchEvent,
@@ -10,31 +10,19 @@ import {
   type TeamMatchStats,
 } from '../../engine';
 import { num } from '../format';
+import { ClubLink, PlayerLink, Sheet } from '../nav';
 
-export function findFixture(game: GameState, id: string): { fixture: Fixture; comp: Competition } | undefined {
-  for (const comp of Object.values(game.competitions)) {
-    const fixture = comp.fixtures.find((f) => f.id === id);
-    if (fixture) return { fixture, comp };
-  }
-  return undefined;
+export function findFixture(game: GameState, id: string): { fixture: Fixture; name: string; roundLabel: string } | undefined {
+  const x = allFixtures(game).find((a) => a.fixture.id === id);
+  if (!x) return undefined;
+  const roundLabel = x.cup ? (x.cup.rounds[x.fixture.round - 1]?.name ?? '') + (x.cup.kind === 'baraz' ? `, ${x.fixture.round}. zápas` : '') : `${x.fixture.round}. kolo`;
+  return { fixture: x.fixture, name: x.name, roundLabel };
 }
 
-export function MatchDetail({ game, fixtureId, onClose }: { game: GameState; fixtureId: string; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    // Stránka pod náhledem se neposouvá.
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previous;
-    };
-  }, [onClose]);
-
+export function MatchDetail({ game, fixtureId, onClose, onBack }: { game: GameState; fixtureId: string; onClose: () => void; onBack?: () => void }) {
   const found = findFixture(game, fixtureId);
   if (!found) return null;
-  const { fixture: f, comp } = found;
+  const { fixture: f, name: compName, roundLabel } = found;
   const r = f.result;
   const home = game.clubs[f.homeId];
   const away = game.clubs[f.awayId];
@@ -43,29 +31,28 @@ export function MatchDetail({ game, fixtureId, onClose }: { game: GameState; fix
   for (const line of [...(d?.home.lineup ?? []), ...(d?.home.bench ?? []), ...(d?.away.lineup ?? []), ...(d?.away.bench ?? [])]) {
     names.set(line.id, line.name);
   }
-  const nameOf = (id?: string) => (id ? (names.get(id) ?? (game.players[id] ? `${game.players[id].firstName} ${game.players[id].lastName}` : 'neznámý hráč')) : '');
+  const plainName = (id?: string) => (id ? (names.get(id) ?? (game.players[id] ? `${game.players[id].firstName} ${game.players[id].lastName}` : 'neznámý hráč')) : '');
+  // Hráč, který ve hře ještě je, má odkaz na svou kartu.
+  const nameOf = (id?: string): ReactNode => (id && game.players[id] ? <PlayerLink id={id}>{plainName(id)}</PlayerLink> : plainName(id));
 
   return (
-    <div className="overlay sheet-overlay" onClick={onClose}>
-      <div className="card sheet" role="dialog" aria-modal="true" aria-label="Náhled zápasu" onClick={(e) => e.stopPropagation()}>
-        <div className="row-between">
-          <span className="muted small">
-            {comp.name}, {f.round}. kolo · {formatDate(f.date, true)}
-          </span>
-          <button onClick={onClose}>Zavřít</button>
-        </div>
+    <Sheet label="Náhled zápasu" onClose={onClose} onBack={onBack}>
+        <p className="muted small">
+          {compName}, {roundLabel} · {formatDate(f.date, true)}
+        </p>
 
         <div className="scoreboard">
           <div className="sb-team">
             <span className="crest" style={{ background: home.colors[0], borderColor: home.colors[1] }} />
-            <strong>{home.shortName}</strong>
+            <strong><ClubLink id={home.id}>{home.shortName}</ClubLink></strong>
           </div>
           <div className="sb-score">{r ? `${r.homeGoals}:${r.awayGoals}` : '–:–'}</div>
           <div className="sb-team">
             <span className="crest" style={{ background: away.colors[0], borderColor: away.colors[1] }} />
-            <strong>{away.shortName}</strong>
+            <strong><ClubLink id={away.id}>{away.shortName}</ClubLink></strong>
           </div>
         </div>
+        {r?.penalties && <p className="center"><strong>Penalty {r.penalties[0]}:{r.penalties[1]}</strong></p>}
         {r && (
           <p className="center muted small">
             {d && <>xG {d.home.xg.toFixed(2)} : {d.away.xg.toFixed(2)} · </>}
@@ -102,8 +89,7 @@ export function MatchDetail({ game, fixtureId, onClose }: { game: GameState; fix
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -151,7 +137,7 @@ const EVENT_LABEL: Record<MatchEvent['type'], string> = {
   zraneni: 'Zranění',
 };
 
-function Timeline({ events, homeId, nameOf }: { events: MatchEvent[]; homeId: string; nameOf: (id?: string) => string }) {
+function Timeline({ events, homeId, nameOf }: { events: MatchEvent[]; homeId: string; nameOf: (id?: string) => ReactNode }) {
   if (!events.length) return <p className="muted">Bez událostí.</p>;
   return (
     <ul className="timeline">
@@ -218,7 +204,7 @@ function Lineup({ title, team, events, potm }: { title: string; team: TeamMatchS
     <tr key={line.id} className={line.id === potm ? 'potm' : ''}>
       <td className="muted">{POSITION_SHORT[line.position]}</td>
       <td className="wrap">
-        {line.name} <span className="marks">{marks(line)}</span>
+        <PlayerLink id={line.id}>{line.name}</PlayerLink> <span className="marks">{marks(line)}</span>
       </td>
       <td className="num">{line.rating !== undefined ? <span className={`rating ${ratingTone(line.rating)}`}>{line.rating.toFixed(1)}</span> : <span className="muted">–</span>}</td>
     </tr>

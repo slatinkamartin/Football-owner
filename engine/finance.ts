@@ -1,6 +1,6 @@
 import { squadQualityForReputation } from './players';
 import type { Rng } from './rng';
-import type { Club, FinanceCategory, FinanceTotals, GameState, Player } from './types';
+import type { Accounting, Club, FinanceCategory, FinanceTotals, GameState, Player } from './types';
 import { hash01 } from './world';
 
 /**
@@ -127,7 +127,7 @@ export function matchAttendance(rng: Rng, home: Club, away: Club, tier: number, 
 }
 
 export function emptyTotals(): FinanceTotals {
-  return { vstupne: 0, tv: 0, komercni: 0, platy: 0, vedeni: 0, provoz: 0, prestupy: 0, vklad: 0 };
+  return { vstupne: 0, tv: 0, komercni: 0, pohar: 0, platy: 0, vedeni: 0, provoz: 0, prestupy: 0, dane: 0, vklad: 0 };
 }
 
 export function book(state: GameState, clubId: string, category: FinanceCategory, amount: number, note: string): void {
@@ -149,6 +149,87 @@ export const CATEGORY_LABEL: Record<FinanceCategory, string> = {
   platy: 'Platy hráčů',
   vedeni: 'Trenér a vedení (platy, odstupné)',
   provoz: 'Provoz, zaměstnanci, akademie',
-  prestupy: 'Přestupy',
+  prestupy: 'Přestupy (odstupné, agenti)',
+  pohar: 'Pohár (prémie za postup)',
+  dane: 'Daň z příjmů',
   vklad: 'Vklady majitele',
 };
+
+// ---------- Účetnictví (klub majitele) ----------
+
+export const TAX_RATE = 0.21;
+
+export function emptyAccounting(): Accounting {
+  return { amortization: 0, saleProfit: 0, writeOffs: 0, agentFees: 0 };
+}
+
+export function ownerAccounting(state: GameState): Accounting {
+  const club = state.clubs[state.owner.clubId];
+  club.finance.accounting ??= emptyAccounting();
+  return club.finance.accounting;
+}
+
+/** Měsíční odpis registrací: cena hráče se rozkládá do délky smlouvy. */
+export function monthlyAmortization(state: GameState): void {
+  const acc = ownerAccounting(state);
+  for (const p of Object.values(state.players)) {
+    if (p.clubId !== state.owner.clubId || !p.bookValue || !p.amortization) continue;
+    const a = Math.min(p.bookValue, p.amortization);
+    p.bookValue -= a;
+    acc.amortization += a;
+  }
+}
+
+export interface ProfitAndLoss {
+  revenues: { label: string; amount: number }[];
+  costs: { label: string; amount: number }[];
+  beforeTax: number;
+}
+
+/** Výsledovka: příjmy a náklady bez kapitálových pohybů, s odpisy a ziskem z prodeje hráčů. */
+export function profitAndLoss(totals: FinanceTotals, acc: Accounting = emptyAccounting()): ProfitAndLoss {
+  const revenues = [
+    { label: CATEGORY_LABEL.vstupne, amount: totals.vstupne },
+    { label: CATEGORY_LABEL.tv, amount: totals.tv },
+    { label: CATEGORY_LABEL.komercni, amount: totals.komercni },
+    { label: CATEGORY_LABEL.pohar, amount: totals.pohar },
+    { label: 'Zisk z prodeje hráčů', amount: acc.saleProfit },
+  ];
+  const costs = [
+    { label: CATEGORY_LABEL.platy, amount: totals.platy },
+    { label: CATEGORY_LABEL.vedeni, amount: totals.vedeni },
+    { label: CATEGORY_LABEL.provoz, amount: totals.provoz },
+    { label: 'Odpisy hráčských registrací', amount: -acc.amortization },
+    { label: 'Odpis při uvolnění hráčů', amount: -acc.writeOffs },
+    { label: 'Odměny agentům', amount: -acc.agentFees },
+  ];
+  const beforeTax = [...revenues, ...costs].reduce((a, x) => a + x.amount, 0);
+  return { revenues, costs, beforeTax: Math.round(beforeTax) };
+}
+
+/** Rozvaha klubu majitele (zjednodušená): hotovost a registrace hráčů proti vlastnímu kapitálu a závazkům. */
+export function balanceSheet(state: GameState) {
+  const club = state.clubs[state.owner.clubId];
+  const registrations = Object.values(state.players)
+    .filter((p) => p.clubId === club.id)
+    .reduce((a, p) => a + (p.bookValue ?? 0), 0);
+  const cash = Math.max(0, club.finance.balance);
+  const debt = Math.max(0, -club.finance.balance);
+  return { cash, registrations: Math.round(registrations), debt, equity: Math.round(cash + registrations - debt) };
+}
+
+/** Konec sezóny: daň z kladného výsledku po odečtení ztrát z minulých let. */
+export function settleTax(state: GameState): number {
+  const club = state.clubs[state.owner.clubId];
+  const pnl = profitAndLoss(club.finance.season, ownerAccounting(state));
+  const carry = club.finance.lossCarry ?? 0;
+  const taxable = pnl.beforeTax - carry;
+  if (taxable > 0) {
+    club.finance.lossCarry = 0;
+    const tax = Math.round(taxable * TAX_RATE);
+    book(state, club.id, 'dane', -tax, `Daň z příjmů za sezónu (21 % z ${Math.round(taxable).toLocaleString('cs-CZ')} Kč)`);
+    return tax;
+  }
+  club.finance.lossCarry = -taxable;
+  return 0;
+}

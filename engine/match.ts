@@ -1,3 +1,4 @@
+import { formBonus } from './players';
 import type { Rng } from './rng';
 import type { CoachStyle, MatchDetail, MatchEvent, MatchPlayerLine, MatchResult, Player, Position, TeamMatchStats } from './types';
 
@@ -47,9 +48,9 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Výkon hráče v zápase: kvalita snížená únavou. */
-function effective(p: Player): number {
-  return p.overall * (0.85 + 0.15 * (p.fitness / 100));
+/** Výkon hráče v zápase: kvalita upravená kondicí, morálkou a formou. */
+export function effective(p: Player): number {
+  return p.overall * (0.85 + 0.15 * (p.fitness / 100)) * (0.96 + 0.08 * ((p.morale ?? 60) / 100)) + formBonus(p);
 }
 
 /** Sestava, jakou by postavil trenér: podle formace, kvality, kondice a jeho přístupu k mladým. */
@@ -330,7 +331,10 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
         rating = Math.round(Math.max(3, Math.min(10, rating)) * 10) / 10;
         p.ratingSum += rating;
         p.ratingCount += 1;
+        p.recent = [...(p.recent ?? []), rating].slice(-5);
       }
+      // Morálka: hrát je radost, výhra potěší, prohra zamrzí.
+      p.morale = Math.max(0, Math.min(100, (p.morale ?? 60) + (log.started ? 1.5 : 0.5) + (result > 0 ? 2 : result < 0 ? -2 : 0)));
       p.apps += 1;
       if (log.started) p.starts += 1;
       p.minutes += minutes;
@@ -345,6 +349,13 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
         if (p.yellows % 4 === 0) p.suspension += 1;
       }
       lines.push({ id: p.id, name: `${p.firstName} ${p.lastName}`, position: p.position, minutes, rating, started: log.started });
+    }
+    // Hráči, kteří by chtěli hrát a nedostali šanci, ztrácejí morálku.
+    const sorted = [...s.side.players].sort((a, b) => b.overall - a.overall);
+    const median = sorted[Math.floor(sorted.length / 2)]?.overall ?? 0;
+    for (const p of s.side.players) {
+      if (s.logs.has(p.id) || !isAvailable(p, date) || p.overall < median) continue;
+      p.morale = Math.max(0, (p.morale ?? 60) - 3);
     }
     return lines;
   };

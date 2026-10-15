@@ -4,8 +4,8 @@
   "country": "CZ",
   "note": "Pracovní verze. Složení soutěží odpovídá přibližně sezóně 2025/26 a je potřeba ho ověřit podle FAČR (hlavně 2. a 3. liga). Kapacity stadionů jsou orientační. Hráči jsou zatím generovaní.",
   "competitions": [
-    { "id": "cz1", "name": "1. liga", "tier": 1, "targetSize": 16, "promote": 0, "relegate": 2 },
-    { "id": "cz2", "name": "2. liga", "tier": 2, "targetSize": 16, "promote": 2, "relegate": 2 },
+    { "id": "cz1", "name": "1. liga", "tier": 1, "targetSize": 16, "promote": 0, "relegate": 1, "format": "nadstavba", "playoff": { "vs": "cz2", "upper": [14, 15], "lower": [3, 2] } },
+    { "id": "cz2", "name": "2. liga", "tier": 2, "targetSize": 16, "promote": 1, "relegate": 2 },
     { "id": "cz3c", "name": "ČFL", "fullName": "Česká fotbalová liga", "tier": 3, "region": "cechy", "targetSize": 18, "promote": 1, "relegate": 0 },
     { "id": "cz3m", "name": "MSFL", "fullName": "Moravskoslezská fotbalová liga", "tier": 3, "region": "morava", "targetSize": 16, "promote": 1, "relegate": 0 }
   ],

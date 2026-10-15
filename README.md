@@ -23,7 +23,7 @@ npm run build      # produkční sestavení do složky dist/
 | `app/` | Uživatelské rozhraní (React) |
 | `data/cz-zaklad/` | Datový balíček: soutěže a kluby české pyramidy (1. až 3. liga) |
 
-## Co umí verze 0.4
+## Co umí verze 0.5
 
 - Výběr klubu z 1. až 3. ligy a startovních podmínek (osobní kapitál majitele).
 - Týdenní tahy, celé sezóny se 4 soutěžemi (1. liga, 2. liga, ČFL, MSFL), postupy a sestupy včetně pravidel pro B-týmy.
@@ -40,6 +40,13 @@ npm run build      # produkční sestavení do složky dist/
 - **Ekonomika podle české ligy:** hodnoty hráčů podle Transfermarktu (podle kvality, věku, potenciálu a soutěže), tržní platy podle úrovně klubu, prémie za body, odměny za umístění, strukturální ztráta klubů.
 - **Zahraniční kupci:** kluby z Anglie, Německa, Nizozemska, Belgie, Polska a dalších zemí kupují nejlepší hráče za skutečné peníze. Prodeje jsou hlavní zdroj příjmů jako v realitě.
 - **Řazení a filtry:** všechny tabulky se řadí kliknutím na hlavičku, filtry si hra pamatuje.
+- **Karty hráčů:** hodnocení a potenciál, hodnota, forma, morálka, kondice, statistiky sezóny, grafy vývoje hodnocení a hodnoty, kariéra po sezónách a přestupy. Otevřou se kliknutím na jméno kdekoli ve hře.
+- **Karty klubů:** umístění, trenér, stadion, poslední zápasy a kádr se skautskými odhady.
+- **Vývoj hráčů:** průběžně každý měsíc podle věku, odehraných minut a trenéra.
+- **Forma a morálka:** ovlivňují výkon. Hráči, kteří nehrají, jsou nespokojení, neprodlouží smlouvu a přitahují nabídky.
+- **Soutěže:** nadstavba 1. ligy (skupina o titul, o umístění a o záchranu), baráž o 1. ligu a domácí pohár s prémiemi.
+- **Účetnictví:** výsledovka s odpisy hráčských registrací a ziskem z prodejů, rozvaha, daň z příjmů 21 % s převodem ztrát.
+- **Pohodlí:** tlačítko „Do zápasu“ se souhrnem zápasu, grafy pozice v tabulce a zůstatku klubu.
 - **Smlouvy:** prodlužování, uvolnění hráče, odchody po skončení smlouvy (důležitým hráčům prodlužuje ředitel sám).
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
@@ -48,6 +55,5 @@ npm run build      # produkční sestavení do složky dist/
 
 - Hráči jsou generovaní. Skuteční hráči 1. a 2. ligy přijdou jako samostatný datový balíček.
 - Složení 2. a 3. ligy v datech je pracovní a je potřeba ho ověřit podle FAČR.
-- 1. liga zatím nemá nadstavbu, sestupují přímo 2 kluby (bez baráže).
 - Ostatní kluby mezi sebou přestupy řeší souhrnně v letním okně.
 - Spoluvlastníci, stadion, fanoušci a média přijdou v dalších fázích.

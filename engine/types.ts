@@ -15,6 +15,10 @@ export interface CompetitionDef {
   promote: number;
   /** Počet klubů, které sestupují o úroveň níž. */
   relegate: number;
+  /** 'nadstavba' = po základní části se soutěž dělí na skupiny (o titul, o umístění, o záchranu). */
+  format?: 'nadstavba';
+  /** Baráž: kluby na pozicích `upper` hrají s kluby na pozicích `lower` z nižší soutěže `vs`. */
+  playoff?: { vs: string; upper: number[]; lower: number[] };
 }
 
 export interface ClubDef {
@@ -79,6 +83,48 @@ export interface Player {
   injury?: string;
   /** Počet zápasů klubu, které hráč ještě nesmí hrát kvůli kartám. */
   suspension: number;
+  /** Morálka 0–100. Klesá hráčům, kteří nehrají, roste s úspěchy a novou smlouvou. */
+  morale: number;
+  /** Posledních až 5 známek (forma). */
+  recent: number[];
+  /** Kdy si hráč naposledy stěžoval na málo minut. */
+  complainedAt?: string;
+  career: CareerSeason[];
+  transfers: PlayerTransfer[];
+  trend?: TrendPoint[];
+  /** Účetní zůstatková hodnota registrace (jen hráči klubu majitele koupení za odstupné). */
+  bookValue?: number;
+  /** Měsíční odpis registrace. */
+  amortization?: number;
+}
+
+// ---------- Vývoj a kariéra hráče ----------
+
+export interface CareerSeason {
+  season: number;
+  club: string;
+  competition: string;
+  apps: number;
+  goals: number;
+  assists: number;
+  minutes: number;
+  avgRating?: number;
+  overall: number;
+  value: number;
+}
+
+export interface PlayerTransfer {
+  date: string;
+  from: string;
+  to: string;
+  fee: number;
+}
+
+/** Měsíční záznam vývoje (ukládá se pro hráče klubu majitele). */
+export interface TrendPoint {
+  date: string;
+  overall: number;
+  value: number;
 }
 
 // ---------- Lidé ----------
@@ -180,10 +226,24 @@ export type FinanceCategory =
   | 'provoz'
   | 'prestupy'
   | 'vedeni'
+  | 'pohar'
+  | 'dane'
   | 'vklad';
 
-export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'tv', 'komercni', 'vklad'];
-export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'provoz', 'prestupy'];
+export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'tv', 'komercni', 'pohar', 'vklad'];
+export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'provoz', 'prestupy', 'dane'];
+
+/** Účetní položky sezóny (jen klub majitele). Na rozdíl od peněz rozkládají cenu hráče do let smlouvy. */
+export interface Accounting {
+  /** Odpisy hráčských registrací. */
+  amortization: number;
+  /** Zisk (nebo ztráta) z prodeje hráčů = odstupné minus zůstatková hodnota. */
+  saleProfit: number;
+  /** Jednorázové odpisy při uvolnění hráče. */
+  writeOffs: number;
+  /** Odměny agentům (náklad, neodepisují se). */
+  agentFees: number;
+}
 
 export type FinanceTotals = Record<FinanceCategory, number>;
 
@@ -200,6 +260,12 @@ export interface ClubFinance {
   monthsNegative: number;
   /** Zůstatek na začátku měsíce (pro výhled finančního ředitele). */
   monthStartBalance?: number;
+  /** Zůstatek na začátku každého měsíce (pro graf, jen klub majitele). */
+  balanceHistory?: { date: string; balance: number }[];
+  accounting?: Accounting;
+  lastAccounting?: Accounting;
+  /** Neuplatněná daňová ztráta z minulých let. */
+  lossCarry?: number;
   season: FinanceTotals;
   lastSeason?: FinanceTotals;
   /** Poslední transakce (jen u klubu hráče). */
@@ -234,6 +300,8 @@ export interface MatchResult {
   homeGoals: number;
   awayGoals: number;
   attendance: number;
+  /** Penaltový rozstřel (pohár, baráž). */
+  penalties?: [number, number];
   scorers: { playerId: string; clubId: string; minute: number; assistId?: string; penalty?: boolean }[];
   /** Podrobnosti (sestavy, statistiky, události). Ukládají se jen pro soutěž klubu majitele. */
   detail?: MatchDetail;
@@ -297,6 +365,27 @@ export interface Fixture {
 export interface Competition extends CompetitionDef {
   clubIds: string[];
   fixtures: Fixture[];
+  /** Skupiny nadstavby (vznikají po základní části). */
+  groups?: { name: string; clubIds: string[] }[];
+  /** Termíny vyhrazené pro nadstavbu. */
+  reservedDates?: string[];
+}
+
+/** Pohár nebo baráž: vyřazovací zápasy mimo ligové tabulky. */
+export interface Cup {
+  id: string;
+  name: string;
+  kind: 'pohar' | 'baraz';
+  fixtures: Fixture[];
+  /** Názvy a termíny kol (u baráže i odveta). */
+  rounds: { name: string; date: string; secondLeg?: string }[];
+  /** Kluby, které jsou ještě ve hře. */
+  alive: string[];
+  /** Index kola, které se má rozlosovat. */
+  nextRound: number;
+  winner?: string;
+  /** Baráž: dvojice (horní klub, dolní klub) a vítěz. */
+  ties?: { upper: string; lower: string; winner?: string }[];
 }
 
 export interface Owner {
@@ -320,15 +409,25 @@ export interface NewsItem {
   text?: string;
   /** Zápas, ke kterému se zpráva vztahuje (otevře náhled). */
   fixtureId?: string;
+  playerId?: string;
 }
 
 export interface SeasonRecord {
   season: number;
   champions: Record<string, string>;
   ownerClub: { competitionId: string; position: number; points: number };
+  cupWinner?: string;
 }
 
-export const SAVE_VERSION = 4;
+/** Průběh sezóny klubu majitele (pro graf pozice v tabulce). */
+export interface TimelinePoint {
+  round: number;
+  date: string;
+  position: number;
+  points: number;
+}
+
+export const SAVE_VERSION = 5;
 
 export interface GameState {
   version: typeof SAVE_VERSION;
@@ -344,6 +443,8 @@ export interface GameState {
   staff: Record<string, Staff>;
   market: Market;
   competitions: Record<string, Competition>;
+  cups: Record<string, Cup>;
+  timeline: TimelinePoint[];
   /** Kluby mimo modelované soutěže (divize a níže). */
   pool: string[];
   news: NewsItem[];

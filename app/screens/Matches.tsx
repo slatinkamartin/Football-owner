@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { competitionOf, formatShortDate, type Fixture, type GameState } from '../../engine';
+import { competitionOf, formatShortDate, type Cup, type Fixture, type GameState } from '../../engine';
 import { num } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
+import { ClubLink } from '../nav';
 
 export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (id: string) => void }) {
   const ownId = game.owner.clubId;
@@ -32,6 +33,7 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
       .join(', ');
 
   return (
+    <div className="stack">
     <div className="grid two">
       <section className="card">
         <h2>Zápasy klubu</h2>
@@ -65,7 +67,12 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
             { key: 'round', label: 'Kolo', num: true, value: (x) => x.f.round, render: (x) => `${x.f.round}.`, className: () => 'muted' },
             { key: 'date', label: 'Datum', value: (x) => x.f.date, render: (x) => formatShortDate(x.f.date), className: () => 'muted' },
             { key: 'venue', label: 'Kde', value: (x) => (x.home ? 'doma' : 'venku') },
-            { key: 'opp', label: 'Soupeř', value: (x) => game.clubs[x.home ? x.f.awayId : x.f.homeId].shortName },
+            {
+              key: 'opp',
+              label: 'Soupeř',
+              value: (x) => game.clubs[x.home ? x.f.awayId : x.f.homeId].shortName,
+              render: (x) => <ClubLink id={x.home ? x.f.awayId : x.f.homeId}>{game.clubs[x.home ? x.f.awayId : x.f.homeId].shortName}</ClubLink>,
+            },
             {
               key: 'score',
               label: 'Výsledek',
@@ -116,5 +123,62 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
         </ul>
       </section>
     </div>
+    {Object.values(game.cups).map((cup) => (
+      <CupSection key={cup.id} game={game} cup={cup} onOpenMatch={onOpenMatch} />
+    ))}
+    </div>
+  );
+}
+
+function CupSection({ game, cup, onOpenMatch }: { game: GameState; cup: Cup; onOpenMatch: (id: string) => void }) {
+  const own = game.owner.clubId;
+  const inCup = cup.alive.includes(own);
+  const played = cup.fixtures.some((f) => f.homeId === own || f.awayId === own);
+  const status = cup.winner
+    ? `Vítěz: ${game.clubs[cup.winner].shortName}`
+    : !played && !inCup
+      ? 'Váš klub se neúčastní.'
+      : inCup
+        ? 'Váš klub je stále ve hře.'
+        : 'Váš klub je vyřazený.';
+  const rounds = cup.kind === 'baraz' ? [1, 2] : cup.rounds.map((_, i) => i + 1).filter((r) => cup.fixtures.some((f) => f.round === r));
+  return (
+    <section className="card">
+      <div className="row-between">
+        <h2>{cup.name}</h2>
+        <span className="muted small">{status}</span>
+      </div>
+      {cup.kind === 'pohar' && (
+        <p className="muted small">
+          Hraje se v úterý: {cup.rounds.map((r) => `${r.name} ${formatShortDate(r.date)}`).join(', ')}. Postup přináší prémie, vítěz dostane 10 mil. Kč.
+        </p>
+      )}
+      <div className="cup-rounds">
+        {[...rounds].reverse().map((r) => (
+          <div key={r} className="cup-round">
+            <h3>{cup.kind === 'baraz' ? `${r}. zápas` : cup.rounds[r - 1].name}</h3>
+            <ul className="fixtures">
+              {cup.fixtures
+                .filter((f) => f.round === r)
+                .sort((a, b) => Number([b.homeId, b.awayId].includes(own)) - Number([a.homeId, a.awayId].includes(own)))
+                .map((f) => (
+                  <li key={f.id} className={[f.homeId, f.awayId].includes(own) ? 'own-row' : ''}>
+                    <button className="fixture-btn" disabled={!f.result} onClick={() => onOpenMatch(f.id)}>
+                      <div className="fixture-line">
+                        <span className="team home">{game.clubs[f.homeId].shortName}</span>
+                        <span className="score-box">
+                          {f.result ? `${f.result.homeGoals}:${f.result.awayGoals}` : formatShortDate(f.date)}
+                          {f.result?.penalties && <small className="muted"> pen. {f.result.penalties[0]}:{f.result.penalties[1]}</small>}
+                        </span>
+                        <span className="team">{game.clubs[f.awayId].shortName}</span>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

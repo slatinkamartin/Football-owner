@@ -1,19 +1,30 @@
 import { useState } from 'react';
-import { averageRating, competitionOf, computeTable, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
+import { averageRating, competitionOf, finalStandings, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
 import { Chips, DataTable, useStoredState } from '../table';
+import { ClubLink, PlayerLink } from '../nav';
 
 export function Tables({ game }: { game: GameState }) {
   const ownId = game.owner.clubId;
   const comps = Object.values(game.competitions).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name, 'cs'));
   const [compId, setCompId] = useState(competitionOf(game, ownId)?.id ?? comps[0].id);
   const comp = game.competitions[compId];
-  const table = computeTable(comp, game).map((r, i) => ({ ...r, rank: i + 1 }));
+  const table = finalStandings(comp, game).map((r, i) => ({ ...r, rank: i + 1 }));
   const n = table.length;
   const [filter, setFilter] = useStoredState('filtr:statistiky', { club: '', position: '' as Position | '' });
 
+  // Při nadstavbě: hranice skupin v tabulce.
+  const groupStart = new Set<number>();
+  let acc = 0;
+  for (const g of comp.groups ?? []) {
+    if (acc > 0) groupStart.add(acc + 1);
+    acc += g.clubIds.length;
+  }
+
+  const lowerPlayoff = Object.values(game.competitions).find((c) => c.playoff?.vs === comp.id)?.playoff;
   const zone = (rank: number) => {
     if (rank <= comp.promote) return 'zone-up';
     if (rank > n - comp.relegate) return 'zone-down';
+    if (comp.playoff?.upper.includes(rank) || lowerPlayoff?.lower.includes(rank)) return 'zone-playoff';
     return '';
   };
 
@@ -38,15 +49,20 @@ export function Tables({ game }: { game: GameState }) {
 
       <section className="card">
         <h2>{comp.fullName ?? comp.name}</h2>
+        {comp.groups ? (
+          <p className="muted small">Nadstavba: {comp.groups.map((g, i) => `${g.name} (${i === 0 ? 1 : comp.groups!.slice(0, i).reduce((a, x) => a + x.clubIds.length, 0) + 1}.–${comp.groups!.slice(0, i + 1).reduce((a, x) => a + x.clubIds.length, 0)}. místo)`).join(', ')}. Body ze základní části se počítají.</p>
+        ) : comp.format === 'nadstavba' ? (
+          <p className="muted small">Po 30 kolech se soutěž rozdělí na skupinu o titul (1.–6.), o umístění (7.–10.) a o záchranu (11.–16.).</p>
+        ) : null}
         <DataTable
           id="tabulka-souteze"
           rows={table}
           rowKey={(r) => r.clubId}
           initialSort={{ key: 'rank', dir: 'asc' }}
-          rowClassName={(r) => `${zone(r.rank)} ${r.clubId === ownId ? 'own-row' : ''}`}
+          rowClassName={(r) => `${zone(r.rank)} ${r.clubId === ownId ? 'own-row' : ''} ${groupStart.has(r.rank) ? 'group-start' : ''}`}
           columns={[
             { key: 'rank', label: '#', num: true, value: (r) => r.rank, render: (r) => `${r.rank}.` },
-            { key: 'club', label: 'Klub', value: (r) => game.clubs[r.clubId].shortName },
+            { key: 'club', label: 'Klub', value: (r) => game.clubs[r.clubId].shortName, render: (r) => <ClubLink id={r.clubId}>{game.clubs[r.clubId].shortName}</ClubLink> },
             { key: 'played', label: 'Z', num: true, value: (r) => r.played },
             { key: 'won', label: 'V', num: true, value: (r) => r.won },
             { key: 'drawn', label: 'R', num: true, value: (r) => r.drawn },
@@ -63,7 +79,9 @@ export function Tables({ game }: { game: GameState }) {
         />
         <p className="muted small">
           {comp.promote > 0 && <><span className="legend zone-up" /> postup </>}
+          {lowerPlayoff && <><span className="legend zone-playoff" /> baráž </>}
           {comp.relegate > 0 && <><span className="legend zone-down" /> sestup</>}
+          {comp.playoff && <><span className="legend zone-playoff" /> baráž</>}
         </p>
       </section>
 
@@ -95,7 +113,7 @@ export function Tables({ game }: { game: GameState }) {
           limit={30}
           empty="Zatím nikdo nenastoupil."
           columns={[
-            { key: 'name', label: 'Hráč', value: (p) => p.lastName, render: (p) => playerName(p) },
+            { key: 'name', label: 'Hráč', value: (p) => p.lastName, render: (p) => <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> },
             { key: 'club', label: 'Klub', value: (p) => game.clubs[p.clubId].shortName, className: () => 'muted' },
             { key: 'pos', label: 'Poz.', value: (p) => ['GK', 'DF', 'MF', 'FW'].indexOf(p.position), render: (p) => POSITION_SHORT[p.position], className: () => 'muted' },
             { key: 'age', label: 'Věk', num: true, hideSm: true, value: (p) => playerAge(p, game.season) },
