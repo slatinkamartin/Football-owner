@@ -294,6 +294,8 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 | Vzhled | Světlé a jednodušší |
 | Název | Majitel |
 
-## 15. Další krok
+## 15. Stav vývoje
 
-Založit projekt (Vite + React + TypeScript), herní jádro s kalendářem a simulací ligy a první datový balíček s kluby 1. až 3. ligy.
+**Verze 0.1 (hotovo):** projekt (Vite, React, TypeScript), herní jádro s kalendářem, simulací zápasů, financemi, postupy a sestupy, datový balíček s kluby 1. až 3. ligy a základní rozhraní. Podrobnosti v [README](README.md).
+
+**Další krok:** trenér a sportovní ředitel jako najímané osoby s vlastnostmi, skutečné přestupy (nabídka a protinabídka) a smlouvy hráčů.
