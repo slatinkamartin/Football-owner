@@ -206,11 +206,36 @@ export function expectedPosition(state: GameState, clubId: string): number {
 }
 
 /** Nejbližší cíl, který odpovídá síle kádru. */
+/** Dosažitelný cíl: nejambicióznější cíl, který klub splní, když skončí, jak se čeká. */
 export function realisticGoal(state: GameState, clubId: string): SeasonGoal {
   const comp = competitionOf(state, clubId);
   if (!comp) return 'stred';
   const expected = expectedPosition(state, clubId);
-  return [...GOALS].reverse().find((g) => goalTarget(g, comp) <= expected + 1) ?? 'titul';
+  return GOALS.find((g) => goalTarget(g, comp) >= expected) ?? 'zachrana';
+}
+
+/**
+ * Když klubu majitele chybí trenér nebo sportovní ředitel (odešel, rezignoval), klub dosadí zastupujícího
+ * ze svých řad: slabšího a levnějšího. Majitel ho může kdykoli nahradit stálým ve Vedení.
+ */
+export function ensureInterimStaff(state: GameState, rng: Rng): void {
+  const club = state.clubs[state.owner.clubId];
+  for (const role of ['trener', 'reditel'] as const) {
+    const key = STAFF_KEY[role];
+    if (club.staff[key] && state.staff[club.staff[key]!]) continue;
+    const s = generateStaff(rng, state, role, staffLevelForReputation(club.reputation) - 10, club.id);
+    s.interim = true;
+    s.contractUntil = state.season + 1;
+    s.wage = Math.round((s.wage * 0.7) / 1000) * 1000;
+    state.staff[s.id] = s;
+    club.staff[key] = s.id;
+    state.owner.trust[role] = 50;
+    addNews(state, {
+      kind: 'varovani',
+      title: `Zastupující ${role === 'trener' ? 'trenér' : 'sportovní ředitel'}: ${s.firstName} ${s.lastName}`,
+      text: `Místo zůstalo prázdné, a tak ho klub obsadil z vlastních řad (schopnosti ${s.ability}). Stálého najmete ve Vedení.`,
+    });
+  }
 }
 
 export function setSeasonGoal(prev: GameState, goal: SeasonGoal): ActionResult {
@@ -307,7 +332,7 @@ function releaseCurrent(state: GameState, role: StaffRole, payout: boolean): Sta
   const key = STAFF_KEY[role];
   const current = club.staff[key] ? state.staff[club.staff[key]!] : undefined;
   if (!current) return undefined;
-  if (payout) {
+  if (payout && !current.interim) {
     const cost = severance(state, current);
     if (cost > 0) book(state, club.id, 'vedeni', -cost, `Odstupné: ${current.firstName} ${current.lastName}`);
   }
@@ -371,13 +396,16 @@ export function monthlyStaff(state: GameState, rng: Rng): void {
     }
   }
 
+  // Důvěra se pomalu vrací k normálu; průběžné plnění cíle ji posouvá, trestá se jen výrazné zaostání.
+  for (const role of ['trener', 'reditel'] as const) state.owner.trust[role] = clamp(state.owner.trust[role] + (50 - state.owner.trust[role]) * 0.04, 0, 100);
   const own = ownPosition(state);
   if (own && own.played >= 4) {
     const diff = goalTarget(state.owner.seasonGoal, own.comp) - own.position;
-    const delta = clamp(diff * 0.5, -3, 2);
+    const delta = diff >= 0 ? clamp(diff * 0.3, 0, 1.5) : diff >= -2 ? 0 : clamp((diff + 2) * 0.5, -2.5, 0);
     state.owner.trust.trener = clamp(state.owner.trust.trener + delta, 0, 100);
     state.owner.trust.reditel = clamp(state.owner.trust.reditel + delta / 2, 0, 100);
   }
+  ensureInterimStaff(state, rng);
 
   // Ostatní kluby občas vymění trenéra, když se jim nedaří.
   for (const comp of Object.values(state.competitions)) {
@@ -410,7 +438,7 @@ export function seasonEndStaff(state: GameState, rng: Rng, position: number, com
   if (comp) {
     const target = goalTarget(state.owner.seasonGoal, comp);
     const met = position <= target;
-    const delta = met ? 12 : -Math.min(25, (position - target) * 2);
+    const delta = met ? 12 : -Math.min(15, (position - target) * 1.5);
     state.owner.trust.trener = clamp(state.owner.trust.trener + delta, 0, 100);
     state.owner.trust.reditel = clamp(state.owner.trust.reditel + delta / 2, 0, 100);
     addNews(state, {

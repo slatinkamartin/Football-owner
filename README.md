@@ -61,6 +61,17 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.13: stabilita na dlouhé hraní (test 3 týmů × 5 sezón)
+
+- **Důvěra vedení:** každý měsíc se pomalu vrací k normálu, průběžně se trestá jen výrazné zaostání za cílem, za titul, pohár a postup je bonus. Když majitel situaci nerozhodne a vyřeší ji vedení, vztahy utrpí jen málo.
+- **Zastupující trenér a ředitel:** když místo zůstane prázdné, klub dosadí zastupujícího (slabšího a levnějšího), ve Vedení je označený. Ředitel prodlužuje smlouvy bez ohledu na důvěru.
+- **Cíl sezóny:** na začátku každé sezóny (i po postupu a sestupu) vedení navrhne dosažitelný cíl; změnit ho jde ve Vedení.
+- **Ředitel nakupuje:** se zapnutou péčí o kádr koupí v přestupním okně posilu na nejslabší místo, když je výrazně lepší a vejde se do rozpočtu (jeden nákup nejvýš za 60 % zbývajícího rozpočtu).
+- **Kádr se nerozpadá po sestupu:** prodloužení smí využít místo po odcházejících platech, návrh rozpočtu vždy pokryje podepsané smlouvy a nouzově doplnění hráči mají úroveň soutěže.
+- **Ceny hráčů:** nad hodnocením 76 hodnota roste pomaleji, zahraniční nabídky mají strop podle úrovně kupce (nejvýš asi 20 mil. €).
+- **Peníze bohatých:** hráči dostávají 15 % evropských peněz jako prémie, bohaté kluby ligy zvedají platy, Přehled financí upozorní na nevyužité peníze.
+- **Výhled:** Evropa se před předkoly ukazuje jako rozsah, potřeba od majitele má rezervu 3 % nákladů.
+
 ### Novinky verze 0.12.1: sjednocené škály
 
 - **0–100:** hráči (hodnocení, potenciál, kondice, morálka), schopnosti vedení, pověst, nálada fanoušků, důvěra, vztahy, spokojenost akcionářů, síla základní sestavy, domácí prostředí, riziko a závažnost v šedé zóně.

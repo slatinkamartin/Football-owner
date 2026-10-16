@@ -109,7 +109,7 @@ export function FinanceTransfers({ game, onChange, onOpen }: { game: GameState; 
         />
         <label className="check">
           <input type="checkbox" checked={club.policy.autoSquad !== false} onChange={(e) => set({ autoSquad: e.target.checked })} />
-          <span>Sportovní ředitel sám prodlužuje smlouvy, doplňuje kádr na 22 hráčů a v prodejním klubu prodává hráče mimo opory</span>
+          <span>Sportovní ředitel sám prodlužuje smlouvy, doplňuje kádr na 22 hráčů, kupuje posily na nejslabší místa (jedna posila nejvýš za 60 % zbývajícího rozpočtu) a v prodejním klubu prodává hráče mimo opory</span>
         </label>
       </LineCard>
 

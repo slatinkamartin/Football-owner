@@ -130,7 +130,7 @@ function ExtraStaff({ game, role, onResult, onPick }: { game: GameState; role: S
       </div>
       {person ? (
         <>
-          <p className="small">{person.firstName} {person.lastName} <span className="muted">· {money(person.wage)} měsíčně · do {person.contractUntil}</span></p>
+          <p className="small">{person.firstName} {person.lastName}{person.interim && <> <Badge tone="warn">zastupující</Badge></>} <span className="muted">· {money(person.wage)} měsíčně · do {person.contractUntil}</span></p>
           <p className="small muted">{roleEffect(role, person.ability)}</p>
           {confirming ? (
             <div className="buttons">
@@ -186,7 +186,7 @@ function StaffCard({
         <Badge tone={trust >= 60 ? 'good' : trust >= 35 ? 'warn' : 'bad'}>Důvěra {Math.round(trust)}</Badge>
       </div>
       <p className="person-name">
-        {person.firstName} {person.lastName} <span className="muted">· {staffAge(person, game.season)} let</span>
+        {person.firstName} {person.lastName}{person.interim && <> <Badge tone="warn">zastupující</Badge></>} <span className="muted">· {staffAge(person, game.season)} let</span>
       </p>
       <dl className="kv meters">
         <dt>{role === 'trener' ? 'Trenérské schopnosti' : 'Skauting a vyjednávání'}</dt>

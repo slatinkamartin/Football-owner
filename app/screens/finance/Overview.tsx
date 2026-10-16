@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import {
   activeOverdraft,
+  annualCosts,
+  tierOf,
   balanceSheet,
   budgetApproved,
   budgetChanged,
@@ -80,6 +82,10 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
   const month = Number(game.date.slice(5, 7));
   const ending = month >= 1 && month <= 6 ? expiringSponsors(game) : [];
   if (ending.length) alerts.push({ tone: 'warn', text: `V létě končí sponzorské smlouvy: ${ending.map((c) => `${SLOT_LABEL[c.slot]} (${c.name})`).join(', ')}. Nabídky na prodloužení chodí od března.`, tab: 'prijmy' });
+  const costs = annualCosts(club, tierOf(game, club.id));
+  if (club.finance.balance > costs * 0.8 && plan.cashMin > costs * 0.5) {
+    alerts.push({ tone: 'warn', text: `Na účtu leží ${money(club.finance.balance)} a do konce sezóny neklesne pod ${money(plan.cashMin)}. Ředitel doporučuje peníze využít: stavby a zázemí (Stadion), posily (Přestupy) nebo vyšší mzdový strop.`, tab: 'prestupy' });
+  }
   const seen = new Set<string>();
   const shown = alerts.filter((a) => !seen.has(a.text) && seen.add(a.text));
 

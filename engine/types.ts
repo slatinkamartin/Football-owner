@@ -225,6 +225,8 @@ export interface Staff {
   /** Měsíční plat v Kč. */
   wage: number;
   contractUntil: number;
+  /** Zastupující (dosazený klubem, když místo zůstalo prázdné). */
+  interim?: boolean;
 }
 
 export type SeasonGoal = 'titul' | 'postup' | 'horni' | 'stred' | 'zachrana';
@@ -760,6 +762,8 @@ export interface BudgetPlan {
   licenceBalance?: number;
   /** Kolik musí majitel dodat, aby klub vyšel bez díry (0 = nic). */
   ownerNeed?: number;
+  /** Evropa před předkoly: rozsah příjmů (jen předkola až ligová fáze s nejlepšími výsledky). */
+  europeRange?: { low: number; high: number };
 }
 
 /** Nastavení, které tvoří rozpočet (návrh vedení, schválená verze). */

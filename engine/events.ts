@@ -32,8 +32,12 @@ function teamMorale(state: GameState, delta: number): void {
   for (const p of squadOf(state, state.owner.clubId)) p.morale = clamp(p.morale + delta, 0, 100);
 }
 
+/** Když majitel nerozhodne a situaci vyřeší vedení samo, vztahy utrpí jen málo. */
+let resolvingAutomatically = false;
+
 function trust(state: GameState, role: 'trener' | 'reditel', delta: number): void {
-  state.owner.trust[role] = clamp(state.owner.trust[role] + delta, 0, 100);
+  const d = delta < 0 && resolvingAutomatically ? delta * 0.3 : delta;
+  state.owner.trust[role] = clamp(state.owner.trust[role] + d, 0, 100);
 }
 
 function fans(state: GameState, delta: number): void {
@@ -1210,7 +1214,13 @@ export function resolveEvent(prev: GameState, eventId: string, optionId: string,
 }
 
 function applyResolution(state: GameState, event: GameEvent, optionId: string, auto: boolean): string {
-  const message = TEMPLATES[event.template]?.resolve(state, event, optionId) ?? '';
+  resolvingAutomatically = auto;
+  let message = '';
+  try {
+    message = TEMPLATES[event.template]?.resolve(state, event, optionId) ?? '';
+  } finally {
+    resolvingAutomatically = false;
+  }
   state.events = state.events.filter((e) => e.id !== event.id);
   const option = event.options.find((o) => o.id === optionId);
   addNews(state, {

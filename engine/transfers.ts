@@ -440,8 +440,10 @@ function foreignBuyer(rng: Rng, p: Player, season: number): { id: string; level:
 
 /** Odstupné, které klub nabídne: zahraniční kluby platí víc, nabídnutý hráč jde levněji. */
 function offerFeeFor(rng: Rng, value: number, foreignLevel: number | undefined, listed: boolean): number {
-  const [lo, hi] = foreignLevel === 1 ? [1.1, 1.6] : foreignLevel === 2 ? [0.95, 1.4] : foreignLevel === 3 ? [0.8, 1.15] : [0.85, 1.3];
-  return roundMoney(value * (lo + rng.next() * (hi - lo)) * (listed ? 0.85 : 1));
+  const [lo, hi] = foreignLevel === 1 ? [1.05, 1.35] : foreignLevel === 2 ? [0.95, 1.25] : foreignLevel === 3 ? [0.8, 1.1] : [0.85, 1.2];
+  // Strop podle úrovně kupce: nejbohatší ligy zaplatí nejvýš asi 20 mil. €, menší výrazně méně.
+  const cap = foreignLevel === 1 ? 500_000_000 : foreignLevel === 2 ? 250_000_000 : foreignLevel === 3 ? 120_000_000 : 300_000_000;
+  return roundMoney(Math.min(cap, value * (lo + rng.next() * (hi - lo)) * (listed ? 0.85 : 1)));
 }
 
 export function generateOffers(state: GameState, rng: Rng): void {
@@ -647,14 +649,17 @@ export function seasonEndContracts(state: GameState, rng: Rng): void {
   // Sportovní ředitel sám prodlouží smlouvy hráčům, které kádr potřebuje, pokud nechtějí příliš
   // a vejdou se do mzdového stropu. Majitel to může ve Financích vypnout.
   const club = state.clubs[own];
-  if (directorOf(state, own) && state.owner.trust.reditel >= 30 && club.policy.autoSquad !== false) {
+  // Důvěra v majitele prodlužování nebrzdí: ředitel dělá svou práci, dokud v klubu je.
+  if (directorOf(state, own) && club.policy.autoSquad !== false) {
     const squad = squadOf(state, own).sort((a, b) => b.overall - a.overall);
     // Počítá se jen s platy hráčů, kteří zůstávají; místo po odcházejících jde na prodloužení.
     const sections = sectionsOf(state);
     const usage = sectionUsage(state);
-    const free = new Map(usage.map((u) => [u.section, u.cap - u.continuing]));
+    // Na prodloužení smí jít aspoň místo po odcházejících platech, i když strop po sestupu nebo propadu
+    // pověsti klesl: klub tak udrží kádr na dosavadní platové úrovni a nezačne se rozpadat.
+    const free = new Map(usage.map((u) => [u.section, Math.max(u.cap - u.continuing, u.expiring)]));
     let bill = squad.filter((p) => !contractExpiring(state, p)).reduce((a, p) => a + p.wage, 0);
-    const cap = wageBudgetMonthly(club);
+    const cap = Math.max(wageBudgetMonthly(club), squad.reduce((a, p) => a + p.wage, 0));
     for (const p of squad.slice(0, SQUAD_TARGET)) {
       if (!contractExpiring(state, p) || playerAge(p, state.season) > 32) continue;
       if ((p.morale ?? 60) < 25) continue;
@@ -727,6 +732,13 @@ export function closeWindow(state: GameState, rng: Rng): void {
   trimFreeAgents(state);
 }
 
+/** Typická kvalita hráčů v soutěži klubu (medián podle pověsti soupeřů). */
+function leagueLevel(state: GameState, clubId: string): number {
+  const comp = Object.values(state.competitions).find((c) => c.clubIds.includes(clubId));
+  const levels = (comp?.clubIds ?? [clubId]).filter((id) => id !== clubId).map((id) => squadQualityForReputation(state.clubs[id].reputation)).sort((a, b) => a - b);
+  return levels.length ? levels[Math.floor(levels.length / 2)] : squadQualityForReputation(state.clubs[clubId].reputation);
+}
+
 /** Když klubu majitele chybí hráči, ředitel (nebo asistent) doplní kádr levnými volnými hráči. */
 export function emergencyFill(state: GameState, rng: Rng, when: string): void {
   const own = state.owner.clubId;
@@ -750,7 +762,9 @@ export function emergencyFill(state: GameState, rng: Rng, when: string): void {
       .sort((a, b) => b.overall - a.overall);
     if (squadCount() >= MIN_SQUAD && !needs().length && !affordable.length) break;
     const fa = (auto ? affordable[0] : undefined) ?? pool.sort((a, b) => a.wage - b.wage)[0];
-    const p = fa ?? generatePlayer(rng, state, { clubId: FREE, position: pos, season: state.season, quality: squadQualityForReputation(state.clubs[own].reputation) - 10, age: rng.int(17, 19) });
+    // Bez vhodného volného hráče se najde hráč z nižších soutěží na úrovni ligy (ne podle pověsti klubu,
+    // aby klub po sérii proher nespadl do spirály stále slabších náhradníků).
+    const p = fa ?? generatePlayer(rng, state, { clubId: FREE, position: pos, season: state.season, quality: leagueLevel(state, own) - 6, age: rng.int(19, 26) });
     state.players[p.id] = p;
     executeTransfer(state, p, own, 0, Math.max(5_000, wageDemand(state, p, own)), auto ? 2 : 1);
     signed.push(playerName(p));
@@ -764,6 +778,38 @@ export function emergencyFill(state: GameState, rng: Rng, when: string): void {
         : `Klubu chyběli hráči, a tak se ${when} podepsaly krátké smlouvy s levnými volnými hráči: ${signed.join(', ')}.`,
     });
   }
+}
+
+/**
+ * Jednou týdně v přestupním okně: sportovní ředitel (se zapnutou péčí o kádr) sám koupí posilu na nejslabší
+ * místo základní sestavy, když je výrazně lepší, vejde se do rozpočtu na přestupy i do mzdové sekce.
+ * Jeden nákup smí stát nejvýš 60 % zbývajícího rozpočtu; dražší posily nechává na majiteli (návrhy).
+ */
+export function directorSignings(state: GameState, rng: Rng): void {
+  const own = state.owner.clubId;
+  const club = state.clubs[own];
+  if (!transferWindow(state.date) || !directorOf(state, own) || club.policy.autoSquad === false || state.owner.ousted) return;
+  const squad = squadOf(state, own);
+  if (squad.length >= 27) return;
+  const remaining = budgetRemaining(state);
+  if (remaining <= 0) return;
+  const { position, bar } = weakestPosition(squad);
+  const keys = keyPlayerIds(state);
+  const candidates = Object.values(state.players)
+    .filter((p) => p.position === position && p.clubId !== own && !isForeign(p.clubId) && p.overall >= bar + 4 && playerAge(p, state.season) <= 30)
+    .filter((p) => p.clubId === FREE || (state.clubs[p.clubId] && state.clubs[p.clubId].reputation <= club.reputation + 3 && !keys.has(p.id)))
+    .map((p) => ({ p, fee: askingPrice(state, p, keys), wage: wageDemand(state, p, own) }))
+    .filter((x) => x.fee <= remaining * 0.6 && interest(state, x.p, own).ok && sectionRoomFor(state, x.p, x.wage).room >= 0 && wageBill(state, own) + x.wage <= wageBudgetMonthly(club))
+    .sort((a, b) => b.p.overall - a.p.overall || a.fee - b.fee);
+  const pick = candidates[0];
+  if (!pick) return;
+  const from = pick.p.clubId;
+  executeTransfer(state, pick.p, own, pick.fee, pick.wage, rng.int(2, 4));
+  addNews(state, {
+    kind: 'info',
+    title: `Sportovní ředitel koupil ${playerName(pick.p)} (${pick.p.overall})`,
+    text: `${from === FREE ? 'Volný hráč' : `Z klubu ${clubLabel(state, from)}`} za ${pick.fee.toLocaleString('cs-CZ')} Kč, plat ${pick.wage.toLocaleString('cs-CZ')} Kč měsíčně. Posílí nejslabší místo sestavy. Nákupy ředitele vypnete ve Financích (Přestupy).`,
+  });
 }
 
 // ---------- Přestupy mezi ostatními kluby ----------

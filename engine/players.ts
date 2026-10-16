@@ -125,7 +125,8 @@ export const CZK_PER_EUR = 25;
  */
 export function marketValue(p: Player, season: number): number {
   const age = playerAge(p, season);
-  const baseEur = 11_000_000 * Math.pow(5, (p.overall - 80) / 10);
+  // Nad hodnocením 76 cena roste pomaleji: i hvězda české ligy stojí jednotky až nízké desítky milionů eur.
+  const baseEur = p.overall <= 76 ? 11_000_000 * Math.pow(5, (p.overall - 80) / 10) : 11_000_000 * Math.pow(5, -0.4) * Math.pow(2.2, (p.overall - 76) / 10);
   const ageFactor =
     age <= 21 ? 1.6 : age <= 24 ? 1.35 : age <= 27 ? 1.1 : age <= 29 ? 0.85 : age <= 31 ? 0.55 : age <= 33 ? 0.3 : 0.12;
   const potentialFactor = 1 + Math.max(0, p.potential - p.overall) / 25;

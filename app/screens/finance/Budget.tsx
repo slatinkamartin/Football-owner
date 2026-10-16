@@ -84,6 +84,7 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
       <tr key={l.key} className={go ? 'clickable' : ''} onClick={go ? () => onOpen(go.tab, go.card) : undefined}>
         <td className="wrap">
           {l.label}
+          {l.key === 'evropa' && plan.europeRange && <span className="muted small"> (podle předkol {money(plan.europeRange.low)} až {money(plan.europeRange.high)})</span>}
           {go && <span className="row-go" aria-hidden="true"> ›</span>}
         </td>
         {approvedPlan && <td className="num muted">{money(a?.amount ?? 0)}</td>}

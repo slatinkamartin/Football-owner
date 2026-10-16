@@ -20,6 +20,14 @@ export const EUROPE_LABEL: Record<EuropeCompetition | 'predkola', string> = {
 const LEAGUE_PHASE: Record<EuropeCompetition, number> = { LM: 400_000_000, EL: 120_000_000, KL: 75_000_000 };
 /** Peníze za účast v předkolech. */
 const QUALIFYING: Record<EuropeCompetition, number> = { LM: 25_000_000, EL: 15_000_000, KL: 10_000_000 };
+/** Podíl evropských peněz, který jde hráčům jako prémie. */
+export const EUROPE_BONUS_SHARE = 0.15;
+
+/** Rozsah evropských peněz před předkoly: jen předkola, nebo ligová fáze s nejlepšími výsledky. */
+export function europeRange(entry: EuropeCompetition): { low: number; high: number } {
+  return { low: QUALIFYING[entry], high: QUALIFYING[entry] + LEAGUE_PHASE[entry] * 1.5 };
+}
+
 /** Síla kádru, při které má klub poloviční šanci projít do ligové fáze. */
 const THRESHOLD: Record<EuropeCompetition, number> = { LM: 71, EL: 67, KL: 63.5 };
 const NEXT: Record<EuropeCompetition, EuropeCompetition | undefined> = { LM: 'EL', EL: 'KL', KL: undefined };
@@ -93,6 +101,7 @@ export function resolveEurope(state: GameState, rng: Rng): void {
     }
     e.result = result;
     book(state, e.clubId, 'evropa', QUALIFYING[e.entry], `Evropské poháry: předkola (${EUROPE_LABEL[e.entry]})`);
+    book(state, e.clubId, 'platy', -QUALIFYING[e.entry] * EUROPE_BONUS_SHARE, 'Prémie hráčům za evropské poháry');
     e.revenue = QUALIFYING[e.entry];
     if (result !== 'predkola') {
       e.revenue += Math.round((LEAGUE_PHASE[result] * (1 + rng.next() * 0.5)) / 1_000_000) * 1_000_000;
@@ -126,5 +135,6 @@ export function monthlyEurope(state: GameState): void {
     if (e.result === 'predkola') continue;
     const part = Math.round((e.revenue - QUALIFYING[e.entry]) / 4);
     book(state, e.clubId, 'evropa', part, `Evropské poháry: ${EUROPE_LABEL[e.result]}`);
+    book(state, e.clubId, 'platy', -part * EUROPE_BONUS_SHARE, 'Prémie hráčům za evropské poháry');
   }
 }

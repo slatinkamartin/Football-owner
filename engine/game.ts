@@ -54,6 +54,8 @@ import {
   generateStaff,
   monthlyStaff,
   realisticGoal,
+  ensureInterimStaff,
+  goalLabel,
   refreshStaffPool,
   seasonEndStaff,
   academyBonus,
@@ -62,7 +64,7 @@ import {
   staffLevelForReputation,
 } from './staff';
 import { computeTable, formScore } from './standings';
-import { aiDomesticTransfers, aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
+import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
 import { adminMonthly, pitchFactor, campBonus, dailyOperations, homeMatchOperations, maintenanceInjury, monthlyOperations } from './operations';
 import { NEW_CATEGORIES_V10, SAVE_VERSION, type Departments, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
 import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
@@ -228,6 +230,10 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
  * a zbytek do zázemí a provozu majitele. Nehromadí se tak miliardy.
  */
 function aiReinvest(state: GameState, club: Club, tier: number): void {
+  // Bohaté kluby zvednou platy (silnější kádr, ale i vyšší náklady), chudé je stáhnou.
+  const costs = annualCosts(club, tier);
+  if (club.finance.balance > costs * 1.2) club.policy.wageMultiplier = Math.min(1.6, club.policy.wageMultiplier + 0.1);
+  else if (club.finance.balance < costs * 0.2) club.policy.wageMultiplier = Math.max(0.8, club.policy.wageMultiplier - 0.05);
   const reserve = annualCosts(club, tier) * 0.35;
   const excess = club.finance.balance - reserve;
   if (excess <= 0) return;
@@ -466,6 +472,11 @@ function endSeason(state: GameState, rng: Rng): void {
     moved.add(t.upper);
   }
   for (const m of moves) {
+    if (m.clubId === state.owner.clubId && m.up) {
+      // Postup: vedení i trenér mají radost.
+      state.owner.trust.trener = Math.min(100, state.owner.trust.trener + 10);
+      state.owner.trust.reditel = Math.min(100, state.owner.trust.reditel + 10);
+    }
     m.from.clubIds = m.from.clubIds.filter((id) => id !== m.clubId);
     m.to.clubIds.push(m.clubId);
     if (m.clubId === state.owner.clubId) adjustForNewTier(state, m.from.tier, m.to.tier);
@@ -530,6 +541,12 @@ function endSeason(state: GameState, rng: Rng): void {
     }
   }
 
+  // Titul a pohár: bonus k důvěře nad rámec splněného cíle.
+  if (ownIndex === 0 || state.cups.pohar?.winner === state.owner.clubId) {
+    const bonus = (ownIndex === 0 ? 6 : 0) + (state.cups.pohar?.winner === state.owner.clubId ? 6 : 0);
+    state.owner.trust.trener = Math.min(100, state.owner.trust.trener + bonus);
+    state.owner.trust.reditel = Math.min(100, state.owner.trust.reditel + bonus);
+  }
   seasonEndStaff(state, rng, ownIndex + 1, ownComp);
   if (ownComp) {
     const miss = ownIndex + 1 - goalTarget(state.owner.seasonGoal, ownComp);
@@ -822,6 +839,14 @@ function processDay(state: GameState, rng: Rng): void {
     applyLicenceSanction(state);
     startEurope(state, rng);
     seasonStartSponsors(state, rng);
+    // Vedení navrhne dosažitelný cíl sezóny podle síly kádru a soutěže (po postupu i sestupu).
+    const goal = realisticGoal(state, state.owner.clubId);
+    const ownComp = competitionOf(state, state.owner.clubId);
+    if (ownComp) {
+      state.owner.seasonGoal = goal;
+      addNews(state, { kind: 'info', title: `Vedení navrhuje cíl sezóny: ${goalLabel(goal, ownComp)}`, text: 'Cíl můžete změnit ve Vedení. Podle něj se hodnotí trenér, ředitel i vaše práce.' });
+    }
+    ensureInterimStaff(state, rng);
     prepareBudget(state);
     addNews(state, { kind: 'sezona', title: `Začíná sezóna ${seasonLabel(state.season)}`, text: 'Přestupní okno je otevřené do 31. 8. Nezapomeňte stanovit cíl sezóny.' });
   }
@@ -842,6 +867,7 @@ function processDay(state: GameState, rng: Rng): void {
   if (dayOfWeek(state.date) === 1) {
     maybeCreateEvent(state, rng);
     aiDomesticTransfers(state, rng);
+    directorSignings(state, rng);
   }
   phaseNews(state);
   const window = transferWindow(state.date);

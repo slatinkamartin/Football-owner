@@ -24,6 +24,7 @@ import { squadOf } from './players';
 import { financeFactor, goalTarget, staffAbility, STAFF_KEY, expectedPosition, type ActionResult } from './staff';
 import { matchdayExtras } from './stadium';
 import { CUP_FINALIST_PRIZE, CUP_ROUNDS } from './competitions';
+import { EUROPE_BONUS_SHARE, europeRange } from './europe';
 import { goalBonusPoints, pointsBonusFactor, suggestedSplit } from './wages';
 import { overdraftLimit } from './financing';
 import { sponsorForecast, sponsorMonthly } from './sponsors';
@@ -207,10 +208,16 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const eu = state.europe?.season === state.season ? state.europe.entries.find((e) => e.clubId === own) : undefined;
   if (eu) {
     const qual = { LM: 25_000_000, EL: 15_000_000, KL: 10_000_000 }[eu.entry];
-    if (!state.europe!.resolved) add('evropa', `${state.season}-08-28`, qual);
+    if (!state.europe!.resolved) {
+      add('evropa', `${state.season}-08-28`, qual);
+      add('platy', `${state.season}-08-28`, -qual * EUROPE_BONUS_SHARE);
+    }
     if (!state.europe!.resolved || eu.result !== 'predkola') {
       const part = (eu.revenue - qual) / 4;
-      for (const d of [`${state.season}-10-01`, `${state.season}-11-01`, `${state.season}-12-01`, `${state.season + 1}-01-01`]) add('evropa', d, part);
+      for (const d of [`${state.season}-10-01`, `${state.season}-11-01`, `${state.season}-12-01`, `${state.season + 1}-01-01`]) {
+        add('evropa', d, part);
+        add('platy', d, -part * EUROPE_BONUS_SHARE);
+      }
     }
   }
   for (const c of cupForecast(state)) add('pohar', c.date, c.amount);
@@ -333,7 +340,8 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const balanceOn = (date: string) => club.finance.balance + dates.filter((d) => d <= date).reduce((a, d) => a + byDate.get(d)!, 0);
   const od = club.policy.overdraft ? overdraftLimit(state) : 0;
   const tolerance = annualCosts(club, tier) * 0.01;
-  const ownerNeed = cashMin < -od - tolerance ? Math.ceil((-(cashMin + od) + tolerance) / 500_000) * 500_000 : 0;
+  // Potřeba od majitele s rezervou 3 % nákladů na výkyvy (pokuty, horší výsledky, zranění).
+  const ownerNeed = cashMin < -od - tolerance ? Math.ceil((-(cashMin + od) + annualCosts(club, tier) * 0.03) / 500_000) * 500_000 : 0;
   return {
     lines,
     result: Math.round(result),
@@ -345,6 +353,7 @@ export function forecastSeason(state: GameState): BudgetPlan {
     from: state.date,
     licenceBalance: Math.round(balanceOn(`${state.season + 1}-03-31`)),
     ownerNeed,
+    europeRange: eu && !state.europe!.resolved ? europeRange(eu.entry) : undefined,
   };
 }
 
@@ -511,6 +520,10 @@ export function prepareBudget(state: GameState): void {
     const base = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
     club.policy.wageMultiplier = Math.max(0.5, Math.min(club.policy.wageMultiplier, (bill * 1.05) / Math.max(1, base)));
   }
+  // Návrh vždy pokryje platy podepsaných smluv (strop nesmí být pod tím, co klub už musí platit).
+  const contracted = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
+  const baseCap = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
+  if (wageBudgetMonthly(club) < contracted) club.policy.wageMultiplier = Math.min(2, Math.ceil((contracted / Math.max(1, baseCap)) * 20) / 20);
   state.budget.draft = policySnapshot(club, tier);
   const need = forecastSeason(state).ownerNeed ?? 0;
   addNews(state, {

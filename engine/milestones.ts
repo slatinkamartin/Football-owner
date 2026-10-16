@@ -46,7 +46,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
     title: `Začíná sezóna ${y}/${String(y + 1).slice(2)}`,
     text: [
       'Finanční ředitel (nebo účetní) připravil rozpočet. Schvalte ho do 15. 7., při schválení se prodají permanentky.',
-      'Přestupní okno je otevřené do 31. 8. Stanovte cíl sezóny, podle něj vás budou hodnotit fanoušci, média i spolumajitelé.',
+      `Přestupní okno je otevřené do 31. 8. Vedení navrhuje cíl sezóny: ${comp ? goalLabel(state.owner.seasonGoal, comp) : 'udržet se'}. Změnit ho můžete ve Vedení; podle něj vás budou hodnotit fanoušci, média i spolumajitelé.`,
     ],
     todo: [
       { label: 'Rozpočet sezóny', tab: 'finance', sub: 'rozpocet' },
