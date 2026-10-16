@@ -83,7 +83,10 @@ export function generateSponsorOffers(state: GameState, rng: Rng): void {
   const quality = (director - 50) / 400;
   autoSignExpired(state);
   const used = new Set([...contracts(state).map((c) => c.name)]);
-  const active = new Set(contracts(state).filter((c) => c.untilSeason >= state.season).map((c) => c.slot));
+  // Od března přicházejí nabídky i na místa, kterým smlouva končí v létě (prodloužení nebo nový partner).
+  const month = Number(state.date.slice(5, 7));
+  const renewing = month >= 3 && month <= 6;
+  const active = new Set(contracts(state).filter((c) => c.untilSeason > state.season || (c.untilSeason === state.season && !renewing)).map((c) => c.slot));
   const offered = new Set((state.sponsorOffers ?? []).map((o) => o.slot));
   const offers = [...(state.sponsorOffers ?? []).filter((o) => o.expires > state.date)];
   for (const slot of SLOTS) {
@@ -94,7 +97,8 @@ export function generateSponsorOffers(state: GameState, rng: Rng): void {
     for (let i = 0; i < count; i++) {
       const style = (['jistota', 'bonus', 'kratka'] as const)[i % 3];
       const base = value * (0.88 + rng.next() * 0.22 + quality);
-      const name = pickName(rng, slot, used);
+      const current = renewing && i === 0 ? contracts(state).find((c) => c.slot === slot && c.untilSeason === state.season) : undefined;
+      const name = current?.name ?? pickName(rng, slot, used);
       used.add(name);
       const offer: SponsorOffer = {
         id: `sp${++state.nextId}`,
@@ -114,7 +118,8 @@ export function generateSponsorOffers(state: GameState, rng: Rng): void {
         const kind = rng.chance(0.6) || !comp || comp.tier > 1 ? 'umisteni' : rng.chance(0.5) ? 'pohar' : 'evropa';
         offer.bonus = { kind, amount: round(base * (kind === 'umisteni' ? 0.45 : 0.6)), target: kind === 'umisteni' ? target : undefined };
       }
-      offer.untilSeason = state.season + offer.years - 1;
+      // Nabídka na končící místo platí od příští sezóny.
+      offer.untilSeason = state.season + offer.years - (renewing && contracts(state).some((c) => c.slot === slot) ? 0 : 1);
       offers.push(offer);
     }
   }
@@ -218,4 +223,9 @@ export function initialSponsors(state: GameState, rng: Rng): void {
     return { slot, name, annual: round(market * SLOT_SHARE[slot] * (0.9 + rng.next() * 0.15)), untilSeason: state.season + rng.int(0, 1) };
   });
   generateSponsorOffers(state, rng);
+}
+
+/** Smlouvy, které končí s touto sezónou (k obnovení). */
+export function expiringSponsors(state: GameState): SponsorContract[] {
+  return contracts(state).filter((c) => c.untilSeason === state.season);
 }

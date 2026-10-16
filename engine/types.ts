@@ -699,6 +699,10 @@ export interface BudgetLine {
   label: string;
   amount: number;
   categories: FinanceCategory[];
+  /** Část, která přijde nebo odejde hned na začátku sezóny (permanentky, letní přestupy). */
+  upfront?: number;
+  /** Část, která přijde až na konci sezóny (odměna za umístění). */
+  atEnd?: number;
 }
 
 export interface BudgetPlan {
@@ -715,8 +719,13 @@ export interface SeasonBudget {
   approved?: string;
   revised?: boolean;
   plan?: BudgetPlan;
-  /** Prodané permanentky. */
+  /** Prodané permanentky a co za ně klub dostal. */
   seasonTickets?: number;
+  seasonTicketRevenue?: number;
+  /** Návrh vedení (pro „vrátit na návrh“). */
+  draft?: Pick<ClubPolicy, 'ticketPrice' | 'seasonTicketPrice' | 'wageMultiplier' | 'transferBudget' | 'departments' | 'wageSplit' | 'bonusScheme'>;
+  /** Stav účtů na začátku měsíce (měsíční uzávěrka). */
+  monthStart?: FinanceTotals;
 }
 
 export type EuropeCompetition = 'LM' | 'EL' | 'KL';

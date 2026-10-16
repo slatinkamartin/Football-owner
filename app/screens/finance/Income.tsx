@@ -65,29 +65,31 @@ export function FinanceIncome({ game, onChange, onBudget }: { game: GameState; o
               <div key={slot} className={`subcard ${c ? '' : 'empty'}`}>
                 <div className="row-between">
                   <strong>{SLOT_LABEL[slot]}</strong>
-                  {c ? <Badge tone="good">do {seasonLabel(c.untilSeason)}</Badge> : <Badge tone="warn">volné</Badge>}
+                  {c ? (c.untilSeason === game.season ? <Badge tone="warn">končí letos</Badge> : <Badge tone="good">do {seasonLabel(c.untilSeason)}</Badge>) : <Badge tone="warn">volné</Badge>}
                 </div>
                 {c ? (
                   <>
                     <p className="small">{c.name}: {money(c.annual)} ročně</p>
                     {c.bonus && <p className="small muted">{bonusText(c)}</p>}
+                    {c.untilSeason === game.season && !list.length && <p className="small muted">Nabídky na prodloužení chodí od března.</p>}
                   </>
-                ) : list.length ? (
+                ) : null}
+                {list.length > 0 ? (
                   <ul className="plain offers">
                     {list.map((o) => (
                       <li key={o.id}>
                         <div className="row-between">
                           <span className="small"><strong>{o.name}</strong> · {STYLE_LABEL[o.style]}</span>
-                          <button onClick={() => apply(signSponsor(game, o.id))}>Podepsat</button>
+                          <button onClick={() => apply(signSponsor(game, o.id))}>{c?.name === o.name ? 'Prodloužit' : 'Podepsat'}</button>
                         </div>
                         <span className="small">{money(o.annual)} ročně{o.bonus ? `, ${bonusText(o)}` : ''}</span>
                         <span className="muted small"> · platí do {formatDate(o.expires)}</span>
                       </li>
                     ))}
                   </ul>
-                ) : (
+                ) : !c ? (
                   <p className="small muted">Nové nabídky přijdou začátkem měsíce.</p>
-                )}
+                ) : null}
                 {slot === 'stadion' && !c && <p className="small muted">Prodej názvu stadionu fanoušky naštve (−6).</p>}
               </div>
             );

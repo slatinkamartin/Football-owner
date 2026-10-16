@@ -25,7 +25,7 @@ import { completeProjects, effectiveCapacity, licenseCheck, monthlyBuildingDepre
 import { defaultFacilities, matchdayExtras } from './stadium';
 import { createEvent, expireEvents, maybeCreateEvent, resolveEvent } from './events';
 import { checkBan, media, monthlyGrey } from './grey';
-import { adjustForNewTier, BUDGET_DEADLINE, budgetDeadline, defaultSeasonTicketPrice, forecastSeason, prepareBudget, seasonTicketHolders } from './budget';
+import { adjustForNewTier, monthlyReport, BUDGET_DEADLINE, budgetDeadline, defaultSeasonTicketPrice, forecastSeason, prepareBudget, seasonTicketHolders } from './budget';
 import { homeAdvantage, ownTeamSpirit } from './atmosphere';
 import { activeOverdraft, applyLicenceSanction, CRISIS_MONTHS, dailyFinancing, enterCrisis, INSOLVENCY_MONTHS, leaveCrisisIfSolved, monthlyFinancing } from './financing';
 import { generateSponsorOffers, initialSponsors, seasonStartSponsors, sponsorEuropeBonus, sponsorMonthly, sponsorSeasonBonuses } from './sponsors';
@@ -671,6 +671,7 @@ function playMatchesOn(state: GameState, rng: Rng): void {
 }
 
 function monthlyFinance(state: GameState, rng: Rng): void {
+  monthlyReport(state);
   monthlyStaff(state, rng);
   const squads = playersByClub(state);
   for (const comp of Object.values(state.competitions)) {

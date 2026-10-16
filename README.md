@@ -61,6 +61,15 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.9.2: drobnosti ve Financích
+
+- **Živý plán:** každá změna (například vyšší mzdový strop) se hned propíše do plánovaného rozpočtu. Když se liší od schváleného, ukáže se upozornění a sloupec „Schváleno“. Odkaz „Vrátit na návrh vedení“ vrátí nastavení.
+- **Plán k dnešku a loňská sezóna:** shrnutí rozpočtu ukazuje plán, schválenou verzi, část plánu k dnešnímu dni, skutečnost s odchylkou a loňskou skutečnost.
+- **Posuvníky s okamžitým náhledem:** u vstupného (návštěva a příjem ze zápasu), permanentek a přestupů. Na mzdovém stropu je značka, kde jsou současné platy.
+- **Kalendář peněz** na 12 měsíců (pravidelné toky a termíny) a **měsíční uzávěrka** ve zprávách.
+- **Končící smlouvy:** od března nabídky na prodloužení sponzorů (první od současného partnera) a v Nákladech hráči s končící smlouvou s tlačítkem Prodloužit.
+- Jednotné zaokrouhlení částek (tis. Kč a mil. Kč) a upozornění bez duplicit.
+
 ### Novinky verze 0.9: Finance
 
 - **Finance s podzáložkami:**

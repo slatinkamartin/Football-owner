@@ -1,6 +1,11 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import {
   approveBudget,
+  lastSeasonActual,
+  planToDate,
+  resetBudgetToDraft,
+  seasonProgress,
+  ticketPreview,
   BONUS_HINT,
   BONUS_LABEL,
   bonusScheme,
@@ -75,7 +80,10 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
   const approved = budgetApproved(game);
   const plan = forecastSeason(game);
   const warnings = budgetWarnings(game, plan);
-  const set = (patch: Parameters<typeof updatePolicy>[1]) => onChange(updatePolicy(game, patch));
+  const set = (patch: Parameters<typeof updatePolicy>[1]) => {
+    setMessage(null);
+    onChange(updatePolicy(game, patch));
+  };
   const apply = (r: ActionResult) => {
     if (r.state !== game) onChange(r.state);
     setMessage({ text: r.message, ok: r.ok });
@@ -83,6 +91,8 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
   const income = plan.lines.filter((l) => l.amount > 0).reduce((a, l) => a + l.amount, 0);
   const costs = plan.lines.filter((l) => l.amount < 0).reduce((a, l) => a + l.amount, 0);
   const cfo = staffAbility(game, 'financni');
+  const approvedPlan = approved ? game.budget!.plan : undefined;
+  const pending = !!approvedPlan && Math.abs(approvedPlan.result - plan.result) >= 50_000;
 
   return (
     <section className="card wide budget">
@@ -96,8 +106,15 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
       </div>
       <p className="muted small">
         {cfo !== undefined ? 'Návrh připravil finanční ředitel.' : 'Návrh připravila účetní podle loňska.'} Každá změna se hned promítne do plánu vpravo.
-        Rozpočet můžete kdykoli revidovat.
+        Rozpočet můžete kdykoli revidovat.{' '}
+        {game.budget?.draft && <button className="linkbtn" onClick={() => apply(resetBudgetToDraft(game))}>Vrátit na návrh vedení</button>}
       </p>
+      {pending && (
+        <p className="warning soft">
+          Máte neschválené změny: plánovaný výsledek {money(approvedPlan!.result)} → {money(plan.result)}.{' '}
+          <button className="linkbtn" onClick={() => setStep('shrnuti')}>Schválit revizi ›</button>
+        </p>
+      )}
       <Notice message={message?.text ?? null} ok={message?.ok} />
 
       <nav className="stepper" aria-label="Kroky rozpočtu">
@@ -126,6 +143,12 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
             <dd className="neg">{money(costs)}</dd>
             <dt>Výsledek</dt>
             <dd className={plan.result < 0 ? 'neg' : 'pos'}>{money(plan.result)}</dd>
+            {pending && (
+              <>
+                <dt className="muted">Schválený výsledek</dt>
+                <dd className="muted">{money(approvedPlan!.result)}</dd>
+              </>
+            )}
             <dt>Nejnižší zůstatek</dt>
             <dd className={plan.cashMin < 0 ? 'neg' : ''}>{money(plan.cashMin)}</dd>
             <dt>Zůstatek na konci</dt>
@@ -153,20 +176,27 @@ type SetPolicy = (patch: Parameters<typeof updatePolicy>[1]) => void;
 function StepTotals({ game, keys, title, totalLabel }: { game: GameState; keys: string[]; title: string; totalLabel: string }) {
   const lines = forecastSeason(game).lines.filter((l) => keys.includes(l.key));
   const total = lines.reduce((a, l) => a + l.amount, 0);
+  const hasLast = !!game.clubs[game.owner.clubId].finance.lastSeason;
+  const lastTotal = lines.reduce((a, l) => a + (lastSeasonActual(game, l) ?? 0), 0);
   return (
     <div className="step-totals">
       <h3>{title}</h3>
       <table>
+        <thead>
+          <tr><th /><th className="num">Plán</th>{hasLast && <th className="num">Loni</th>}</tr>
+        </thead>
         <tbody>
           {lines.map((l) => (
             <tr key={l.key}>
               <td className="wrap">{l.label}</td>
               <td className={`num ${l.amount < 0 ? 'neg' : ''}`}>{money(l.amount)}</td>
+              {hasLast && <td className="num muted">{money(lastSeasonActual(game, l) ?? 0)}</td>}
             </tr>
           ))}
           <tr className="total">
             <td>{totalLabel}</td>
             <td className={`num ${total < 0 ? 'neg' : 'pos'}`}>{money(total)}</td>
+            {hasLast && <td className="num muted">{money(lastTotal)}</td>}
           </tr>
         </tbody>
       </table>
@@ -182,19 +212,43 @@ function IncomeStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; on
   return (
     <>
       <h3>Vstupné a permanentky</h3>
-      <NumberField label={`Vstupenka (běžně ${defaultTicketPrice(tier)} Kč)`} value={club.policy.ticketPrice} unit="Kč" onSet={(v) => set({ ticketPrice: v })} />
-      <NumberField
-        label={`Permanentka (běžně ${num(defaultSeasonTicketPrice(tier))} Kč)`}
-        value={seasonTicketPrice(game)}
-        unit="Kč"
-        disabled={sold}
-        onSet={(v) => set({ seasonTicketPrice: v })}
+      <SliderField
+        label="Vstupenka"
+        value={club.policy.ticketPrice}
+        min={Math.round(defaultTicketPrice(tier) * 0.4)}
+        max={defaultTicketPrice(tier) * 2.5}
+        step={10}
+        format={(v) => `${num(v)} Kč`}
+        reference={`běžně ${defaultTicketPrice(tier)} Kč`}
+        onChange={(v) => set({ ticketPrice: v })}
+        preview={(v) => {
+          const t = ticketPreview(game, v);
+          return (
+            <p className="preview small">
+              Návštěva asi <strong>{num(t.attendance)}</strong> ({Math.round(t.fill * 100)} % stadionu), vstupné asi <strong>{money(t.perMatch)}</strong> za zápas.
+              {v > defaultTicketPrice(tier) * 1.1 && ' Drahé vstupné kazí náladu fanoušků.'}
+            </p>
+          );
+        }}
       />
-      <p className="muted small">
-        {sold
-          ? `Prodáno ${num(seasonTicketHolders(game))} permanentek. Další prodej až příští sezónu.`
-          : `Odhad prodeje: ${num(seasonTicketDemand(game))} permanentek. Peníze přijdou při schválení, držitelé pak neplatí vstupné.`}
-      </p>
+      <SliderField
+        label="Permanentka"
+        value={seasonTicketPrice(game)}
+        min={Math.round(defaultSeasonTicketPrice(tier) * 0.4 / 50) * 50}
+        max={defaultSeasonTicketPrice(tier) * 2.5}
+        step={50}
+        format={(v) => `${num(v)} Kč`}
+        reference={`běžně ${num(defaultSeasonTicketPrice(tier))} Kč`}
+        disabled={sold}
+        onChange={(v) => set({ seasonTicketPrice: v })}
+        preview={(v) => (
+          <p className="preview small">
+            {sold
+              ? `Prodáno ${num(seasonTicketHolders(game))} permanentek za ${money(game.budget?.seasonTicketRevenue ?? 0)}. Další prodej až příští sezónu.`
+              : <>Prodá se asi <strong>{num(seasonTicketDemand(game, v))}</strong> permanentek za <strong>{money(seasonTicketDemand(game, v) * v)}</strong>. Peníze přijdou při schválení, držitelé pak neplatí vstupné.</>}
+          </p>
+        )}
+      />
       <h3>Sponzoři</h3>
       <p className="small">
         Smlouvy {money(sp.contracts * 12)} ročně, drobní sponzoři a reklama {money(sp.small * 12)}.{' '}
@@ -232,7 +286,19 @@ function PlayersStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; o
       </div>
       <label className="field">
         <span>{Math.round(club.policy.wageMultiplier * 100)} % běžného stropu pro klub této velikosti, {wageRank(game)}. místo v lize</span>
-        <input type="range" min={50} max={200} step={5} value={Math.round(club.policy.wageMultiplier * 100)} onChange={(e) => set({ wageMultiplier: Number(e.target.value) / 100 })} />
+        <span className="slider-wrap">
+          <input type="range" min={50} max={200} step={5} value={Math.round(club.policy.wageMultiplier * 100)} onChange={(e) => set({ wageMultiplier: Number(e.target.value) / 100 })} />
+          {(() => {
+            const base = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
+            const pct = (wp.contracts / 12 / Math.max(1, base)) * 100;
+            const pos = Math.max(0, Math.min(100, ((pct - 50) / 150) * 100));
+            return (
+              <span className="slider-mark" style={{ left: `${pos}%` }} title={`Současné platy: ${Math.round(pct)} % běžného stropu`}>
+                <span>současné platy</span>
+              </span>
+            );
+          })()}
+        </span>
       </label>
 
       <h3>Rozdělení do sekcí</h3>
@@ -298,12 +364,15 @@ function PlayersStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; o
       </div>
 
       <h3>Přestupy</h3>
-      <NumberField
-        label={`Odstupné za posily (běžně ${money(defaultTransferBudget(club))})`}
-        value={club.policy.transferBudget / 1_000_000}
-        unit="mil. Kč"
-        decimal
-        onSet={(v) => set({ transferBudget: v * 1_000_000 })}
+      <SliderField
+        label="Odstupné za posily na sezónu"
+        value={club.policy.transferBudget}
+        min={0}
+        max={Math.max(defaultTransferBudget(club) * 3, club.policy.transferBudget, 1_000_000)}
+        step={Math.max(100_000, Math.round(defaultTransferBudget(club) / 30 / 100_000) * 100_000)}
+        format={(v) => money(v)}
+        reference={`běžně ${money(defaultTransferBudget(club))}`}
+        onChange={(v) => set({ transferBudget: v })}
       />
       <label className="check">
         <input type="checkbox" checked={club.policy.autoSquad !== false} onChange={(e) => set({ autoSquad: e.target.checked })} />
@@ -385,16 +454,22 @@ function SummaryStep({ game, onApply }: { game: GameState; onApply: (r: ActionRe
   const warnings = budgetWarnings(game, plan);
   const vote = budgetVote(game, plan);
   const comparison = approved ? budgetComparison(game) : [];
+  const pending = approved && Math.abs((game.budget?.plan?.result ?? 0) - plan.result) >= 50_000;
+  const hasLast = !!game.clubs[game.owner.clubId].finance.lastSeason;
   return (
     <>
       <h3>Plán sezóny</h3>
+      <p className="muted small">Plán odpovídá aktuálnímu nastavení. „K dnešku“ je část plánu, která už měla proběhnout ({Math.round(seasonProgress(game) * 100)} % sezóny).</p>
       <div className="table-wrap">
-        <table>
+        <table className="plan-table">
           <thead>
             <tr>
               <th>Položka</th>
               <th className="num">Plán</th>
+              {pending && <th className="num hide-sm">Schváleno</th>}
+              {approved && <th className="num">K dnešku</th>}
               {approved && <th className="num">Skutečnost</th>}
+              {hasLast && <th className="num hide-sm">Loni</th>}
             </tr>
           </thead>
           <tbody>
@@ -402,19 +477,32 @@ function SummaryStep({ game, onApply }: { game: GameState; onApply: (r: ActionRe
               .filter((l) => l.amount !== 0 || l.key === 'evropa')
               .map((l) => {
                 const actual = comparison.find((c) => c.line.key === l.key);
-                const planned = actual?.line.amount ?? l.amount;
+                const approvedLine = game.budget?.plan?.lines.find((x) => x.key === l.key);
+                const toDate = planToDate(game, approvedLine ?? l);
+                const diff = (actual?.actual ?? 0) - toDate;
                 return (
                   <tr key={l.key}>
                     <td className="wrap">{l.label}</td>
-                    <td className={`num ${planned < 0 ? 'neg' : ''}`}>{money(planned)}</td>
-                    {approved && <td className={`num ${(actual?.actual ?? 0) < 0 ? 'neg' : ''}`}>{money(actual?.actual ?? 0)}</td>}
+                    <td className={`num ${l.amount < 0 ? 'neg' : ''}`}>{money(l.amount)}</td>
+                    {pending && <td className="num muted hide-sm">{money(approvedLine?.amount ?? 0)}</td>}
+                    {approved && <td className="num muted">{money(toDate)}</td>}
+                    {approved && (
+                      <td className="num">
+                        {money(actual?.actual ?? 0)}
+                        <span className={`diff ${diff >= 0 ? 'pos' : 'neg'}`}>{diff >= 0 ? '+' : '−'}{money(Math.abs(diff))}</span>
+                      </td>
+                    )}
+                    {hasLast && <td className="num muted hide-sm">{money(lastSeasonActual(game, l) ?? 0)}</td>}
                   </tr>
                 );
               })}
             <tr className="total">
-              <td>Plánovaný výsledek</td>
-              <td className={`num ${plan.result < 0 ? 'neg' : 'pos'}`}>{money(approved ? game.budget!.plan!.result : plan.result)}</td>
+              <td>Výsledek</td>
+              <td className={`num ${plan.result < 0 ? 'neg' : 'pos'}`}>{money(plan.result)}</td>
+              {pending && <td className="num hide-sm">{money(game.budget!.plan!.result)}</td>}
+              {approved && <td className="num">{money((game.budget?.plan?.lines ?? plan.lines).reduce((a, l) => a + planToDate(game, l), 0))}</td>}
               {approved && <td className="num">{money(comparison.reduce((a, c) => a + c.actual, 0))}</td>}
+              {hasLast && <td className="num hide-sm">{money(plan.lines.reduce((a, l) => a + (lastSeasonActual(game, l) ?? 0), 0))}</td>}
             </tr>
           </tbody>
         </table>
@@ -440,6 +528,44 @@ function SummaryStep({ game, onApply }: { game: GameState; onApply: (r: ActionRe
         {approved ? 'Schválit revizi rozpočtu' : 'Schválit rozpočet'}
       </button>
     </>
+  );
+}
+
+/**
+ * Posuvník s okamžitě viditelnou hodnotou a srovnáním s běžnou výší. Náhled se počítá průběžně,
+ * hra se uloží až po puštění posuvníku.
+ */
+function SliderField({ label, value, min, max, step, format, reference, onChange, disabled, preview }: {
+  label: string; value: number; min: number; max: number; step: number; format: (v: number) => string; reference?: string;
+  onChange: (v: number) => void; disabled?: boolean; preview?: (v: number) => ReactNode;
+}) {
+  const [local, setLocal] = useState<number | null>(null);
+  const shown = local ?? value;
+  const commit = () => {
+    if (local !== null && local !== value) onChange(local);
+    setLocal(null);
+  };
+  return (
+    <div className="field">
+      <label className="row-between">
+        <span>{label}: <strong>{format(shown)}</strong></span>
+        {reference && <span className="muted small">{reference}</span>}
+      </label>
+      <input
+        type="range"
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={Math.min(max, Math.max(min, shown))}
+        disabled={disabled}
+        onChange={(e) => setLocal(Number(e.target.value))}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+      />
+      {preview && preview(shown)}
+    </div>
   );
 }
 

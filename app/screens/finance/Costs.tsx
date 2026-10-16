@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import {
   CATERING_SPEND,
+  contractExpiring,
   DEPARTMENT_KEYS,
   DEPARTMENT_LABEL,
   departmentEffect,
@@ -7,7 +9,11 @@ import {
   departmentsOf,
   facilityUpkeep,
   hierarchyIssues,
+  playerAge,
   playerName,
+  renewalDemand,
+  renewContract,
+  sectionRoomFor,
   POSITION_SHORT,
   ROLE_LABEL,
   SECTION_LABEL,
@@ -18,21 +24,29 @@ import {
   squadOf,
   tierOf,
   WAGE_SECTIONS,
+  type ActionResult,
   type GameState,
   type StaffRole,
   type WageSection,
 } from '../../../engine';
 import { money } from '../../format';
 import { PlayerLink } from '../../nav';
+import { Notice } from '../../components';
 
 /** Náklady: platy po sekcích s ručním přeřazením, hierarchie, oddělení, provoz a vedení. */
 export function FinanceCosts({ game, onChange, onBudget }: { game: GameState; onChange: (g: GameState) => void; onBudget: () => void }) {
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const apply = (r: ActionResult) => {
+    if (r.state !== game) onChange(r.state);
+    setMessage({ text: r.message, ok: r.ok });
+  };
   const club = game.clubs[game.owner.clubId];
   const tier = tierOf(game, club.id);
   const usage = sectionUsage(game);
   const sections = sectionsOf(game);
   const squad = squadOf(game, club.id).sort((a, b) => b.wage - a.wage);
   const issues = hierarchyIssues(game);
+  const expiring = squad.filter((p) => contractExpiring(game, p)).sort((a, b) => a.contractUntil - b.contractUntil || b.overall - a.overall);
   const ref = departmentReference(club, tier);
   const depts = departmentsOf(club, tier);
   const admin = tier === 1 ? 450_000 : tier === 2 ? 110_000 : 30_000;
@@ -42,6 +56,7 @@ export function FinanceCosts({ game, onChange, onBudget }: { game: GameState; on
 
   return (
     <div className="stack">
+      <Notice message={message?.text ?? null} ok={message?.ok} />
       <section className="card">
         <div className="row-between">
           <h2>Platy hráčů po sekcích <span className="muted small">· {money(usage.reduce((a, u) => a + u.bill, 0))} z {money(usage.reduce((a, u) => a + u.cap, 0))} měsíčně</span></h2>
@@ -87,6 +102,33 @@ export function FinanceCosts({ game, onChange, onBudget }: { game: GameState; on
         </div>
         <p className="muted small">Hráče řadí hra podle role v kádru. Ručně můžete například zkušeného hráče posunout z opor do rotace; ovlivní to, kolik místa v sekci zbývá.</p>
       </section>
+
+      {expiring.length > 0 && (
+        <section className="card">
+          <h2>Končící smlouvy <span className="muted small">· {expiring.length} hráčů</span></h2>
+          <p className="muted small">Smlouva končí v létě {game.season + 1}. Prodloužení na 2 roky za plat, který hráč chce. Bez prodloužení odejde zadarmo.</p>
+          <div className="table-wrap"><table className="expiring">
+            <thead>
+              <tr><th>Hráč</th><th className="num">Teď</th><th className="num">Chce</th><th className="num">Místo v sekci</th><th /></tr>
+            </thead>
+            <tbody>
+              {expiring.map((p) => {
+                const demand = renewalDemand(game, p);
+                const room = sectionRoomFor(game, p, demand);
+                return (
+                  <tr key={p.id}>
+                    <td data-label="Hráč"><span className="muted">{POSITION_SHORT[p.position]}</span> <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> <span className="muted small">({p.overall}, {playerAge(p, game.season)} let)</span></td>
+                    <td data-label="Teď" className="num">{money(p.wage)}</td>
+                    <td data-label="Chce" className="num">{money(demand)}</td>
+                    <td data-label={SECTION_LABEL[room.section]} className={`num ${room.room < 0 ? 'neg' : 'muted'}`}>{SECTION_LABEL[room.section]}: {money(room.room)}</td>
+                    <td><button onClick={() => apply(renewContract(game, p.id, demand, 2))}>Prodloužit</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table></div>
+        </section>
+      )}
 
       <div className="grid">
         <section className="card">

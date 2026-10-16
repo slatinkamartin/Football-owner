@@ -676,3 +676,29 @@ table.sections td .muted.small { display: block; }
   table.sections tr.total td:first-child { grid-column: 1 / -1; }
 }
 .kv .total-row { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 700; color: var(--text); }
+
+/* Finance drobnosti v0.9.2 */
+.preview { display: block; margin-top: 2px; color: var(--muted); }
+.slider-wrap { position: relative; display: block; padding-bottom: 18px; }
+.slider-wrap input[type='range'] { width: 100%; }
+.slider-mark { position: absolute; top: 0; bottom: 14px; width: 0; border-left: 2px dashed var(--warn); pointer-events: none; }
+.slider-mark > span { position: absolute; bottom: -16px; left: 0; transform: translateX(-50%); font-size: 11px; color: var(--warn); white-space: nowrap; }
+.diff { display: block; font-size: 11px; }
+@media (min-width: 641px) {
+  .plan-table td, .plan-table th { white-space: nowrap; }
+  .plan-table td:first-child, .plan-table th:first-child { white-space: normal; }
+}
+@media (max-width: 640px) {
+  .plan-table { font-size: 12px; }
+  .plan-table th, .plan-table td { padding-left: 4px; padding-right: 4px; }
+}
+.calendar-list li { display: grid; grid-template-columns: 74px 1fr auto; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; align-items: baseline; }
+.calendar-list li:last-child { border-bottom: 0; }
+.cal-date { color: var(--muted); font-variant-numeric: tabular-nums; }
+.calendar-card h3 { font-size: 13px; margin: 4px 0 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+@media (max-width: 640px) {
+  .calendar-list li { grid-template-columns: 64px 1fr; }
+  .calendar-list li .num { grid-column: 2; }
+  table.expiring td:last-child button { width: 100%; }
+}
+.budget-settings, .budget-aside { min-width: 0; }

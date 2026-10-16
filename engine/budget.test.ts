@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
 import { coachMotivation, dressingRoom, homeAdvantage } from './atmosphere';
-import { adjustForNewTier, approveBudget, budgetApproved, budgetVote, budgetWarnings, forecastSeason, seasonTicketDemand } from './budget';
+import { adjustForNewTier, approveBudget, budgetApproved, budgetVote, budgetWarnings, forecastSeason, moneyCalendar, planToDate, resetBudgetToDraft, seasonTicketDemand, ticketPreview } from './budget';
+import { expiringSponsors, generateSponsorOffers } from './sponsors';
 import { leaguePhaseChance, qualifyEurope, resolveEurope } from './europe';
 import { annualCosts, departmentEffect, departmentReference, sponsorsAnnual, updatePolicy } from './index';
 import { advanceDays, migrateSave, newGame } from './game';
@@ -78,6 +79,46 @@ describe('rozpočet sezóny', () => {
     const cheap = updatePolicy(s, { departments: { ...departmentReference(s.clubs.bohemians, 1), mladez: 0, marketing: 0 } });
     const generous = updatePolicy(s, { departments: { ...departmentReference(s.clubs.bohemians, 1), mladez: departmentReference(s.clubs.bohemians, 1).mladez * 4, marketing: departmentReference(s.clubs.bohemians, 1).marketing * 2 } });
     expect(budgetVote(generous).yes).toBeGreaterThan(budgetVote(cheap).yes);
+  });
+
+  it('živý plán: vyšší mzdový strop je hned v plánu a jde vrátit na návrh vedení', () => {
+    const before = forecastSeason(start);
+    const raised = updatePolicy(start, { wageMultiplier: start.clubs.bohemians.policy.wageMultiplier + 0.3 });
+    const after = forecastSeason(raised);
+    expect(after.lines.find((l) => l.key === 'platy')!.amount).toBeLessThan(before.lines.find((l) => l.key === 'platy')!.amount);
+    const reset = resetBudgetToDraft(raised);
+    expect(reset.ok).toBe(true);
+    expect(reset.state.clubs.bohemians.policy.wageMultiplier).toBe(start.clubs.bohemians.policy.wageMultiplier);
+  });
+
+  it('plán k dnešku roste s časem a vyšší vstupné sníží návštěvu', () => {
+    const line = forecastSeason(start).lines.find((l) => l.key === 'platy')!;
+    const later = structuredClone(start);
+    later.date = `${start.season}-12-31`;
+    expect(Math.abs(planToDate(later, line))).toBeGreaterThan(Math.abs(line.amount) * 0.45);
+    expect(Math.abs(planToDate(later, line))).toBeLessThan(Math.abs(line.amount) * 0.55);
+    expect(ticketPreview(start, 600).attendance).toBeLessThan(ticketPreview(start, 150).attendance);
+  });
+
+  it('kalendář peněz a měsíční uzávěrka', () => {
+    const cal = moneyCalendar(start);
+    expect(cal.monthly.find((m) => m.label === 'Platy hráčů')!.amount).toBeLessThan(0);
+    expect(cal.items.some((i) => i.label.includes('Licenční'))).toBe(true);
+    const r = advanceDays(start, 70).state;
+    expect(r.news.some((n) => n.title.includes('Měsíční uzávěrka'))).toBe(true);
+  });
+
+  it('od března přijde nabídka na prodloužení končící sponzorské smlouvy', () => {
+    const s = structuredClone(start);
+    s.date = `${s.season + 1}-03-01`;
+    const c = s.clubs.bohemians.sponsors![0];
+    c.untilSeason = s.season;
+    s.sponsorOffers = [];
+    expect(expiringSponsors(s).length).toBeGreaterThan(0);
+    generateSponsorOffers(s, createRng(1));
+    const renewal = s.sponsorOffers!.find((o) => o.slot === c.slot && o.name === c.name);
+    expect(renewal).toBeDefined();
+    expect(renewal!.untilSeason).toBeGreaterThan(s.season);
   });
 
   it('po sestupu se ceny přepočítají na nižší soutěž', () => {
