@@ -454,7 +454,8 @@ export function generateOffers(state: GameState, rng: Rng): void {
   const policy = state.clubs[own].policy.salesPolicy ?? 'dobra';
   // Prodejní klub: sportovní ředitel sám přijme doporučené nabídky na hráče mimo opory, které majitel
   // nechal propadnout (nebo kterým by propadly až po zavření okna).
-  if (policy === 'prodejni' && state.clubs[own].policy.autoSquad !== false && !state.owner.ousted) {
+  const mayTrade = !state.clubs[own].policy.delegation || state.clubs[own].policy.delegation.director === 'vysoka';
+  if (policy === 'prodejni' && state.clubs[own].policy.autoSquad !== false && mayTrade && !state.owner.ousted) {
     const md = state.date.slice(5);
     const closing = (md >= '08-24' && md <= '08-31') || (md >= '02-07' && md <= '02-14');
     const core = new Set(squadOf(state, own).sort((a, b) => b.overall - a.overall).slice(0, 6).map((p) => p.id));
@@ -805,6 +806,8 @@ export function directorSignings(state: GameState, rng: Rng): void {
   const own = state.owner.clubId;
   const club = state.clubs[own];
   if (!transferWindow(state.date) || !directorOf(state, own) || club.policy.autoSquad === false || state.owner.ousted) return;
+  // Nákupy jen s nejvyšší pravomocí ředitele.
+  if (club.policy.delegation && club.policy.delegation.director !== 'vysoka') return;
   const squad = squadOf(state, own);
   if (squad.length >= 27) return;
   const remaining = budgetRemaining(state);

@@ -899,3 +899,7 @@ table.sections td .muted.small { display: block; }
 .rival-tag { color: var(--neg); font-size: 12px; }
 .team-of-round li { padding: 2px 0; }
 @media (width <= 640px) { .cup-path li { grid-template-columns: 1fr auto; } .cup-path li .muted { display: none; } .cup-text { grid-column: 1 / -1; } }
+
+/* Etapa C: lidé */
+.interview { max-width: 560px; display: flex; flex-direction: column; gap: 8px; max-height: 92vh; overflow-y: auto; }
+.interview h2 { margin: 0; }

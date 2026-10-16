@@ -17,8 +17,8 @@ import { addNews, clamp, competitionOf, FOREIGN_PREFIX, hash01, transferWindow }
  * médií, kabiny, důvěry i peněz.
  */
 
-const COOLDOWN: Record<StoryKind, number> = { krize: 100, hvezda: 200, media: 200, kabina: 120 };
-const STORY_LABEL: Record<StoryKind, string> = { krize: 'Krize výsledků', hvezda: 'Hvězda chce odejít', media: 'Tlak médií', kabina: 'Spor v kabině' };
+const COOLDOWN: Record<StoryKind, number> = { krize: 100, hvezda: 200, media: 200, kabina: 120, hodnoceni: 300 };
+const STORY_LABEL: Record<StoryKind, string> = { krize: 'Krize výsledků', hvezda: 'Hvězda chce odejít', media: 'Tlak médií', kabina: 'Spor v kabině', hodnoceni: 'Hodnocení trenéra po podzimu' };
 export { STORY_LABEL };
 
 const own = (s: GameState) => s.clubs[s.owner.clubId];
@@ -146,6 +146,30 @@ function tryStart(state: GameState, kind: StoryKind, roll: number): boolean {
     });
     return true;
   }
+  if (kind === 'hodnoceni') {
+    // Zimní pauza: po posledním podzimním zápase majitel hodnotí trenéra.
+    const comp = competitionOf(state, state.owner.clubId);
+    const coach = coachOf(state, club.id);
+    if (!comp || !coach || coach.interim) return false;
+    const mine = comp.fixtures.filter((f) => f.homeId === club.id || f.awayId === club.id);
+    const autumn = mine.filter((f) => f.date < `${state.season + 1}-01-01`);
+    if (!autumn.length || autumn.some((f) => !f.result) || state.date >= `${state.season + 1}-01-01` || state.date < `${state.season}-10-01`) return false;
+    const pos = ownPositionNow(state)!;
+    const story = startStory(state, 'hodnoceni', `Hodnocení trenéra ${coach.firstName} ${coach.lastName} po podzimu`);
+    story.log.push(`Po podzimu je klub na ${pos.position}. místě, cíl je do ${pos.target}. místa.`);
+    const good = pos.position <= pos.target;
+    ask(state, story, {
+      title: `Hodnocení trenéra po podzimu: ${pos.position}. místo (cíl do ${pos.target}.)`,
+      text: good ? 'Podzim vyšel podle plánu. Jak trenéra ohodnotíte?' : 'Podzim za plánem zaostal. Média i fanoušci čekají, co uděláte.',
+      defaultOption: 'pokracovat',
+      options: [
+        { id: 'pokracovat', label: good ? 'Pochválit a pokračovat' : 'Vyjádřit důvěru a pokračovat', hint: good ? 'Důvěra trenéra +5, média +1.' : 'Důvěra trenéra +4. Když jaro nevyjde, padá to i na vás.' },
+        { id: 'ultimatum', label: 'Ultimátum: 5 jarních zápasů, aspoň 8 bodů', hint: 'Důvěra trenéra −5, hráči se vzchopí (morálka +3). Bez 8 bodů ho budete muset odvolat.' },
+        { id: 'odvolat', label: 'Odvolat trenéra v zimní pauze', hint: 'Odstupné podle smlouvy, nový trenér má na přípravu celou zimu.' },
+      ],
+    });
+    return true;
+  }
   if (kind === 'kabina') {
     const room = dressingRoom(state);
     if (room.morale >= 45 || roll > 0.3 * f) return false;
@@ -213,6 +237,37 @@ export function resolveStoryEvent(state: GameState, event: GameEvent, option: st
     fans(state, -4);
     finish(state, story, 'spatne', story.data.choice === 'ultimatum' ? 'Ultimátum vypršelo a trenér zůstal. Média píšou, že nedržíte slovo.' : 'Trenér zůstává i přes krizi. Fanoušci jsou nespokojení.');
     return 'Trenér zůstává.';
+  }
+
+  if (story.kind === 'hodnoceni' && story.step === 0) {
+    if (option === 'pokracovat') {
+      trust(state, 'trener', 5);
+      media(state, 1);
+      finish(state, story, 'neutralni', 'Trenér pokračuje s vaší podporou.');
+      return 'Trenér pokračuje.';
+    }
+    if (option === 'odvolat') {
+      const r = fireStaff(state, 'trener');
+      if (r.ok) Object.assign(state, r.state);
+      ensureInterimStaff(state, createRng(state.rngState ^ state.nextId));
+      finish(state, (state.stories ?? []).find((s) => s.id === story.id)!, 'neutralni', 'Trenér odvolán v zimní pauze. Nového najdete ve Vedení.');
+      return 'Trenér odvolán.';
+    }
+    trust(state, 'trener', -5);
+    teamMorale(state, 3);
+    story.data.choice = 'ultimatum';
+    story.data.points = row?.points ?? 0;
+    story.data.played = row?.played ?? 0;
+    story.data.need = 5;
+    story.data.min = 8;
+    story.step = 1;
+    story.waiting = 'zapasy';
+    story.matchesLeft = 5;
+    return 'Ultimátum platí: 5 zápasů, aspoň 8 bodů.';
+  }
+  if (story.kind === 'hodnoceni' && story.step === 1) {
+    story.kind = 'krize';
+    return resolveStoryEvent(state, event, option);
   }
 
   if (story.kind === 'hvezda') {
@@ -290,7 +345,7 @@ export function weeklyStories(state: GameState, rng: { next(): number }): void {
   if (state.owner.ousted || state.gameOver) return;
   for (const story of activeStories(state)) advance(state, story);
   if (activeStories(state).length >= maxActive(state)) return;
-  for (const kind of ['krize', 'kabina', 'media', 'hvezda'] as StoryKind[]) {
+  for (const kind of ['hodnoceni', 'krize', 'kabina', 'media', 'hvezda'] as StoryKind[]) {
     if (activeStories(state).length >= maxActive(state)) break;
     tryStart(state, kind, rng.next());
   }
@@ -303,23 +358,25 @@ function advance(state: GameState, story: Story): void {
     return;
   }
   const row = ownRow(state);
-  if (story.kind === 'krize' && story.waiting === 'zapasy') {
+  if ((story.kind === 'krize' || story.kind === 'hodnoceni') && story.waiting === 'zapasy') {
+    const need = Number(story.data.need ?? 3);
+    const min = Number(story.data.min ?? 4);
     const played = (row?.played ?? 0) - Number(story.data.played ?? 0);
-    story.matchesLeft = Math.max(0, 3 - played);
-    if (played < 3) return;
+    story.matchesLeft = Math.max(0, need - played);
+    if (played < need) return;
     const gained = (row?.points ?? 0) - Number(story.data.points ?? 0);
-    if (gained >= 4) {
+    if (gained >= min) {
       fans(state, 4);
       media(state, 3);
       if (story.data.choice === 'podpora') trust(state, 'trener', 3);
-      finish(state, story, 'dobre', `Tým získal ${gained} bodů ze tří zápasů, krize je zažehnaná.`);
+      finish(state, story, 'dobre', `Tým získal ${gained} bodů z ${need} zápasů, ${story.kind === 'krize' ? 'krize je zažehnaná' : 'ultimátum splnil'}.`);
       return;
     }
     if (story.data.choice === 'podpora') media(state, -6);
-    story.log.push(`Za tři zápasy jen ${gained} ${gained === 1 ? 'bod' : gained < 5 && gained > 0 ? 'body' : 'bodů'}.`);
+    story.log.push(`Za ${need} zápasy jen ${gained} ${gained === 1 ? 'bod' : gained < 5 && gained > 0 ? 'body' : 'bodů'}.`);
     ask(state, story, {
-      title: 'Krize pokračuje',
-      text: `Tým za tři zápasy získal jen ${gained} b. ${story.data.choice === 'ultimatum' ? 'Ultimátum vypršelo.' : 'Tlak na změnu roste.'}`,
+      title: story.kind === 'krize' ? 'Krize pokračuje' : 'Ultimátum nesplněno',
+      text: `Tým za ${need} zápasy získal jen ${gained} b. ${story.data.choice === 'ultimatum' ? 'Ultimátum vypršelo.' : 'Tlak na změnu roste.'}`,
       defaultOption: 'podrzet',
       options: [
         { id: 'odvolat', label: 'Odvolat trenéra', hint: 'Odstupné podle smlouvy, fanoušci +3, média +2. Tým povede zastupující trenér.' },

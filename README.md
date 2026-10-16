@@ -61,6 +61,26 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.17: lidé (etapa C)
+
+- **Žádosti hráčů**: přidat na platu, víc minut, volno kvůli rodině, nová smlouva po skvělé sezóně. Vyhovět stojí peníze nebo klid v kabině, odmítnutí sráží morálku.
+- **Požadavky vedení**:
+  - trenér chce posilu na konkrétní pozici: slib se hlídá do konce okna, splněný zvedne důvěru (+6), porušený ji srazí (−10);
+  - akademie chce víc minut pro mladé;
+  - trenér chce víc peněz na medicínu, když je moc zraněných.
+- **Přetahování**: o úspěšného trenéra i sportovního ředitele mají zájem jiné kluby. Přidat, pustit za odstupné, nebo trvat na smlouvě.
+- **Pohovor při najímání** trenéra a sportovního ředitele:
+  - otázky na mladé, rozpočet a pravomoci;
+  - pohovor prozradí povahu kandidáta (ego, ambice, loajalita, vztah k mladým);
+  - odpovědi určí výchozí důvěru;
+  - slib rozpočtu se hlídá celou sezónu (porušení −15).
+- **Hodnocení trenéra po podzimu**: pochvala, ultimátum na 5 jarních zápasů (aspoň 8 bodů), nebo odvolání v zimní pauze.
+- **Pravomoci ředitelů** (Vedení):
+  - sportovní ředitel: malé / střední / plné; jen s plnými sám nakupuje a prodává;
+  - obchodní ředitel sám podepisuje sponzory na volná místa;
+  - finanční ředitel sám schvaluje návrh rozpočtu.
+- **Přijímačky dorostu** (Kádr): akademie každé léto představí 4–6 dorostenců s odhadem potenciálu, smlouvu dostanou 2–3. Ostatní odejdou mezi volné hráče, kde je může podepsat soupeř.
+
 ### Novinky verze 0.16: zápasy a liga (etapa B)
 
 - **Příprava na zápas** na Přehledu:

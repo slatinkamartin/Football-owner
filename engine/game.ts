@@ -25,7 +25,7 @@ import { completeProjects, effectiveCapacity, licenseCheck, monthlyBuildingDepre
 import { defaultFacilities, matchdayExtras } from './stadium';
 import { createEvent, expireEvents, maybeCreateEvent, resolveEvent } from './events';
 import { checkBan, media, monthlyGrey } from './grey';
-import { adjustForNewTier, monthlyReport, TICKET_ANGER, BUDGET_DEADLINE, budgetDeadline, defaultSeasonTicketPrice, forecastSeason, prepareBudget, seasonTicketHolders } from './budget';
+import { approveBudget, adjustForNewTier, monthlyReport, TICKET_ANGER, BUDGET_DEADLINE, budgetDeadline, defaultSeasonTicketPrice, forecastSeason, prepareBudget, seasonTicketHolders } from './budget';
 import { homeAdvantage, ownTeamSpirit } from './atmosphere';
 import { activeOverdraft, applyLicenceSanction, CRISIS_MONTHS, dailyFinancing, enterCrisis, INSOLVENCY_MONTHS, leaveCrisisIfSolved, monthlyFinancing } from './financing';
 import { generateSponsorOffers, initialSponsors, seasonStartSponsors, sponsorEuropeBonus, sponsorMonthly, sponsorSeasonBonuses } from './sponsors';
@@ -68,6 +68,7 @@ import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emer
 import { decisiveness, settingsOf } from './settings';
 import { recordPulse, pulseValues, snapshotPulse } from './pulse';
 import { weeklyStories } from './stories';
+import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
 import { afterOwnMatch, halftimeAdjust, pendingPrematch, planEffect } from './matchday';
 import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyRivalOwners } from './league';
 import { milestoneToday, nextMilestone } from './milestones';
@@ -594,6 +595,11 @@ function ageAndDevelopPlayers(state: GameState, rng: Rng): void {
       const bonus = academyBonus(state, clubId) + 2.5 * departmentEffect(state.clubs[clubId], tierOf(state, clubId), 'mladez');
       const quality = squadQualityForReputation(state.clubs[clubId].reputation) - 4 + (academy - 3) * 2 + bonus;
       const count = academy >= 4 ? 3 : academy >= 2 ? 2 : 1;
+      // Klub majitele: přijímačky, ze kterých majitel vybírá.
+      if (clubId === state.owner.clubId && !state.owner.ousted) {
+        createYouthIntake(state, rng, nextSeason, quality, academy, bonus);
+        continue;
+      }
       for (let i = 0; i < count; i++) {
         const position = rng.pick(['GK', 'DF', 'DF', 'MF', 'MF', 'FW'] as Position[]);
         const p = generatePlayer(rng, state, { clubId, position, season: nextSeason, quality, age: rng.int(17, 18) });
@@ -785,6 +791,7 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   monthlyEurope(state);
   wageMorale(state);
   monthlyDevelopment(state, rng);
+  monthlyDelegation(state);
   // Pozornost ze sestavy kola měsíčně slábne.
   for (const p of Object.values(state.players)) if (p.spotlight) p.spotlight = p.spotlight > 1 ? p.spotlight - 1 : undefined;
   monthlyAmortization(state);
@@ -894,6 +901,11 @@ function processDay(state: GameState, rng: Rng): void {
     ensureInterimStaff(state, rng);
     refreshForeignMarket(state, rng);
     prepareBudget(state);
+    // Finanční ředitel s pravomocí schválí návrh sám (majitel ho dál může upravit).
+    if (delegationOf(state.clubs[state.owner.clubId]).finance && state.clubs[state.owner.clubId].staff.financeId) {
+      const r = approveBudget(state);
+      if (r.ok) Object.assign(state, r.state);
+    }
     addNews(state, { kind: 'sezona', title: `Začíná sezóna ${seasonLabel(state.season)}`, text: 'Přestupní okno je otevřené do 31. 8. Nezapomeňte stanovit cíl sezóny.' });
   }
   completeProjects(state);
@@ -908,6 +920,8 @@ function processDay(state: GameState, rng: Rng): void {
     if (e && e.result !== 'predkola') sponsorEuropeBonus(state);
   }
   if (state.date.endsWith('-01') && md !== SEASON_START) generateSponsorOffers(state, rng);
+  if (state.youthIntake && state.date >= state.youthIntake.deadline) closeYouthIntake(state, true);
+  if (state.date.endsWith('-02')) autoSponsors(state);
   // Zahraniční trh se obnoví i před zimním oknem.
   if (md === '12-01') refreshForeignMarket(state, rng);
   if (md === '06-20') createEvent(state, rng, 'valna', `${state.date.slice(0, 4)}-06-29`);
@@ -915,6 +929,7 @@ function processDay(state: GameState, rng: Rng): void {
   if (state.owner.ousted) boardDecides(state);
   if (dayOfWeek(state.date) === 1) {
     weeklyStories(state, rng);
+    checkPromises(state);
     weeklyRivalOwners(state, rng);
     snapshotPulse(state);
     maybeCreateEvent(state, rng);

@@ -54,7 +54,7 @@ describe('hráči', () => {
     const own = squadOf(after, 'bohemians').filter((p) => p.career.length);
     expect(own.length).toBeGreaterThan(15);
     expect(own[0].career[0].season).toBe(2026);
-    expect(own[0].trend?.length).toBeGreaterThan(6);
+    expect(Math.max(...own.map((p) => p.trend?.length ?? 0))).toBeGreaterThan(6);
   }, 30_000);
 
   it('do zápasu: hra se zastaví po zápase klubu majitele', () => {

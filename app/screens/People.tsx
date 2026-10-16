@@ -33,6 +33,7 @@ import {
 import { Badge, Meter, Notice } from '../components';
 import { money } from '../format';
 import { DataTable } from '../table';
+import { Delegation, Interview } from './PeopleExtras';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
 
@@ -74,6 +75,7 @@ export function People({ game, onChange }: Props) {
         </section>
 
         <AdviceCard game={game} onResult={apply} />
+        <Delegation game={game} onResult={apply} />
       </div>
 
       <div className="grid two">
@@ -239,6 +241,7 @@ function StaffCard({
 
 function Candidates({ game, role, setRole, onResult }: { game: GameState; role: StaffRole; setRole: (r: StaffRole) => void; onResult: (r: ActionResult) => void }) {
   const [pending, setPending] = useState<string | null>(null);
+  const [interview, setInterview] = useState<Staff | null>(null);
   const club = game.clubs[game.owner.clubId];
   const currentId = club.staff[STAFF_KEY[role]];
   const current = currentId ? game.staff[currentId] : undefined;
@@ -283,7 +286,17 @@ function Candidates({ game, role, setRole, onResult }: { game: GameState; role: 
                 <span className="muted small">nemá zájem</span>
               ) : pending === s.id ? (
                 <span className="buttons end">
-                  <button className="primary" onClick={() => { setPending(null); onResult(hireStaff(game, s.id, 2)); }}>Potvrdit</button>
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setPending(null);
+                      // Trenér a sportovní ředitel jdou přes pohovor.
+                      if (s.role === 'trener' || s.role === 'reditel') setInterview(s);
+                      else onResult(hireStaff(game, s.id, 2));
+                    }}
+                  >
+                    {s.role === 'trener' || s.role === 'reditel' ? 'Na pohovor' : 'Potvrdit'}
+                  </button>
                   <button onClick={() => setPending(null)}>Zpět</button>
                 </span>
               ) : (
@@ -292,6 +305,7 @@ function Candidates({ game, role, setRole, onResult }: { game: GameState; role: 
           },
         ]}
       />
+      {interview && <Interview game={game} staff={interview} onResult={onResult} onClose={() => setInterview(null)} />}
       {pending && current && (
         <p className="muted small">
           {ROLE_LABEL[role]} {current.firstName} {current.lastName} odejde, odstupné {money(severance(game, current))}.

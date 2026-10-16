@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   budgetRemaining,
+  delegationOf,
   clubLabel,
   defaultTransferBudget,
   forecastSeason,
@@ -107,10 +108,9 @@ export function FinanceTransfers({ game, onChange, onOpen }: { game: GameState; 
             />
           )}
         />
-        <label className="check">
-          <input type="checkbox" checked={club.policy.autoSquad !== false} onChange={(e) => set({ autoSquad: e.target.checked })} />
-          <span>Sportovní ředitel sám prodlužuje smlouvy, doplňuje kádr na 22 hráčů, kupuje posily na nejslabší místa (jedna posila nejvýš za 60 % zbývajícího rozpočtu) a v prodejním klubu prodává hráče mimo opory</span>
-        </label>
+        <p className="small">
+          Pravomoci sportovního ředitele: <strong>{{ nizka: 'malé (jen nouzové doplnění kádru)', stredni: 'střední (smlouvy a doplnění kádru)', vysoka: 'plné (i nákupy, jedna posila nejvýš za 60 % zbytku rozpočtu, a prodeje v prodejním klubu)' }[delegationOf(club).director]}</strong>. Mění se ve Vedení › Pravomoci ředitelů.
+        </p>
       </LineCard>
 
       <LineCard id="prodeje" title="Prodejní politika" lines={[]} effects={['počet a výše nabídek', 'síla kádru', 'peníze z prodejů']}>

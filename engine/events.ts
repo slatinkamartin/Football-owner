@@ -12,6 +12,7 @@ import { addNews, clamp, competitionOf, FOREIGN_PREFIX, tierOf } from './world';
 import { dramaFactor, maxOpenEvents } from './settings';
 import { resolveStoryEvent } from './stories';
 import { resolvePress } from './matchday';
+import { PEOPLE_COOLDOWN, peopleTemplates } from './people';
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -88,6 +89,8 @@ function tappingTarget(s: GameState): Player | undefined {
 }
 
 export const TEMPLATES: Record<string, Template> = {
+  // Žádosti hráčů, požadavky trenéra a přetahování ředitele (engine/people.ts).
+  ...peopleTemplates({ trust, teamMorale }),
   // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
   'tiskovka-zapas': {
     weight: () => 0,
@@ -1181,7 +1184,7 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
   state.eventLog ??= {};
   const recent = (id: string) => {
     const last = state.eventLog![id];
-    return !!last && addDays(last, COOLDOWN[id] ?? 90) > state.date;
+    return !!last && addDays(last, COOLDOWN[id] ?? PEOPLE_COOLDOWN[id] ?? 90) > state.date;
   };
   const weighted = Object.entries(TEMPLATES)
     .filter(([id]) => !open.has(id) && !recent(id) && (!state.owner.ousted || OUSTED_TEMPLATES.has(id)))
@@ -1190,7 +1193,7 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
   const total = weighted.reduce((a, x) => a + x.w, 0);
   // Výběr partnera přijde vždy, ostatní situace zhruba jednou za dva týdny.
   const urgent = weighted.find((x) => x.w >= 50);
-  if (!urgent && !rng.chance(Math.min(0.6, total * 0.06 * dramaFactor(state)))) return;
+  if (!urgent && !rng.chance(Math.min(0.6, total * 0.05 * dramaFactor(state)))) return;
   let pick = urgent?.id;
   if (!pick) {
     let r = rng.next() * total;

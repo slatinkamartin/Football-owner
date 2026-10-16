@@ -1,3 +1,4 @@
+import { YouthIntake } from './PeopleExtras';
 import { useEffect, useRef, useState } from 'react';
 import { ratingText, homeEdgeScore, strengthDelta,
   contractExpiring,
@@ -90,6 +91,7 @@ export function Squad({ game, onChange }: Props) {
       </section>
 
       <Notice message={message?.text ?? null} ok={message?.ok} />
+      <YouthIntake game={game} onResult={apply} />
 
       {selected && (
         <section className="card" ref={panel}>

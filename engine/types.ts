@@ -502,6 +502,8 @@ export interface ClubPolicy {
   community?: number;
   /** Minimální rezerva peněz, pod kterou ředitel nesmí jít. */
   cashReserve?: number;
+  /** Pravomoci ředitelů. */
+  delegation?: { director: 'nizka' | 'stredni' | 'vysoka'; commercial: boolean; finance: boolean };
   /** Kde smí sportovní ředitel sám nakupovat: jen doma, nebo i v regionech se skautskou sítí. */
   directorMarket?: 'doma' | 'zahranici';
 }
@@ -626,7 +628,7 @@ export interface GameEvent {
 
 // ---------- Příběhy, tlak, nastavení ----------
 
-export type StoryKind = 'krize' | 'hvezda' | 'media' | 'kabina';
+export type StoryKind = 'krize' | 'hvezda' | 'media' | 'kabina' | 'hodnoceni';
 
 export interface Story {
   id: string;
@@ -647,6 +649,20 @@ export interface Story {
   log: string[];
   done?: boolean;
   outcome?: 'dobre' | 'spatne' | 'neutralni';
+}
+
+export interface OwnerPromise {
+  id: string;
+  kind: 'posila' | 'rozpocet';
+  role: 'trener' | 'reditel';
+  position?: Position;
+  bar?: number;
+  value?: number;
+  until: string;
+  made: string;
+  /** Hráči v kádru v době slibu (posila musí být nová). */
+  known?: string[];
+  done?: 'splneno' | 'poruseno';
 }
 
 export interface MatchPlan {
@@ -978,6 +994,10 @@ export interface GameState {
   campsPaid?: { season: number; summer?: CampChoice; winter?: CampChoice };
   version: typeof SAVE_VERSION;
   stories?: Story[];
+  /** Sliby majitele vedení (posila, rozpočet z pohovoru). */
+  promises?: OwnerPromise[];
+  /** Letní přijímačky dorostu klubu majitele. */
+  youthIntake?: { season: number; deadline: string; slots: number; candidates: Player[]; chosen: string[] };
   /** Zpravodaje posledních kol soutěže majitele. */
   roundReports?: import('./league').RoundReport[];
   /** Zlomové okamžiky sezóny pro graf vývoje tabulky. */
