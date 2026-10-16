@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   BAN_SEVERITY,
+  toScore,
   buyShares,
   callExtraordinaryAgm,
   campaignAvailableFrom,
@@ -278,11 +279,11 @@ function GreyCard({ game }: { game: GameState }) {
     <section className="card">
       <div className="row-between">
         <h2>Na hraně etiky</h2>
-        <Badge tone={risk.tone}>Riziko {risk.label}</Badge>
+        <Badge tone={risk.tone}>Riziko {risk.label} ({Math.round(game.grey.exposure)} ze 100)</Badge>
       </div>
       <p className="muted small">
         Rozhodnutí v šedé zóně (daňové triky, zakázky pro vlastní firmu, neoficiální jednání s hráči…) přinesou peníze nebo výhodu, ale zvyšují riziko mediální kauzy.
-        Riziko časem klesá. Při odhalení přijde pokuta, vratky, propad pověsti a nespokojení akcionáři; při závažnosti {BAN_SEVERITY} zákaz činnosti.
+        Riziko časem klesá. Při odhalení přijde pokuta, vratky, propad pověsti a nespokojení akcionáři; při závažnosti 100 ze 100 zákaz činnosti.
       </p>
       {scandal && <p className="warning">Probíhá kauza: sponzoři krátí plnění do {formatDate(g.scandalUntil!)}.</p>}
       {g.taxSchemeUntil && g.taxSchemeUntil > game.date && <p className="small">Platy přes obrazová práva běží do {formatDate(g.taxSchemeUntil)}.</p>}
@@ -296,7 +297,7 @@ function GreyCard({ game }: { game: GameState }) {
               </li>
             ))}
           </ul>
-          <p className="muted small">Závažnost odhalených kauz: {severity} z {BAN_SEVERITY}.</p>
+          <p className="muted small">Závažnost odhalených kauz: {toScore(severity, 0, BAN_SEVERITY)} ze 100.</p>
         </>
       ) : (
         <p className="muted small">Zatím máte čistý štít.</p>

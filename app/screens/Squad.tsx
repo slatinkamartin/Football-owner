@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import {
+import { ratingScore, homeEdgeScore, strengthDelta,
   contractExpiring,
   playerValue,
   playerAge,
@@ -74,7 +74,7 @@ export function Squad({ game, onChange }: Props) {
         </p>
         <dl className="kv inline">
           <dt>Hráčů</dt><dd>{squad.length}</dd>
-          <dt>Síla základní sestavy</dt><dd>{teamStrength(squad).toFixed(1)}</dd>
+          <dt>Síla základní sestavy</dt><dd>{Math.round(teamStrength(squad))} / 100</dd>
           <dt>Platy měsíčně</dt><dd>{money(wages)}</dd>
           <dt>Hodnota kádru</dt><dd>{money(value)}</dd>
         </dl>
@@ -185,13 +185,13 @@ export function Squad({ game, onChange }: Props) {
             { key: 'cards', label: 'ŽK/ČK', num: true, hideSm: true, value: (p) => p.yellows + p.reds * 3, render: (p) => `${p.yellows}/${p.reds}` },
             {
               key: 'avg',
-              label: 'Ø zn.',
+              label: 'Ø hodn.',
               num: true,
-              title: 'Průměrná známka',
+              title: 'Průměrné hodnocení v zápasech (0–100)',
               value: (p) => averageRating(p) ?? 0,
               render: (p) => {
                 const avg = averageRating(p);
-                return avg ? <span className={avg >= 7.2 ? 'pos' : avg < 6.2 ? 'neg' : ''}>{avg.toFixed(2)}</span> : <span className="muted">–</span>;
+                return avg ? <span className={avg >= 7.2 ? 'pos' : avg < 6.2 ? 'neg' : ''}>{ratingScore(avg)}</span> : <span className="muted">–</span>;
               },
             },
             { key: 'value', label: 'Hodnota', num: true, value: (p) => playerValue(game, p), render: (p) => money(playerValue(game, p)) },
@@ -261,16 +261,17 @@ function TeamSpirit({ game }: { game: GameState }) {
   const room = dressingRoom(game);
   const motivation = coachMotivation(game);
   const club = game.clubs[game.owner.clubId];
-  const sign = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(1).replace('.', ',')}`;
+  const edge = homeAdvantage(club, club.stadium.capacity * 0.7, club.stadium.capacity);
+  const edgeScore = homeEdgeScore(edge);
   return (
     <dl className="kv meters spirit">
       <dt>Nálada v kabině ({room.label})</dt>
-      <dd><Meter value={room.morale} /> {sign(room.bonus)}</dd>
-      <dt>Motivace trenéra (důvěra {Math.round(game.owner.trust.trener)})</dt>
-      <dd><Meter value={game.owner.trust.trener} /> {sign(motivation)}</dd>
+      <dd><Meter value={room.morale} /> {Math.round(room.morale)} <span className="muted small">· síla {strengthDelta(room.bonus)}</span></dd>
+      <dt>Motivace trenéra (důvěra v majitele)</dt>
+      <dd><Meter value={game.owner.trust.trener} /> {Math.round(game.owner.trust.trener)} <span className="muted small">· síla {strengthDelta(motivation)}</span></dd>
       <dt>Domácí prostředí (fanoušci {Math.round(club.fanMood)})</dt>
-      <dd><Meter value={club.fanMood} /> {sign(homeAdvantage(club, club.stadium.capacity * 0.7, club.stadium.capacity) - TYPICAL_HOME_ADVANTAGE)}</dd>
-      <dd className="muted small spirit-note">Čísla jsou vliv na sílu týmu v zápase (domácí prostředí proti běžnému při 70% zaplnění stadionu).</dd>
+      <dd><Meter value={edgeScore} /> {edgeScore} <span className="muted small">· síla {strengthDelta(edge - TYPICAL_HOME_ADVANTAGE)}</span></dd>
+      <dd className="muted small spirit-note">Všechny hodnoty jsou na škále 0–100. „Síla“ je vliv na sílu týmu v zápase v bodech hodnocení hráčů (domácí prostředí proti běžnému při 70% zaplnění).</dd>
     </dl>
   );
 }

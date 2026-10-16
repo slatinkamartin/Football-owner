@@ -1,4 +1,4 @@
-import {
+import { ratingScore,
   averageRating,
   clubLabel,
   competitionOf,
@@ -86,8 +86,8 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
           <span className="muted small">tržní hodnota</span>
         </div>
         <div className="pc-big">
-          <span className="pc-num">{avg ? avg.toFixed(2) : '–'}</span>
-          <span className="muted small">Ø známka v sezóně</span>
+          <span className="pc-num">{avg ? ratingScore(avg) : '–'}</span>
+          <span className="muted small">Ø hodnocení v sezóně (0–100)</span>
         </div>
       </div>
       {!view.exact && <p className="muted small">Hodnocení cizích hráčů jsou odhady skautů.</p>}
@@ -96,7 +96,7 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
         <dl className="kv meters">
           <dt>Forma (poslední zápasy)</dt>
           <dd className="form-ratings">
-            {p.recent.length ? p.recent.map((r, i) => <span key={i} className={`rating ${r >= 7.5 ? 'r-good' : r < 6 ? 'r-bad' : ''}`}>{r.toFixed(1)}</span>) : <span className="muted">–</span>}
+            {p.recent.length ? p.recent.map((r, i) => <span key={i} className={`rating ${r >= 7.5 ? 'r-good' : r < 6 ? 'r-bad' : ''}`}>{ratingScore(r)}</span>) : <span className="muted">–</span>}
           </dd>
           <dt>Morálka</dt>
           <dd><Meter value={p.morale} /> {Math.round(p.morale)}</dd>
@@ -181,7 +181,7 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
                   <td className="num">{c.apps}</td>
                   <td className="num">{c.goals}</td>
                   <td className="num">{c.assists}</td>
-                  <td className="num">{c.avgRating?.toFixed(2) ?? '–'}</td>
+                  <td className="num">{c.avgRating !== undefined ? ratingScore(c.avgRating) : '–'}</td>
                   <td className="num">{c.overall}</td>
                   <td className="num hide-sm">{money(c.value)}</td>
                 </tr>

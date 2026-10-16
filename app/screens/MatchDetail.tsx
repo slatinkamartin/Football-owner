@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import {
+import { homeEdgeScore, ratingScore,
   allFixtures,
   formatDate,
   POSITION_SHORT,
@@ -60,7 +60,7 @@ export function MatchDetail({ game, fixtureId, onClose, onBack }: { game: GameSt
             {d && <>xG {d.home.xg.toFixed(2)} : {d.away.xg.toFixed(2)} · </>}
             {num(r.attendance)} diváků · {home.stadium.name}
             {d?.potm && <> · Hráč zápasu: <strong>{nameOf(d.potm)}</strong></>}
-            {d?.homeEdge !== undefined && <> · Domácí prostředí: {d.homeEdge >= 7.2 ? 'bouřlivé' : d.homeEdge >= 5.6 ? 'běžné' : 'vlažné'} ({d.homeEdge.toFixed(1).replace('.', ',')})</>}
+            {d?.homeEdge !== undefined && <> · Domácí prostředí: {d.homeEdge >= 7.2 ? 'bouřlivé' : d.homeEdge >= 5.6 ? 'běžné' : 'vlažné'} ({homeEdgeScore(d.homeEdge)}/100)</>}
           </p>
         )}
 
@@ -120,11 +120,11 @@ function Pitch({ home, away, homeClub, awayClub, events, potm }: {
         const g = goals.get(l.id) ?? 0;
         return (
           <g key={l.id} transform={`translate(${x} ${y})`}>
-            <title>{`${l.name}${l.rating !== undefined ? `, známka ${l.rating.toFixed(1)}` : ''}`}</title>
+            <title>{`${l.name}${l.rating !== undefined ? `, hodnocení ${ratingScore(l.rating)}` : ''}`}</title>
             <circle r="3.6" fill={club.colors[0]} stroke={club.colors[1] ?? '#fff'} strokeWidth="0.9" />
             {l.id === potm && <circle r="5" fill="none" stroke="#f5c518" strokeWidth="0.8" />}
             <text y="7.4" className="pt-name">{surname}</text>
-            {l.rating !== undefined && <text y="11" className={`pt-rating ${ratingTone(l.rating)}`}>{l.rating.toFixed(1)}</text>}
+            {l.rating !== undefined && <text y="11" className={`pt-rating ${ratingTone(l.rating)}`}>{ratingScore(l.rating)}</text>}
             {g > 0 && <text x="4.6" y="-2.6" className="pt-mark">{g > 1 ? `${g}×⚽` : '⚽'}</text>}
             {subbed.has(l.id) && <text x="-4.6" y="-2.6" className="pt-mark pt-sub">↓</text>}
             {sentOff.has(l.id) && <rect x="3.6" y="-1" width="1.8" height="2.6" fill="#d33" />}
@@ -271,7 +271,7 @@ function Lineup({ title, team, events, potm }: { title: string; team: TeamMatchS
       <td className="wrap">
         <PlayerLink id={line.id}>{line.name}</PlayerLink> <span className="marks">{marks(line)}</span>
       </td>
-      <td className="num">{line.rating !== undefined ? <span className={`rating ${ratingTone(line.rating)}`}>{line.rating.toFixed(1)}</span> : <span className="muted">–</span>}</td>
+      <td className="num">{line.rating !== undefined ? <span className={`rating ${ratingTone(line.rating)}`}>{ratingScore(line.rating)}</span> : <span className="muted">–</span>}</td>
     </tr>
   );
   const used = team.bench.filter((b) => b.minutes > 0);

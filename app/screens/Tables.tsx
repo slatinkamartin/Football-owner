@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { averageRating, competitionOf, finalStandings, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
+import { ratingScore, averageRating, competitionOf, finalStandings, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
 import { Chips, DataTable, useStoredState } from '../table';
 import { ClubLink, PlayerLink } from '../nav';
 
@@ -127,11 +127,11 @@ export function Tables({ game }: { game: GameState }) {
             { key: 'reds', label: 'ČK', num: true, hideSm: true, value: (p) => p.reds },
             {
               key: 'avg',
-              label: 'Ø zn.',
+              label: 'Ø hodn.',
               num: true,
-              title: 'Průměrná známka (aspoň 3 hodnocené zápasy)',
+              title: 'Průměrné hodnocení 0–100 (aspoň 3 hodnocené zápasy)',
               value: (p) => (p.ratingCount >= 3 ? averageRating(p)! : 0),
-              render: (p) => (p.ratingCount >= 3 ? averageRating(p)!.toFixed(2) : '–'),
+              render: (p) => (p.ratingCount >= 3 ? ratingScore(averageRating(p)!) : '–'),
             },
           ]}
         />

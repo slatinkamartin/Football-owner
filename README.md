@@ -27,10 +27,10 @@ npm run build      # produkční sestavení do složky dist/
 
 - Výběr klubu z 1. až 3. ligy, startovních podmínek (osobní kapitál majitele) a podílu v klubu (100 %, 60 % nebo 35 %).
 - Týdenní tahy, celé sezóny se 4 soutěžemi (1. liga, 2. liga, ČFL, MSFL), postupy a sestupy včetně pravidel pro B-týmy.
-- **Zápasový engine:** simulace po minutách, střely s xG, góly a asistence, fauly, žluté a červené karty, zranění, až 5 střídání, známky hráčů a hráč zápasu. Trenér skládá sestavu podle formace (4-3-3, 4-4-2, 5-3-2), kvality a kondice a hráče rotuje.
-- **Náhled zápasu:** rozestavení obou týmů na hřišti se známkami a góly, sestavy, střídání, karty, xG, střely, držení míče, rohy, fauly, průběh zápasu a známky.
+- **Zápasový engine:** simulace po minutách, střely s xG, góly a asistence, fauly, žluté a červené karty, zranění, až 5 střídání, hodnocení hráčů 0–100 a hráč zápasu. Trenér skládá sestavu podle formace (4-3-3, 4-4-2, 5-3-2), kvality a kondice a hráče rotuje.
+- **Náhled zápasu:** rozestavení obou týmů na hřišti s hodnocením a góly, sestavy, střídání, karty, xG, střely, držení míče, rohy, fauly, průběh zápasu a hodnocení.
 - **Kondice, zranění a tresty:** stopka za červenou kartu a za každou 4. žlutou, zranění na dny až měsíce.
-- Tabulky, statistiky hráčů (zápasy, minuty, góly, asistence, karty, průměrná známka), návštěvnost.
+- Tabulky, statistiky hráčů (zápasy, minuty, góly, asistence, karty, průměrné hodnocení), návštěvnost.
 - Finance klubu: vstupné, TV peníze, komerční příjmy, platy, provoz, přestupy. Bankrot = konec hry.
 - Rozhodnutí majitele: cena vstupenek, mzdový rozpočet, rozpočet na přestupy, vklad vlastního kapitálu.
 - **Vedení:** hlavní trenér a sportovní ředitel se schopnostmi a povahou (ambice, ego, loajalita), důvěra ve majitele, nábor z volných kandidátů, odvolání s odstupným, rezignace.
@@ -60,6 +60,11 @@ npm run build      # produkční sestavení do složky dist/
 - **Smlouvy:** prodlužování, uvolnění hráče, odchody po skončení smlouvy (důležitým hráčům prodlužuje ředitel sám).
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
+
+### Novinky verze 0.12.1: jednotná škála 0–100
+
+- Všechna hodnocení ve hře jsou na škále 0–100: hráči, schopnosti vedení, pověst, nálada fanoušků, morálka, kondice, důvěra, vztahy, spokojenost akcionářů, a nově i hodnocení hráčů v zápase (dřív známka 3–10), úrovně zázemí (dřív 1–5 a 0–3), domácí prostředí, síla základní sestavy a riziko a závažnost v šedé zóně.
+- U nálady v kabině, motivace trenéra a domácího prostředí je vedle hodnoty 0–100 i vliv na sílu týmu v bodech hodnocení.
 
 ### Novinky verze 0.12: přestupová politika a dopady změn
 

@@ -1,3 +1,4 @@
+import { toScore } from './scales';
 import { addDays } from './calendar';
 import { annualCosts, book } from './finance';
 import { satisfy } from './ownership';
@@ -112,7 +113,7 @@ export function discover(state: GameState): void {
     state.owner.ousted = { ...(state.owner.ousted ?? { since: state.date }), banUntil: until };
     text += ` Opakované prohřešky: svaz vám na rok zakázal činnost ve fotbale (do ${until.split('-').reverse().join('. ')}). Klub zatím řídí představenstvo.`;
   } else {
-    text += ` Celková závažnost vašich kauz je ${severity} z ${BAN_SEVERITY}; při ${BAN_SEVERITY} hrozí zákaz činnosti.`;
+    text += ` Celková závažnost vašich kauz je ${toScore(severity, 0, BAN_SEVERITY)} ze 100; při 100 hrozí zákaz činnosti.`;
   }
   addNews(state, { kind: 'varovani', title: 'Kauza: majitel na hraně etiky', text });
 }
