@@ -8,6 +8,7 @@ import { directorAbility, scoutingError, type ActionResult } from './staff';
 import type { ForeignMarket, ForeignTarget, GameState, Player, Position, ScoutRegion } from './types';
 import { budgetRemaining, executeTransfer, monthsUntilContractEnd, playerName, wageBill, weakestPosition } from './transfers';
 import { sectionRoomFor } from './wages';
+import { ffpBlocksSigning } from './finplus';
 import { addNews, clamp, clubLabel, FOREIGN_PREFIX, hash01, plural, tierOf, transferWindow } from './world';
 
 /**
@@ -227,6 +228,8 @@ export function foreignBlocked(state: GameState, t: ForeignTarget, price = forei
   const own = state.owner.clubId;
   if (!transferWindow(state.date)) return 'Podepsat lze jen v přestupním okně (od 1. 7. a od 8. 1.).';
   if (squadOf(state, own).length >= 30) return 'Kádr je plný (30 hráčů).';
+  const ffp = ffpBlocksSigning(state);
+  if (ffp) return ffp;
   if (t.player.nonEu && nonEuCount(state) >= NON_EU_LIMIT) return `V kádru je už ${NON_EU_LIMIT} hráčů mimo EU.`;
   if (price.total > budgetRemaining(state)) return 'Nevejde se do rozpočtu na přestupy.';
   if (wageBill(state, own) + price.wage > wageBudgetMonthly(state.clubs[own]) * 1.05) return 'Plat by překročil mzdový strop.';

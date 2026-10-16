@@ -358,6 +358,8 @@ export const LOAN_MONTHS = 36;
 export function loanOffers(state: GameState): number[] {
   const club = state.clubs[state.owner.clubId];
   if (state.loans.some((l) => (l.kind ?? 'provozni') === 'provozni')) return [];
+  // S finančním vysvědčením F banka provozní úvěr nedá.
+  if (state.rating?.grade === 'F') return [];
   const yearly = annualCosts(club, tierOf(state, club.id));
   return [0.1, 0.25, 0.5].map((k) => Math.round((yearly * k) / 1_000_000) * 1_000_000).filter((v) => v > 0);
 }
@@ -382,6 +384,13 @@ export function loanVotePasses(state: GameState): boolean {
   return yes > 0.5;
 }
 
+/** Úrok banky: základ podle druhu úvěru upravený finančním vysvědčením (A levněji, E a F dráž). */
+export function loanRate(state: GameState, kind: 'provozni' | 'investicni' = 'provozni'): number {
+  const g = state.rating?.grade;
+  const adj = g === 'A' ? -0.015 : g === 'B' ? -0.005 : g === 'D' ? 0.01 : g === 'E' ? 0.025 : g === 'F' ? 0.05 : 0;
+  return Math.max(0.02, (kind === 'investicni' ? INVEST_RATE : LOAN_RATE) + adj);
+}
+
 export function annuity(principal: number, rate: number, months: number): number {
   const r = rate / 12;
   return Math.round((principal * r) / (1 - Math.pow(1 + r, -months)));
@@ -392,7 +401,7 @@ export function takeLoan(prev: GameState, amount: number, kind: 'provozni' | 'in
   if (!allowed || prev.owner.ousted) return prev;
   if (!loanVotePasses(prev)) return prev;
   const state = structuredClone(prev);
-  const rate = kind === 'investicni' ? INVEST_RATE : LOAN_RATE;
+  const rate = loanRate(state, kind);
   const months = kind === 'investicni' ? INVEST_MONTHS : LOAN_MONTHS;
   const payment = annuity(amount, rate, months);
   state.loans.push({ id: `u${++state.nextId}`, kind, principal: amount, remaining: amount, rate, payment, monthsLeft: months });

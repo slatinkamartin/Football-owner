@@ -8,13 +8,12 @@ import {
   grantOptions,
   injectCapital,
   INVEST_MONTHS,
-  INVEST_RATE,
+  loanRate,
   investmentLoanOffer,
   lendToClub,
   licenceProblems,
   loanOffers,
   LOAN_MONTHS,
-  LOAN_RATE,
   OVERDRAFT_RATE,
   overdraftLimit,
   OWNER_LOAN_RATE,
@@ -105,11 +104,11 @@ export function FinanceFunding({ game, onChange }: { game: GameState; onChange: 
           {(offers.length > 0 || invest > 0) && <VoteInfo vote={vote} />}
           {offers.length > 0 && (
             <>
-              <p className="small"><strong>Provozní úvěr</strong> na {LOAN_MONTHS / 12} roky, {Math.round(LOAN_RATE * 100)} % ročně:</p>
+              <p className="small"><strong>Provozní úvěr</strong> na {LOAN_MONTHS / 12} roky, {(loanRate(game) * 100).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} % ročně{game.rating ? ` (rating ${game.rating.grade})` : ''}:</p>
               <div className="buttons">
                 {offers.map((a) => (
                   <button key={a} disabled={!vote.passes || !!game.owner.ousted} onClick={() => onChange(takeLoan(game, a))}>
-                    {money(a)} <span className="muted small">(splátka {money(annuity(a, LOAN_RATE, LOAN_MONTHS))})</span>
+                    {money(a)} <span className="muted small">(splátka {money(annuity(a, loanRate(game), LOAN_MONTHS))})</span>
                   </button>
                 ))}
               </div>
@@ -117,9 +116,9 @@ export function FinanceFunding({ game, onChange }: { game: GameState; onChange: 
           )}
           {invest > 0 && (
             <>
-              <p className="small"><strong>Investiční úvěr</strong> na rozestavěné stavby, {INVEST_MONTHS / 12} let, {INVEST_RATE * 100} % ročně:</p>
+              <p className="small"><strong>Investiční úvěr</strong> na rozestavěné stavby, {INVEST_MONTHS / 12} let, {(loanRate(game, 'investicni') * 100).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} % ročně:</p>
               <button disabled={!vote.passes || !!game.owner.ousted} onClick={() => onChange(takeLoan(game, invest, 'investicni'))}>
-                {money(invest)} <span className="muted small">(splátka {money(annuity(invest, INVEST_RATE, INVEST_MONTHS))})</span>
+                {money(invest)} <span className="muted small">(splátka {money(annuity(invest, loanRate(game, 'investicni'), INVEST_MONTHS))})</span>
               </button>
             </>
           )}

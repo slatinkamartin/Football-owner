@@ -22,6 +22,7 @@ import {
 } from '../../engine';
 import { Briefing, PulsePanel, Stories } from './Briefing';
 import { MatchPrepCard } from './MatchPrep';
+import { SideGoalsCard } from './finance/Extras';
 import { Badge } from '../components';
 import { findFixture } from './MatchDetail';
 import { Decisions } from './Decisions';
@@ -62,6 +63,7 @@ export function Overview({
       <Decisions game={game} onChange={onChange} />
       <Stories game={game} />
       <MatchPrepCard game={game} onChange={onChange} onLive={onLive} />
+      <SideGoalsCard game={game} />
       <section className="card">
         <h2>Další zápas</h2>
         {next ? (

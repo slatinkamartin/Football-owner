@@ -1,3 +1,4 @@
+import { ffpBlocksSigning } from './finplus';
 import { AGENT_STYLE_LABEL, agentFeeFactor, agentOf, agentWageFactor, changeAgentRelation, closeDomino, deadlineDay, deadlineDiscount, releaseClauseFor, startDomino, tipDiscount } from './market';
 import { crisisDiscount, noteTimeline } from './league';
 import { book, ownerAccounting, playerWage, wageBudgetMonthly } from './finance';
@@ -223,6 +224,8 @@ export function startNegotiation(prev: GameState, playerId: string): ActionResul
   if (p.clubId === prev.owner.clubId) return { state: prev, ok: false, message: 'Hráč už hraje za váš klub.' };
   const want = interest(prev, p, prev.owner.clubId);
   if (!want.ok) return { state: prev, ok: false, message: want.reason };
+  const ffp = p.clubId !== FREE ? ffpBlocksSigning(prev) : undefined;
+  if (ffp) return { state: prev, ok: false, message: ffp };
 
   const state = structuredClone(prev);
   const { asking, minFee, minWage } = negotiationPrices(state, p);
@@ -874,6 +877,7 @@ export function directorSignings(state: GameState, rng: Rng): void {
   const own = state.owner.clubId;
   const club = state.clubs[own];
   if (!transferWindow(state.date) || !directorOf(state, own) || club.policy.autoSquad === false || state.owner.ousted) return;
+  if (ffpBlocksSigning(state)) return;
   // Nákupy jen s nejvyšší pravomocí ředitele.
   if (club.policy.delegation && club.policy.delegation.director !== 'vysoka') return;
   const squad = squadOf(state, own);

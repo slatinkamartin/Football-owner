@@ -68,6 +68,7 @@ import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emer
 import { decisiveness, settingsOf } from './settings';
 import { recordPulse, pulseValues, snapshotPulse } from './pulse';
 import { weeklyStories } from './stories';
+import { createSideGoals, seasonFfp, seasonRating, settleSideGoals } from './finplus';
 import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
 import { afterOwnMatch, halftimeAdjust, pendingPrematch, planEffect } from './matchday';
@@ -222,6 +223,7 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
   }
   initialSponsors(state, rng);
   prepareBudget(state);
+  createSideGoals(state);
   // Hned na začátku: výběr generálního partnera.
   maybeCreateEvent(state, rng);
   addNews(state, {
@@ -567,6 +569,10 @@ function endSeason(state: GameState, rng: Rng): void {
       book(state, own.id, 'platy', -goalBonusPoints(state) * bonusPerPoint(own), 'Prémie hráčům za splnění cíle sezóny');
     }
   }
+  // Finanční konec sezóny: vedlejší cíle, vysvědčení a fair play.
+  settleSideGoals(state);
+  seasonRating(state);
+  seasonFfp(state);
   returnLoans(state);
   seasonEndContracts(state, rng);
   ageAndDevelopPlayers(state, rng);
@@ -903,6 +909,7 @@ function processDay(state: GameState, rng: Rng): void {
     }
     ensureInterimStaff(state, rng);
     refreshForeignMarket(state, rng);
+    createSideGoals(state);
     {
       // Podmíněné doplatky za loňský postup nebo Evropu.
       const last = state.history[state.history.length - 1];

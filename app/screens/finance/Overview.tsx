@@ -1,3 +1,4 @@
+import { RatingCard, ScenariosCard } from './Extras';
 import { useState } from 'react';
 import {
   activeOverdraft,
@@ -239,6 +240,10 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
           </div>
         </div>
       </section>
+      <div className="grid two">
+        <RatingCard game={game} />
+        <ScenariosCard game={game} />
+      </div>
     </div>
   );
 }

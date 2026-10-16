@@ -97,7 +97,9 @@ export function generateSponsorOffers(state: GameState, rng: Rng): void {
     const expected = comp ? expectedPosition(state, club.id) : 8;
     for (let i = 0; i < count; i++) {
       const style = (['jistota', 'bonus', 'kratka'] as const)[i % 3];
-      const base = value * (0.88 + rng.next() * 0.22 + quality);
+      // Vztah se sponzorem (aktivace, splněné cíle) mění nabídky o ±10 %.
+      const relation = 0.9 + (state.sponsorRelations?.[slot] ?? 50) / 500;
+      const base = value * (0.88 + rng.next() * 0.22 + quality) * relation;
       const current = renewing && i === 0 ? contracts(state).find((c) => c.slot === slot && c.untilSeason === state.season) : undefined;
       const name = current?.name ?? pickName(rng, slot, used);
       used.add(name);

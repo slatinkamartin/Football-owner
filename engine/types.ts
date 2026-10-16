@@ -1022,6 +1022,15 @@ export interface GameState {
   domino?: { soldName: string; soldOverall: number; position: Position; budget: number; until: string };
   /** Deadline day: hráči nabídnutí v posledních dnech okna se slevou. */
   deadlineDeals?: string[];
+  /** Vedlejší cíle sezóny (sponzor, město, akcionáři). */
+  sideGoals?: { season: number; goals: import('./finplus').SideGoal[] };
+  /** Finanční vysvědčení poslední sezóny. */
+  rating?: { season: number; grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F'; score: number };
+  /** Provozní výsledky a vklady minulých sezón (fair play). */
+  opHistory?: { season: number; result: number; deposits: number }[];
+  ffp?: { strikes: number; restrictedSeason?: number };
+  /** Vztahy se sponzory podle místa (0–100). */
+  sponsorRelations?: Partial<Record<SponsorSlot, number>>;
   /** Sliby majitele vedení (posila, rozpočet z pohovoru). */
   promises?: OwnerPromise[];
   /** Letní přijímačky dorostu klubu majitele. */

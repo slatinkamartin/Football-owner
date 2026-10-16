@@ -13,6 +13,7 @@ import { dramaFactor, maxOpenEvents } from './settings';
 import { resolveStoryEvent } from './stories';
 import { resolvePress } from './matchday';
 import { PEOPLE_COOLDOWN, peopleTemplates } from './people';
+import { FINANCE_COOLDOWN, financeTemplates } from './finplus';
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -91,6 +92,8 @@ function tappingTarget(s: GameState): Player | undefined {
 export const TEMPLATES: Record<string, Template> = {
   // Žádosti hráčů, požadavky trenéra a přetahování ředitele (engine/people.ts).
   ...peopleTemplates({ trust, teamMorale }),
+  // Sponzoři s aktivacemi a finanční šoky (engine/finplus.ts).
+  ...financeTemplates({ teamMorale, media }),
   // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
   'tiskovka-zapas': {
     weight: () => 0,
@@ -1184,7 +1187,7 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
   state.eventLog ??= {};
   const recent = (id: string) => {
     const last = state.eventLog![id];
-    return !!last && addDays(last, COOLDOWN[id] ?? PEOPLE_COOLDOWN[id] ?? 90) > state.date;
+    return !!last && addDays(last, COOLDOWN[id] ?? PEOPLE_COOLDOWN[id] ?? FINANCE_COOLDOWN[id] ?? 90) > state.date;
   };
   const weighted = Object.entries(TEMPLATES)
     .filter(([id]) => !open.has(id) && !recent(id) && (!state.owner.ousted || OUSTED_TEMPLATES.has(id)))

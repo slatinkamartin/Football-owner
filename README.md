@@ -61,6 +61,21 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.19: finance (etapa E)
+
+- **Vedlejší cíle sezóny** na Přehledu, s průběžným plněním. Vyhodnocení na konci sezóny přinese bonus nebo ztrátu vztahu.
+  - Generální partner: průměrná návštěva.
+  - Město: minuty hráčů do 21 let.
+  - Akcionáři: provozní výsledek aspoň nula.
+- **Co když…** (Finance › Přehled): výhled sezóny při prodeji nejlepšího hráče, vyšším mzdovém stropu o 20 %, stavbě nového stadionu nebo krizi nálady fanoušků.
+- **Sponzoři se závazky**:
+  - firemní akce s hráči (vztah se sponzorem, bonus, únava hráčů);
+  - nabídka loga na rukáv;
+  - vztah se sponzorem mění nabídky při prodlužování (±10 %).
+- **Finanční šoky a příležitosti**: dražší energie (zaplatit, nebo úsporný režim), nová TV smlouva ligy, krach sponzora, refinancování úvěru, sbírka fanoušků v krizi.
+- **Finanční vysvědčení A–F** na konci sezóny podle kapitálu, výsledku, dluhu a likvidity. Mění úrok bank (A −1,5 bodu, E +2,5, s F banka provozní úvěr nedá) a spokojenost akcionářů.
+- **Finanční fair play** v 1. a 2. lize: ztráty za tři sezóny nad limit (polovina ročních nákladů; vklady majitele se počítají napůl) znamenají napomenutí, pak omezení přestupů (nejvýš 2 hráči za odstupné), pak pokutu.
+
 ### Novinky verze 0.18: přestupy (etapa D)
 
 - **Deadline day**: poslední tři dny okna hra zastaví a jde po dnech (s možností přeskočit na konec okna).

@@ -36,3 +36,4 @@ export * from './league';
 export * from './matchday';
 export * from './people';
 export * from './market';
+export * from './finplus';
