@@ -1,10 +1,9 @@
-import { useEffect } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import {
   balanceSheet,
   CATEGORY_LABEL,
-  EXPENSE_CATEGORIES,
   formatShortDate,
-  INCOME_CATEGORIES,
+  OPERATING_CATEGORIES,
   profitAndLoss,
   TAX_RATE,
   type FinanceCategory,
@@ -31,7 +30,8 @@ const TABS: { id: FinanceTab; label: string }[] = [
 ];
 
 export function Finance({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
-  const [tab, setTab] = useStoredState<FinanceTab>('finance:zalozka', 'prehled');
+  // Finance se vždy otevírají na Přehledu.
+  const [tab, setTab] = useState<FinanceTab>('prehled');
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [tab]);
@@ -44,7 +44,7 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
           </button>
         ))}
       </nav>
-      {tab === 'prehled' && <FinanceOverview game={game} onOpen={setTab} />}
+      {tab === 'prehled' && <FinanceOverview game={game} onOpen={setTab} onChange={onChange} />}
       {tab === 'rozpocet' && <BudgetCard game={game} onChange={onChange} onOpen={setTab} />}
       {tab === 'prijmy' && <FinanceIncome game={game} onChange={onChange} onBudget={() => setTab('rozpocet')} />}
       {tab === 'naklady' && <FinanceCosts game={game} onChange={onChange} onBudget={() => setTab('rozpocet')} />}
@@ -57,45 +57,60 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
 function Accounting({ game }: { game: GameState }) {
   const club = game.clubs[game.owner.clubId];
   return (
-    <div className="grid two">
+    <div className="grid accounting-grid">
       <ProfitLoss game={game} />
       <section className="card">
         <h2>Peněžní toky</h2>
+        <p className="muted small">Stejné členění jako rozpočet. Rozbalte skupinu pro jednotlivé položky.</p>
         <CashFlow current={club.finance.season} last={club.finance.lastSeason} />
-      </section>
-      <section className="card">
-        <h2>Pohyby podle kategorií</h2>
-        <Totals current={club.finance.season} last={club.finance.lastSeason} />
       </section>
       <Movements game={game} />
     </div>
   );
 }
 
-/** Výkaz peněžních toků: provozní, investiční a finanční činnost. */
+/** Peněžní toky ve třech skupinách jako v rozpočtu, s rozbalitelnými položkami. */
 function CashFlow({ current, last }: { current: FinanceTotals; last?: FinanceTotals }) {
+  const [open, setOpen] = useState<string | null>(null);
   const groups: { label: string; cats: FinanceCategory[] }[] = [
-    { label: 'Provozní činnost', cats: ['vstupne', 'stadion', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'platy', 'vedeni', 'oddeleni', 'provoz', 'dane'] },
-    { label: 'Investiční činnost (stavby a přestupy)', cats: ['investice', 'prestupy'] },
-    { label: 'Finanční činnost (úvěry, půjčky, vklady)', cats: ['uver', 'vklad'] },
+    { label: 'Provozní výsledek', cats: OPERATING_CATEGORIES },
+    { label: 'Přestupy, investice a daň', cats: ['prestupy', 'investice', 'dane'] },
+    { label: 'Úvěry, půjčky a vklady majitele', cats: ['uver', 'vklad'] },
   ];
   const sum = (t: FinanceTotals | undefined, cats: FinanceCategory[]) => (t ? cats.reduce((a, c) => a + (t[c] ?? 0), 0) : 0);
   const total = (t?: FinanceTotals) => groups.reduce((a, g) => a + sum(t, g.cats), 0);
   return (
-    <table>
+    <table className="cashflow">
       <thead>
         <tr><th /><th className="num">Tato sezóna</th>{last && <th className="num">Minulá</th>}</tr>
       </thead>
       <tbody>
-        {groups.map((g) => (
-          <tr key={g.label}>
-            <td className="wrap">{g.label}</td>
-            <td className={`num ${sum(current, g.cats) < 0 ? 'neg' : 'pos'}`}>{money(sum(current, g.cats))}</td>
-            {last && <td className="num muted">{money(sum(last, g.cats))}</td>}
-          </tr>
-        ))}
+        {groups.map((g) => {
+          const cats = g.cats.filter((c) => (current[c] ?? 0) !== 0 || (last?.[c] ?? 0) !== 0);
+          const expanded = open === g.label;
+          return (
+            <Fragment key={g.label}>
+              <tr className="group-row">
+                <td className="wrap">
+                  {cats.length > 0 ? (
+                    <button className="linkbtn" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : g.label)}>{expanded ? '▾' : '▸'} {g.label}</button>
+                  ) : g.label}
+                </td>
+                <td className={`num ${sum(current, g.cats) < 0 ? 'neg' : 'pos'}`}>{money(sum(current, g.cats))}</td>
+                {last && <td className="num muted">{money(sum(last, g.cats))}</td>}
+              </tr>
+              {expanded && cats.map((c) => (
+                <tr key={c} className="detail-row">
+                  <td className="wrap">{CATEGORY_LABEL[c]}</td>
+                  <td className="num">{money(current[c] ?? 0)}</td>
+                  {last && <td className="num muted">{money(last[c] ?? 0)}</td>}
+                </tr>
+              ))}
+            </Fragment>
+          );
+        })}
         <tr className="total">
-          <td>Změna hotovosti</td>
+          <td>Změna peněz na účtu</td>
           <td className={`num ${total(current) < 0 ? 'neg' : 'pos'}`}>{money(total(current))}</td>
           {last && <td className="num">{money(total(last))}</td>}
         </tr>
@@ -111,7 +126,7 @@ function ProfitLoss({ game }: { game: GameState }) {
   const last = f.lastSeason ? profitAndLoss(f.lastSeason, f.lastAccounting) : undefined;
   const bs = balanceSheet(game);
   const lines = (key: 'revenues' | 'costs') =>
-    now[key].map((l, i) => (
+    now[key].map((l, i) => ({ l, i })).filter(({ l, i }) => Math.round(l.amount) !== 0 || Math.round(last?.[key][i].amount ?? 0) !== 0).map(({ l, i }) => (
       <tr key={l.label}>
         <td className="wrap">{l.label}</td>
         <td className="num">{money(l.amount)}</td>
@@ -123,7 +138,7 @@ function ProfitLoss({ game }: { game: GameState }) {
       <section className="card">
         <h2>Výsledovka</h2>
         <p className="muted small">
-          Účetní pohled: cena koupeného hráče se rozkládá do let smlouvy (odpisy), u prodeje se počítá zisk proti zůstatkové hodnotě. Vklady majitele nejsou výnos.
+          Účetní pohled: na rozdíl od provozního výsledku v rozpočtu obsahuje odpisy hráčů a staveb, zisk z prodeje hráčů a úroky. Cena koupeného hráče se rozkládá do let smlouvy. Vklady a půjčky majitele nejsou výnos. Nulové řádky jsou skryté.
         </p>
         <table>
           <thead>
@@ -135,7 +150,7 @@ function ProfitLoss({ game }: { game: GameState }) {
             <tr className="subhead"><td colSpan={3}>Náklady</td></tr>
             {lines('costs')}
             <tr className="total">
-              <td>Výsledek před zdaněním</td>
+              <td>Účetní výsledek před zdaněním</td>
               <td className={`num ${now.beforeTax < 0 ? 'neg' : 'pos'}`}>{money(now.beforeTax)}</td>
               {last && <td className={`num ${last.beforeTax < 0 ? 'neg' : 'pos'}`}>{money(last.beforeTax)}</td>}
             </tr>
@@ -205,37 +220,5 @@ function Movements({ game }: { game: GameState }) {
         ]}
       />
     </section>
-  );
-}
-
-function Totals({ current, last }: { current: FinanceTotals; last?: FinanceTotals }) {
-  const sum = (t: FinanceTotals | undefined, cats: typeof INCOME_CATEGORIES) => (t ? cats.reduce((s, c) => s + t[c], 0) : 0);
-  const rows = (cats: typeof INCOME_CATEGORIES) =>
-    cats.map((c) => (
-      <tr key={c}>
-        <td className="wrap">{CATEGORY_LABEL[c]}</td>
-        <td className="num">{money(current[c])}</td>
-        {last && <td className="num muted">{money(last[c])}</td>}
-      </tr>
-    ));
-  const result = sum(current, INCOME_CATEGORIES) + sum(current, EXPENSE_CATEGORIES);
-  const lastResult = sum(last, INCOME_CATEGORIES) + sum(last, EXPENSE_CATEGORIES);
-  return (
-    <table>
-      <thead>
-        <tr><th /><th className="num">Tato sezóna</th>{last && <th className="num">Minulá</th>}</tr>
-      </thead>
-      <tbody>
-        <tr className="subhead"><td colSpan={3}>Příjmy</td></tr>
-        {rows(INCOME_CATEGORIES)}
-        <tr className="subhead"><td colSpan={3}>Výdaje</td></tr>
-        {rows(EXPENSE_CATEGORIES)}
-        <tr className="total">
-          <td>Výsledek</td>
-          <td className={`num ${result < 0 ? 'neg' : 'pos'}`}>{money(result)}</td>
-          {last && <td className={`num ${lastResult < 0 ? 'neg' : 'pos'}`}>{money(lastResult)}</td>}
-        </tr>
-      </tbody>
-    </table>
   );
 }

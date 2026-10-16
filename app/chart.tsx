@@ -18,6 +18,8 @@ export function LineChart({
   min,
   max,
   height = 170,
+  forecastFrom,
+  baseline,
 }: {
   title: string;
   points: ChartPoint[];
@@ -27,6 +29,10 @@ export function LineChart({
   min?: number;
   max?: number;
   height?: number;
+  /** Od tohoto bodu dál je řada odhad (kreslí se čárkovaně). */
+  forecastFrom?: number;
+  /** Vodorovná referenční čára (například nula nebo hranice kontokorentu). */
+  baseline?: { value: number; label: string };
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -53,7 +59,7 @@ export function LineChart({
 
   const width = measured;
   const pad = { top: 14, right: 56, bottom: 22, left: 44 };
-  const values = points.map((p) => p.value);
+  const values = [...points.map((p) => p.value), ...(baseline ? [baseline.value] : [])];
   let lo = min ?? Math.min(...values);
   let hi = max ?? Math.max(...values);
   if (lo === hi) {
@@ -80,7 +86,11 @@ export function LineChart({
       seen.add(label);
       return true;
     });
-  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+  const split = forecastFrom !== undefined && forecastFrom > 0 && forecastFrom < points.length ? forecastFrom : points.length;
+  const line = (from: number, to: number) => points.slice(from, to).map((p, k) => `${k ? 'L' : 'M'}${x(from + k).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+  const path = line(0, split);
+  const future = split < points.length ? line(split - 1, points.length) : '';
+  const isForecast = (i: number) => i >= split;
   const last = points.length - 1;
   const xLabels = [0, Math.floor(last / 2), last];
   const active = hover ?? null;
@@ -126,7 +136,15 @@ export function LineChart({
               {points[i].label}
             </text>
           ))}
+          {baseline && (
+            <g>
+              <line className="chart-baseline" x1={pad.left} x2={width - pad.right} y1={y(baseline.value)} y2={y(baseline.value)} />
+              <text className="chart-axis" x={width - pad.right + 4} y={y(baseline.value) + 4}>{baseline.label}</text>
+            </g>
+          )}
+          {split < points.length && <line className="chart-today" x1={x(split - 1)} x2={x(split - 1)} y1={pad.top} y2={pad.top + innerH} />}
           <path className="chart-line" d={path} />
+          {future && <path className="chart-line forecast" d={future} />}
           <circle className="chart-dot" cx={x(last)} cy={y(points[last].value)} r={4} />
           {active === null && (
             <text className="chart-endlabel" x={x(last) + 8} y={y(points[last].value) + 4}>
@@ -147,7 +165,7 @@ export function LineChart({
             role="status"
           >
             <strong>{format(points[active].value)}</strong>
-            <span>{points[active].label}</span>
+            <span>{points[active].label}{isForecast(active) ? ' · výhled' : ''}</span>
           </div>
         )}
       </div>
@@ -157,7 +175,7 @@ export function LineChart({
           <tbody>
             {points.map((p, i) => (
               <tr key={i}>
-                <td className="muted">{p.label}</td>
+                <td className="muted">{p.label}{isForecast(i) ? ' (výhled)' : ''}</td>
                 <td className="num">{format(p.value)}</td>
               </tr>
             ))}

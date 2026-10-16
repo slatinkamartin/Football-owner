@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
 import { coachMotivation, dressingRoom, homeAdvantage } from './atmosphere';
-import { adjustForNewTier, approveBudget, budgetApproved, budgetVote, budgetWarnings, forecastSeason, moneyCalendar, planToDate, resetBudgetToDraft, seasonTicketDemand, ticketPreview } from './budget';
+import { adjustForNewTier, approveBudget, budgetApproved, budgetChanged, operatingActual, budgetVote, budgetWarnings, forecastSeason, moneyCalendar, planToDate, resetBudgetToDraft, seasonTicketDemand, ticketPreview } from './budget';
 import { expiringSponsors, generateSponsorOffers } from './sponsors';
 import { leaguePhaseChance, qualifyEurope, resolveEurope } from './europe';
 import { annualCosts, departmentEffect, departmentReference, sponsorsAnnual, updatePolicy } from './index';
@@ -85,7 +85,8 @@ describe('rozpočet sezóny', () => {
     const before = forecastSeason(start);
     const raised = updatePolicy(start, { wageMultiplier: start.clubs.bohemians.policy.wageMultiplier + 0.3 });
     const after = forecastSeason(raised);
-    expect(after.lines.find((l) => l.key === 'platy')!.amount).toBeLessThan(before.lines.find((l) => l.key === 'platy')!.amount);
+    expect(after.lines.find((l) => l.key === 'rezerva')!.amount).toBeLessThan(before.lines.find((l) => l.key === 'rezerva')!.amount);
+    expect(after.result).toBeLessThan(before.result);
     const reset = resetBudgetToDraft(raised);
     expect(reset.ok).toBe(true);
     expect(reset.state.clubs.bohemians.policy.wageMultiplier).toBe(start.clubs.bohemians.policy.wageMultiplier);
@@ -119,6 +120,54 @@ describe('rozpočet sezóny', () => {
     const renewal = s.sponsorOffers!.find((o) => o.slot === c.slot && o.name === c.name);
     expect(renewal).toBeDefined();
     expect(renewal!.untilSeason).toBeGreaterThan(s.season);
+  });
+
+  it('výhled v půlce sezóny = skutečnost + zbytek a sedí se zůstatkem na konci', () => {
+    let s = approveBudget(start).state;
+    s = advanceDays(s, 240).state;
+    const plan = forecastSeason(s);
+    expect(plan.from).toBe(s.date);
+    expect(plan.months[0].date > s.date).toBe(true);
+    const platy = plan.lines.find((l) => l.key === 'platy')!;
+    expect(platy.actual).toBe(s.clubs.bohemians.finance.season.platy);
+    expect(Math.abs(operatingActual(s) - plan.lines.filter((l) => l.group === 'provoz').reduce((a, l) => a + (l.actual ?? 0), 0))).toBeLessThan(1000);
+    const end = advanceDays(s, Math.round((new Date(`${s.season + 1}-06-19`).getTime() - new Date(s.date).getTime()) / 86_400_000)).state;
+    const actualEnd = end.clubs.bohemians.finance.balance;
+    expect(Math.abs(actualEnd - plan.months[plan.months.length - 2].balance)).toBeLessThan(Math.abs(actualEnd) * 0.35 + 5_000_000);
+  });
+
+  it('neschválené změny jen při změně nastavení, ne při posunu výhledu', () => {
+    let s = approveBudget(start).state;
+    expect(budgetChanged(s)).toBe(false);
+    s = advanceDays(s, 60).state;
+    expect(budgetChanged(s)).toBe(false);
+    expect(budgetChanged(updatePolicy(s, { ticketPrice: 400 }))).toBe(true);
+  });
+
+  it('ztrátový klub: návrh ukáže potřebu od majitele a půjčka ji pokryje', () => {
+    const s = structuredClone(start);
+    s.clubs.bohemians.finance.balance = 2_000_000;
+    const plan = forecastSeason(s);
+    expect(plan.ownerNeed).toBeGreaterThan(0);
+    expect(budgetWarnings(s, plan).some((w) => w.text.includes('Potřeba od majitele'))).toBe(true);
+    s.clubs.bohemians.finance.balance += plan.ownerNeed!;
+    expect(forecastSeason(s).ownerNeed).toBe(0);
+  });
+
+  it('přestupy na splátky se v plánu nepočítají dvakrát', () => {
+    const s = structuredClone(start);
+    const budget = s.clubs.bohemians.policy.transferBudget;
+    const before = forecastSeason(s).lines.find((l) => l.key === 'prestupy')!.amount;
+    // Koupě za celý rozpočet: polovina hned, zbytek ve splátkách.
+    s.market.spent += budget;
+    s.clubs.bohemians.finance.season.prestupy -= budget / 2;
+    s.clubs.bohemians.finance.balance -= budget / 2;
+    s.payments = [
+      { id: 'a', due: `${s.season}-12-30`, from: 'bohemians', to: 'slavia', amount: budget / 4, note: 'x' },
+      { id: 'b', due: `${s.season + 1}-07-01`, from: 'bohemians', to: 'slavia', amount: budget / 4, note: 'x' },
+    ];
+    const after = forecastSeason(s).lines.find((l) => l.key === 'prestupy')!.amount;
+    expect(Math.round(after)).toBe(Math.round(before + budget / 4));
   });
 
   it('po sestupu se ceny přepočítají na nižší soutěž', () => {

@@ -25,7 +25,7 @@ import { completeProjects, effectiveCapacity, licenseCheck, monthlyBuildingDepre
 import { defaultFacilities, matchdayExtras } from './stadium';
 import { createEvent, expireEvents, maybeCreateEvent, resolveEvent } from './events';
 import { checkBan, media, monthlyGrey } from './grey';
-import { adjustForNewTier, monthlyReport, BUDGET_DEADLINE, budgetDeadline, defaultSeasonTicketPrice, forecastSeason, prepareBudget, seasonTicketHolders } from './budget';
+import { adjustForNewTier, monthlyReport, TICKET_ANGER, BUDGET_DEADLINE, budgetDeadline, defaultSeasonTicketPrice, forecastSeason, prepareBudget, seasonTicketHolders } from './budget';
 import { homeAdvantage, ownTeamSpirit } from './atmosphere';
 import { activeOverdraft, applyLicenceSanction, CRISIS_MONTHS, dailyFinancing, enterCrisis, INSOLVENCY_MONTHS, leaveCrisisIfSolved, monthlyFinancing } from './financing';
 import { generateSponsorOffers, initialSponsors, seasonStartSponsors, sponsorEuropeBonus, sponsorMonthly, sponsorSeasonBonuses } from './sponsors';
@@ -729,7 +729,7 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   for (const club of Object.values(state.clubs)) {
     const ratio = club.policy.ticketPrice / defaultTicketPrice(tierOf(state, club.id));
     const target = 50 + 6 * departmentEffect(club, tierOf(state, club.id), 'marketing');
-    club.fanMood = Math.max(0, Math.min(100, club.fanMood + (target - club.fanMood) * 0.05 - Math.max(0, ratio - 1.1) * 8));
+    club.fanMood = Math.max(0, Math.min(100, club.fanMood + (target - club.fanMood) * 0.05 - Math.max(0, ratio - TICKET_ANGER) * 8));
   }
   recordTrend(state);
   moraleNews(state);

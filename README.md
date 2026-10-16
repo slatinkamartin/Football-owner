@@ -61,6 +61,16 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.10: finance, které sedí
+
+- **Výhled = skutečnost + zbytek sezóny.** Rozpočet, Přehled i licence počítají peníze den po dni od dneška do konce června (zápasy podle rozpisu, výplaty prvního v měsíci, splátky, Evropa, pohár, odměna za umístění). V březnu už neukazují nesmysly.
+- **Přesnější řádky plánu:** platy ve smlouvách a prémie zvlášť od rezervy ve mzdovém stropu, přestupy jako utraceno + splátky + zbytek rozpočtu (bez dvojího započtení splátek), domácí pohár, daň z příjmů, investice, úvěry a vklady mimo výsledek.
+- **Dva jasné pojmy:** provozní výsledek (bez přestupů, investic, daně a financování) a změna peněz na účtu (všechno). Stejné členění používá rozpočet, přehled i peněžní toky v účetnictví.
+- **Neschválené změny** se hlásí jen při změně nastavení. Posun výhledu kvůli výsledkům se ukáže jako informace.
+- **Potřeba od majitele:** když by klubu došly peníze, hra řekne kolik a kdy a nabídne půjčku nebo vklad jedním klikem. Licenční varování odhaduje stav k 31. 3. stejně jako svaz (vlastní kapitál a neuhrazené závazky).
+- **Nový Přehled financí** se otevře vždy jako první: stav peněz se semaforem, graf skutečnost + čárkovaný výhled, hlavní ukazatele, „Sezóna v číslech“ (skutečnost z výhledu po položkách) a kalendář peněz.
+- Opravy: bankovní úvěry podle velikosti soutěže, jednotná hranice drahého vstupného (+10 %), lepší odhad prémií, účetnictví bez nulových řádků a bez „-0 Kč“.
+
 ### Novinky verze 0.9.2: drobnosti ve Financích
 
 - **Živý plán:** každá změna (například vyšší mzdový strop) se hned propíše do plánovaného rozpočtu. Když se liší od schváleného, ukáže se upozornění a sloupec „Schváleno“. Odkaz „Vrátit na návrh vedení“ vrátí nastavení.

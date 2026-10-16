@@ -1,6 +1,7 @@
 /** Částky: miliony s jedním desetinným místem, tisíce zaokrouhleně, malé částky přesně. */
 export function money(value: number): string {
   const abs = Math.abs(value);
+  if (abs < 0.5) return '0 Kč';
   if (abs >= 1_000_000) {
     return `${(value / 1_000_000).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč`;
   }

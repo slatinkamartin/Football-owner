@@ -139,7 +139,7 @@ function resolvePlayoffs(state: GameState, cup: Cup, rng: Rng): void {
 
 // ---------- Pohár ----------
 
-const CUP_ROUNDS: { name: string; md: string; spring: boolean; prize: number }[] = [
+export const CUP_ROUNDS: { name: string; md: string; spring: boolean; prize: number }[] = [
   { name: '1. kolo', md: '08-25', spring: false, prize: 300_000 },
   { name: '2. kolo', md: '09-22', spring: false, prize: 600_000 },
   { name: 'Osmifinále', md: '10-27', spring: false, prize: 1_000_000 },
@@ -147,7 +147,7 @@ const CUP_ROUNDS: { name: string; md: string; spring: boolean; prize: number }[]
   { name: 'Semifinále', md: '04-13', spring: true, prize: 3_000_000 },
   { name: 'Finále', md: '05-12', spring: true, prize: 10_000_000 },
 ];
-const CUP_FINALIST_PRIZE = 4_000_000;
+export const CUP_FINALIST_PRIZE = 4_000_000;
 
 /** Pohár se hraje v úterý, aby se nekryl s ligovými koly (sobota a středa). */
 function tuesdayFrom(iso: string): string {

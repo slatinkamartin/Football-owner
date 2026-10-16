@@ -4,6 +4,7 @@ import {
   annuity,
   applyGrant,
   clubLabel,
+  forecastSeason,
   formatDate,
   grantOptions,
   injectCapital,
@@ -30,6 +31,7 @@ import {
 import { Badge, Notice } from '../../components';
 import { money } from '../../format';
 import { VoteInfo } from '../../VoteInfo';
+import { OwnerNeedActions } from './shared';
 
 /** Financování: peníze majitele, banka, záloha na TV, dotace, splátky přestupů a licence. */
 export function FinanceFunding({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
@@ -49,6 +51,7 @@ export function FinanceFunding({ game, onChange }: { game: GameState; onChange: 
   const grants = grantOptions(game);
   const payments = [...(game.payments ?? [])].sort((a, b) => (a.due < b.due ? -1 : 1));
   const problems = licenceProblems(game);
+  const plan = forecastSeason(game);
 
   return (
     <div className="stack">
@@ -61,7 +64,11 @@ export function FinanceFunding({ game, onChange }: { game: GameState; onChange: 
             <dd>{money(game.owner.wallet)}</dd>
             <dt>Půjčka klubu od vás</dt>
             <dd>{money(game.ownerLoan?.remaining ?? 0)}</dd>
+            <dt>Výhled klubu do konce sezóny</dt>
+            <dd className={plan.cashMin < -activeOverdraft(game) ? 'neg' : ''}>nejméně {money(plan.cashMin)}, na konci {money(plan.cashEnd)}</dd>
           </dl>
+          {(plan.ownerNeed ?? 0) > 0 && <p className="warning">Podle výhledu klub potřebuje asi {money(plan.ownerNeed!)}, aby nezůstal v minusu{activeOverdraft(game) ? ' nad kontokorent' : ''}.</p>}
+          <OwnerNeedActions game={game} need={plan.ownerNeed ?? 0} onResult={apply} />
           <div className="inline-form wrap">
             <input inputMode="decimal" value={amount} placeholder="0" onChange={(e) => setAmount(e.target.value)} aria-label="Částka v milionech" />
             <span>mil. Kč</span>

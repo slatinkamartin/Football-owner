@@ -2,7 +2,7 @@ import { squadQualityForReputation } from './players';
 import { defaultFacilities, facilityUpkeep } from './stadium';
 import type { Rng } from './rng';
 import type { Accounting, Club, Departments, FinanceCategory, FinanceTotals, GameState, Player } from './types';
-import { hash01 } from './world';
+import { hash01, tierOf } from './world';
 
 /**
  * Ekonomika je kalibrovaná podle české ligy (hodnoty z Transfermarktu, rozpočty klubů z výročních zpráv).
@@ -330,7 +330,7 @@ export const LOAN_MONTHS = 36;
 export function loanOffers(state: GameState): number[] {
   const club = state.clubs[state.owner.clubId];
   if (state.loans.some((l) => (l.kind ?? 'provozni') === 'provozni')) return [];
-  const yearly = annualCosts(club, 1);
+  const yearly = annualCosts(club, tierOf(state, club.id));
   return [0.1, 0.25, 0.5].map((k) => Math.round((yearly * k) / 1_000_000) * 1_000_000).filter((v) => v > 0);
 }
 

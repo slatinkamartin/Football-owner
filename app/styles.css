@@ -702,3 +702,61 @@ table.sections td .muted.small { display: block; }
   table.expiring td:last-child button { width: 100%; }
 }
 .budget-settings, .budget-aside { min-width: 0; }
+.chart-line.forecast { stroke-dasharray: 5 4; opacity: 0.85; }
+.chart-baseline { stroke: var(--neg); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.7; }
+.chart-today { stroke: var(--line); stroke-width: 1; }
+
+/* Přehled financí v0.10 */
+.fin-hero { display: grid; grid-template-columns: minmax(260px, 1fr) 1.6fr; gap: 20px; align-items: start; border-left: 4px solid var(--pos); }
+.fin-hero.warn { border-left-color: #e0a030; }
+.fin-hero.bad { border-left-color: var(--neg); }
+.hero-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hero-value { font-size: 34px; line-height: 1.1; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.status-pill { align-self: flex-start; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.status-pill.good { background: var(--up); color: var(--pos); }
+.status-pill.warn { background: var(--warn-bg); color: var(--warn); }
+.status-pill.bad { background: var(--down); color: var(--neg); }
+.hero-verdict { margin: 4px 0 2px; font-size: 14px; line-height: 1.45; }
+.hero-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 6px 0 0; }
+.hero-facts div { background: var(--bg); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.hero-facts dt { font-size: 11px; color: var(--muted); }
+.hero-facts dd { margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
+.hero-chart { min-width: 0; }
+.need-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.ratio-meter { position: relative; display: block; height: 6px; border-radius: 3px; background: var(--line); margin: 4px 0 2px; }
+.ratio-meter > span { display: block; height: 100%; border-radius: 3px; }
+.ratio-meter > span.good { background: var(--pos); }
+.ratio-meter > span.warn { background: #e0a030; }
+.ratio-meter > span.bad { background: var(--neg); }
+.ratio-meter > i { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); opacity: 0.5; }
+.bullets h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 14px 0 6px; }
+.bullets li { display: grid; grid-template-columns: minmax(140px, 1.2fr) 2fr minmax(150px, auto); gap: 10px; align-items: center; padding: 4px 0; font-size: 13px; }
+.bullet-bar { position: relative; height: 12px; }
+.bullet-track, .bullet-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 0 4px 4px 0; }
+.bullet-track.pos { background: var(--up); }
+.bullet-track.neg { background: var(--down); }
+.bullet-fill { top: 3px; height: 6px; }
+.bullet-fill.pos { background: var(--pos); }
+.bullet-fill.neg { background: var(--neg); }
+.bullet-value { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bullet-total { display: flex; gap: 10px; align-items: baseline; justify-content: flex-end; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 8px; font-weight: 600; }
+.other-flows { margin-top: 10px; font-size: 13px; }
+.drift { margin: 6px 0; }
+.plan-table tr.total td { font-weight: 600; border-top: 1px solid var(--line); }
+.plan-table tr.grand td { border-top: 2px solid var(--text); }
+.plan-table .diff.muted { color: var(--muted); font-weight: 400; }
+.cashflow .group-row .linkbtn { color: var(--text); font-weight: 500; text-align: left; }
+.cashflow .detail-row td { font-size: 12px; color: var(--muted); padding-left: 18px; }
+@media (max-width: 760px) {
+  .fin-hero { grid-template-columns: 1fr; }
+  .hero-value { font-size: 28px; }
+  .bullets li { grid-template-columns: 1fr auto; }
+  .bullet-bar { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 420px) {
+  .hero-facts { grid-template-columns: 1fr 1fr; }
+}
+.accounting-grid { grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); }
+@media (max-width: 640px) { .accounting-grid { grid-template-columns: 1fr; } }
+.bullets li { grid-template-columns: 230px minmax(0, 1fr) 200px; }
+@media (max-width: 760px) { .bullets li { grid-template-columns: minmax(0, 1fr) auto; } }

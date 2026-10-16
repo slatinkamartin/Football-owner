@@ -1,16 +1,17 @@
 import { Fragment, useState, type ReactNode } from 'react';
 import {
   approveBudget,
+  budgetChanged,
   lastSeasonActual,
   planToDate,
   resetBudgetToDraft,
-  seasonProgress,
   ticketPreview,
+  type BudgetLine,
+  type BudgetPlan,
   BONUS_HINT,
   BONUS_LABEL,
   bonusScheme,
   budgetApproved,
-  budgetComparison,
   budgetDue,
   budgetVote,
   budgetWarnings,
@@ -47,10 +48,14 @@ import {
   type GameState,
   type WageSection,
 } from '../../../engine';
-import { LineChart } from '../../chart';
 import { Badge, Notice } from '../../components';
 import { money, num } from '../../format';
 import { VoteInfo } from '../../VoteInfo';
+import { CashChart, OwnerNeedActions } from './shared';
+
+const MONTHS = ['červenci', 'srpnu', 'září', 'říjnu', 'listopadu', 'prosinci', 'lednu', 'únoru', 'březnu', 'dubnu', 'květnu', 'červnu'];
+const monthIn = (date: string) => MONTHS[(Number(date.slice(5, 7)) + 5) % 12];
+const groupSum = (plan: BudgetPlan, group: BudgetLine['group']) => plan.lines.filter((l) => l.group === group).reduce((a, l) => a + l.amount, 0);
 
 type Props = { game: GameState; onChange: (g: GameState) => void; onOpen?: (tab: 'prijmy' | 'naklady') => void };
 
@@ -88,11 +93,14 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
     if (r.state !== game) onChange(r.state);
     setMessage({ text: r.message, ok: r.ok });
   };
-  const income = plan.lines.filter((l) => l.amount > 0).reduce((a, l) => a + l.amount, 0);
-  const costs = plan.lines.filter((l) => l.amount < 0).reduce((a, l) => a + l.amount, 0);
+  const operating = plan.lines.filter((l) => l.group === 'provoz');
+  const income = operating.filter((l) => l.amount > 0).reduce((a, l) => a + l.amount, 0);
+  const costs = operating.filter((l) => l.amount < 0).reduce((a, l) => a + l.amount, 0);
   const cfo = staffAbility(game, 'financni');
   const approvedPlan = approved ? game.budget!.plan : undefined;
-  const pending = !!approvedPlan && Math.abs(approvedPlan.result - plan.result) >= 50_000;
+  const changed = budgetChanged(game);
+  const drift = approvedPlan && !changed ? plan.result - approvedPlan.result : 0;
+  const club = game.clubs[game.owner.clubId];
 
   return (
     <section className="card wide budget">
@@ -105,14 +113,18 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
         )}
       </div>
       <p className="muted small">
-        {cfo !== undefined ? 'Návrh připravil finanční ředitel.' : 'Návrh připravila účetní podle loňska.'} Každá změna se hned promítne do plánu vpravo.
-        Rozpočet můžete kdykoli revidovat.{' '}
+        {cfo !== undefined ? 'Návrh připravil finanční ředitel.' : 'Návrh připravila účetní podle loňska.'} {approved ? 'Výhled = co už je na účtu + odhad zbytku sezóny.' : 'Každá změna se hned promítne do plánu vpravo.'}{' '}
         {game.budget?.draft && <button className="linkbtn" onClick={() => apply(resetBudgetToDraft(game))}>Vrátit na návrh vedení</button>}
       </p>
-      {pending && (
+      {changed && (
         <p className="warning soft">
-          Máte neschválené změny: plánovaný výsledek {money(approvedPlan!.result)} → {money(plan.result)}.{' '}
+          Změnili jste nastavení: provozní výsledek {money(approvedPlan!.result)} → {money(plan.result)}.{' '}
           <button className="linkbtn" onClick={() => setStep('shrnuti')}>Schválit revizi ›</button>
+        </p>
+      )}
+      {!changed && Math.abs(drift) >= Math.max(500_000, Math.abs(approvedPlan?.result ?? 0) * 0.05) && (
+        <p className="muted small drift">
+          Výhled se od schválení posunul o {drift >= 0 ? '+' : '−'}{money(Math.abs(drift))} (výsledky, pohár, sponzoři, přestupy). Nastavení se nezměnilo, není co schvalovat.
         </p>
       )}
       <Notice message={message?.text ?? null} ok={message?.ok} />
@@ -133,25 +145,29 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
           {step === 'shrnuti' && <SummaryStep game={game} onApply={apply} />}
         </div>
         <aside className="budget-aside">
-          <h3>Plán v kostce</h3>
+          <h3>{approved ? 'Výhled sezóny' : 'Plán v kostce'}</h3>
           <dl className="kv">
             <dt>Mzdový strop</dt>
-            <dd>{money(wageBudgetMonthly(game.clubs[game.owner.clubId]))} / měs.</dd>
-            <dt>Příjmy</dt>
+            <dd>{money(wageBudgetMonthly(club))} / měs.</dd>
+            <dt>Provozní příjmy</dt>
             <dd className="pos">{money(income)}</dd>
-            <dt>Výdaje</dt>
+            <dt>Provozní výdaje</dt>
             <dd className="neg">{money(costs)}</dd>
-            <dt>Výsledek</dt>
+            <dt>Provozní výsledek</dt>
             <dd className={plan.result < 0 ? 'neg' : 'pos'}>{money(plan.result)}</dd>
-            {pending && (
+            {approvedPlan && (
               <>
-                <dt className="muted">Schválený výsledek</dt>
-                <dd className="muted">{money(approvedPlan!.result)}</dd>
+                <dt className="muted">Schváleno</dt>
+                <dd className="muted">{money(approvedPlan.result)}</dd>
               </>
             )}
-            <dt>Nejnižší zůstatek</dt>
+            <dt>Přestupy, investice, daň</dt>
+            <dd>{money(groupSum(plan, 'kapital'))}</dd>
+            <dt>Změna peněz za sezónu</dt>
+            <dd className={(plan.cashFlow ?? 0) < 0 ? 'neg' : 'pos'}>{money(plan.cashFlow ?? 0)}</dd>
+            <dt>Nejméně peněz (v {monthIn(plan.cashMinDate ?? game.date)})</dt>
             <dd className={plan.cashMin < 0 ? 'neg' : ''}>{money(plan.cashMin)}</dd>
-            <dt>Zůstatek na konci</dt>
+            <dt>Na konci sezóny</dt>
             <dd>{money(plan.cashEnd)}</dd>
           </dl>
           {warnings.length > 0 && (
@@ -174,7 +190,8 @@ type SetPolicy = (patch: Parameters<typeof updatePolicy>[1]) => void;
 
 /** Součet řádků plánu, které patří ke kroku rozpočtu. */
 function StepTotals({ game, keys, title, totalLabel }: { game: GameState; keys: string[]; title: string; totalLabel: string }) {
-  const lines = forecastSeason(game).lines.filter((l) => keys.includes(l.key));
+  const lines = forecastSeason(game).lines.filter((l) => keys.includes(l.key) && (l.amount !== 0 || l.key === 'platy'));
+  const head = budgetApproved(game) ? 'Výhled' : 'Plán';
   const total = lines.reduce((a, l) => a + l.amount, 0);
   const hasLast = !!game.clubs[game.owner.clubId].finance.lastSeason;
   const lastTotal = lines.reduce((a, l) => a + (lastSeasonActual(game, l) ?? 0), 0);
@@ -183,7 +200,7 @@ function StepTotals({ game, keys, title, totalLabel }: { game: GameState; keys: 
       <h3>{title}</h3>
       <table>
         <thead>
-          <tr><th /><th className="num">Plán</th>{hasLast && <th className="num">Loni</th>}</tr>
+          <tr><th /><th className="num">{head}</th>{hasLast && <th className="num">Loni</th>}</tr>
         </thead>
         <tbody>
           {lines.map((l) => (
@@ -254,7 +271,7 @@ function IncomeStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; on
         Smlouvy {money(sp.contracts * 12)} ročně, drobní sponzoři a reklama {money(sp.small * 12)}.{' '}
         {onOpen && <button className="linkbtn" onClick={() => onOpen('prijmy')}>Sponzorská místa a nabídky ›</button>}
       </p>
-      <StepTotals game={game} keys={['vstupne', 'stadion', 'tv', 'komercni', 'evropa']} title="Plánované příjmy za sezónu" totalLabel="Příjmy celkem" />
+      <StepTotals game={game} keys={['vstupne', 'stadion', 'tv', 'komercni', 'evropa', 'pohar']} title="Provozní příjmy za sezónu" totalLabel="Příjmy celkem" />
     </>
   );
 }
@@ -388,9 +405,10 @@ function PlayersStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; o
           </Fragment>
         ))}
       </dl>
-      <StepTotals game={game} keys={['platy', 'vedeni', 'prestupy']} title="Plánované výdaje na hráče a vedení" totalLabel="Hráči a vedení celkem" />
+      <StepTotals game={game} keys={['platy', 'rezerva', 'vedeni', 'prestupy']} title="Výdaje na hráče, vedení a přestupy" totalLabel="Celkem" />
       <p className="muted small">
-        Platy se plánují podle stropu ({money(wp.cap)}), protože do něj smí ředitel podepisovat. Současné smlouvy dělají {money(wp.contracts)}, prémie za body a cíl odhadem {money(wp.bonuses)}.
+        Rozpočet na platy je celý mzdový strop ({money(wp.cap)} na sezónu). Ve výhledu jsou zvlášť platy podepsaných smluv s prémiemi (prémie za body a cíl odhadem {money(wp.bonuses)}) a rezerva, kterou může ředitel ještě využít na nové smlouvy. Co nevyužije, zůstane klubu.
+        Přestupy počítají s utracením zbytku rozpočtu, dokud je nebo bude otevřené okno; prodeje hráčů se přičtou, až nastanou.
       </p>
     </>
   );
@@ -453,69 +471,83 @@ function SummaryStep({ game, onApply }: { game: GameState; onApply: (r: ActionRe
   const plan = forecastSeason(game);
   const warnings = budgetWarnings(game, plan);
   const vote = budgetVote(game, plan);
-  const comparison = approved ? budgetComparison(game) : [];
-  const pending = approved && Math.abs((game.budget?.plan?.result ?? 0) - plan.result) >= 50_000;
+  const approvedPlan = approved ? game.budget?.plan : undefined;
+  const totals = game.clubs[game.owner.clubId].finance.season;
   const hasLast = !!game.clubs[game.owner.clubId].finance.lastSeason;
+  const started = plan.lines.some((l) => (l.actual ?? 0) !== 0);
+  const actualOf = (l: BudgetLine) => l.categories.reduce((a, c) => a + (totals[c] ?? 0), 0);
+  const groups: { id: BudgetLine['group']; total: string }[] = [
+    { id: 'provoz', total: 'Provozní výsledek' },
+    { id: 'kapital', total: 'Přestupy, investice a daň' },
+    { id: 'financovani', total: 'Úvěry, půjčky a vklady' },
+  ];
+  const row = (label: string, pick: (p: BudgetPlan) => number, cls: string, actual?: number, last?: number, toDate?: number) => (
+    <tr className={cls}>
+      <td className="wrap">{label}</td>
+      {approvedPlan && <td className="num muted">{money(pick(approvedPlan))}</td>}
+      <td className={`num ${pick(plan) < 0 ? 'neg' : ''}`}>{money(pick(plan))}</td>
+      {started && (
+        <td className="num">
+          {actual === undefined ? '–' : money(actual)}
+          {toDate !== undefined && <span className="diff muted">plán k dnešku {money(toDate)}</span>}
+        </td>
+      )}
+      {hasLast && <td className="num muted hide-sm">{last === undefined ? '' : money(last)}</td>}
+    </tr>
+  );
   return (
     <>
-      <h3>Plán sezóny</h3>
-      <p className="muted small">Plán odpovídá aktuálnímu nastavení. „K dnešku“ je část plánu, která už měla proběhnout ({Math.round(seasonProgress(game) * 100)} % sezóny).</p>
+      <h3>{approved ? 'Výhled sezóny' : 'Plán sezóny'}</h3>
+      <p className="muted small">
+        {approved ? 'Výhled je skutečnost na účtu k dnešku plus odhad zbytku sezóny podle aktuálního nastavení.' : 'Plán podle aktuálního nastavení.'} Provozní výsledek nezahrnuje přestupy, investice, daň ani úvěry; ty jsou níž a dohromady dávají změnu peněz na účtu.
+      </p>
       <div className="table-wrap">
         <table className="plan-table">
           <thead>
             <tr>
               <th>Položka</th>
-              <th className="num">Plán</th>
-              {pending && <th className="num hide-sm">Schváleno</th>}
-              {approved && <th className="num">K dnešku</th>}
-              {approved && <th className="num">Skutečnost</th>}
+              {approvedPlan && <th className="num">Schváleno</th>}
+              <th className="num">{approved ? 'Výhled' : 'Plán'}</th>
+              {started && <th className="num">Skutečnost</th>}
               {hasLast && <th className="num hide-sm">Loni</th>}
             </tr>
           </thead>
           <tbody>
-            {plan.lines
-              .filter((l) => l.amount !== 0 || l.key === 'evropa')
-              .map((l) => {
-                const actual = comparison.find((c) => c.line.key === l.key);
-                const approvedLine = game.budget?.plan?.lines.find((x) => x.key === l.key);
-                const toDate = planToDate(game, approvedLine ?? l);
-                const diff = (actual?.actual ?? 0) - toDate;
-                return (
-                  <tr key={l.key}>
-                    <td className="wrap">{l.label}</td>
-                    <td className={`num ${l.amount < 0 ? 'neg' : ''}`}>{money(l.amount)}</td>
-                    {pending && <td className="num muted hide-sm">{money(approvedLine?.amount ?? 0)}</td>}
-                    {approved && <td className="num muted">{money(toDate)}</td>}
-                    {approved && (
-                      <td className="num">
-                        {money(actual?.actual ?? 0)}
-                        <span className={`diff ${diff >= 0 ? 'pos' : 'neg'}`}>{diff >= 0 ? '+' : '−'}{money(Math.abs(diff))}</span>
-                      </td>
-                    )}
-                    {hasLast && <td className="num muted hide-sm">{money(lastSeasonActual(game, l) ?? 0)}</td>}
-                  </tr>
-                );
-              })}
-            <tr className="total">
-              <td>Výsledek</td>
-              <td className={`num ${plan.result < 0 ? 'neg' : 'pos'}`}>{money(plan.result)}</td>
-              {pending && <td className="num hide-sm">{money(game.budget!.plan!.result)}</td>}
-              {approved && <td className="num">{money((game.budget?.plan?.lines ?? plan.lines).reduce((a, l) => a + planToDate(game, l), 0))}</td>}
-              {approved && <td className="num">{money(comparison.reduce((a, c) => a + c.actual, 0))}</td>}
-              {hasLast && <td className="num hide-sm">{money(plan.lines.reduce((a, l) => a + (lastSeasonActual(game, l) ?? 0), 0))}</td>}
+            {groups.map((g) => {
+              const lines = plan.lines.filter((l) => l.group === g.id && (l.amount !== 0 || actualOf(l) !== 0 || (approvedPlan?.lines.find((x) => x.key === l.key)?.amount ?? 0) !== 0));
+              if (!lines.length && g.id !== 'provoz') return null;
+              const sumPick = (p: BudgetPlan) => p.lines.filter((l) => l.group === g.id || (!l.group && g.id === 'provoz')).reduce((a, l) => a + l.amount, 0);
+              return (
+                <Fragment key={g.id}>
+                  {lines.map((l) => {
+                    const approvedLine = approvedPlan?.lines.find((x) => x.key === l.key);
+                    const toDate = approvedLine && approvedPlan && l.categories.length ? planToDate(game, approvedLine, approvedPlan.from) : undefined;
+                    return (
+                      <Fragment key={l.key}>
+                        {row(l.label, (p) => p.lines.find((x) => x.key === l.key)?.amount ?? 0, '', l.categories.length ? actualOf(l) : undefined, l.categories.length ? lastSeasonActual(game, l) : undefined, toDate)}
+                      </Fragment>
+                    );
+                  })}
+                  {row(g.total, sumPick, 'total', lines.filter((l) => l.categories.length).reduce((a, l) => a + actualOf(l), 0), hasLast ? lines.reduce((a, l) => a + (lastSeasonActual(game, l) ?? 0), 0) : undefined)}
+                </Fragment>
+              );
+            })}
+            <tr className="total grand">
+              <td>Změna peněz na účtu za sezónu</td>
+              {approvedPlan && <td className="num muted">{money(approvedPlan.cashFlow ?? approvedPlan.result)}</td>}
+              <td className={`num ${(plan.cashFlow ?? 0) < 0 ? 'neg' : 'pos'}`}>{money(plan.cashFlow ?? 0)}</td>
+              {started && <td className="num">{money(plan.lines.reduce((a, l) => a + actualOf(l), 0))}</td>}
+              {hasLast && <td className="num hide-sm" />}
             </tr>
           </tbody>
         </table>
       </div>
-      <LineChart
-        title="Plánovaný zůstatek po měsících"
-        points={plan.months.map((m) => ({ label: `${m.date.slice(5, 7)}/${m.date.slice(2, 4)}`, value: m.balance }))}
-        format={(v) => money(v)}
-        height={140}
-      />
+      {approvedPlan && started && <p className="muted small">„Plán k dnešku“ je část schváleného plánu, která už měla proběhnout.</p>}
+      <CashChart game={game} plan={plan} title="Peníze na účtu: skutečnost a výhled" height={150} />
       {warnings.map((w, i) => (
         <p key={i} className={w.tone === 'bad' ? 'warning' : 'warning soft'}>{w.text}</p>
       ))}
+      <OwnerNeedActions game={game} need={plan.ownerNeed ?? 0} onResult={onApply} />
       <VoteInfo vote={vote} />
       {vote.needed && !vote.passes && (
         <ul className="plain small muted">
@@ -524,8 +556,8 @@ function SummaryStep({ game, onApply }: { game: GameState; onApply: (r: ActionRe
           ))}
         </ul>
       )}
-      <button className="primary" disabled={(vote.needed && !vote.passes) || !!game.owner.ousted} onClick={() => onApply(approveBudget(game))}>
-        {approved ? 'Schválit revizi rozpočtu' : 'Schválit rozpočet'}
+      <button className="primary" disabled={(vote.needed && !vote.passes) || !!game.owner.ousted || (approved && !budgetChanged(game))} onClick={() => onApply(approveBudget(game))}>
+        {approved ? (budgetChanged(game) ? 'Schválit revizi rozpočtu' : 'Rozpočet je schválený') : 'Schválit rozpočet'}
       </button>
     </>
   );

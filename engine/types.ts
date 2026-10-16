@@ -697,20 +697,36 @@ export interface TimelinePoint {
 export interface BudgetLine {
   key: string;
   label: string;
+  /** Celá sezóna: skutečnost k datu výpočtu plus odhad zbytku. */
   amount: number;
   categories: FinanceCategory[];
-  /** Část, která přijde nebo odejde hned na začátku sezóny (permanentky, letní přestupy). */
+  /** provoz = provozní výsledek, kapital = přestupy, investice a daň, financovani = úvěry, půjčky a vklady. */
+  group?: 'provoz' | 'kapital' | 'financovani';
+  /** Skutečnost na účtu v den výpočtu. */
+  actual?: number;
+  /** Část zbytku, která přijde nebo odejde hned (permanentky, letní přestupy). */
   upfront?: number;
-  /** Část, která přijde až na konci sezóny (odměna za umístění). */
+  /** Část zbytku, která přijde až na konci sezóny (odměna za umístění, daň). */
   atEnd?: number;
 }
 
 export interface BudgetPlan {
   lines: BudgetLine[];
+  /** Provozní výsledek sezóny (bez přestupů, investic, daní a financování). */
   result: number;
+  /** Změna peněz na účtu za celou sezónu (všechny řádky). */
+  cashFlow?: number;
   cashMin: number;
+  cashMinDate?: string;
   cashEnd: number;
+  /** Zůstatek na začátku každého zbývajícího měsíce a na konci sezóny. */
   months: { date: string; balance: number }[];
+  /** Den, ke kterému je plán spočítaný. */
+  from?: string;
+  /** Odhad zůstatku k licenční kontrole 31. 3. */
+  licenceBalance?: number;
+  /** Kolik musí majitel dodat, aby klub vyšel bez díry (0 = nic). */
+  ownerNeed?: number;
 }
 
 export interface SeasonBudget {
@@ -723,6 +739,8 @@ export interface SeasonBudget {
   seasonTickets?: number;
   seasonTicketRevenue?: number;
   /** Návrh vedení (pro „vrátit na návrh“). */
+  /** Nastavení v době schválení (pro upozornění na neschválené změny). */
+  approvedPolicy?: Pick<ClubPolicy, 'ticketPrice' | 'seasonTicketPrice' | 'wageMultiplier' | 'transferBudget' | 'departments' | 'wageSplit' | 'bonusScheme'>;
   draft?: Pick<ClubPolicy, 'ticketPrice' | 'seasonTicketPrice' | 'wageMultiplier' | 'transferBudget' | 'departments' | 'wageSplit' | 'bonusScheme'>;
   /** Stav účtů na začátku měsíce (měsíční uzávěrka). */
   monthStart?: FinanceTotals;
