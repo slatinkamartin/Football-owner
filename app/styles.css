@@ -667,3 +667,12 @@ table.sections td .muted.small { display: block; }
   table.sections td input[type='range'] { max-width: none; width: 100%; }
   .subtabs { margin-right: -16px; padding-right: 16px; }
 }
+.step-totals { margin-top: 14px; }
+.step-totals table td { font-size: 14px; }
+.cap-box { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.cap-box > div { background: var(--bg); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.cap-box strong { font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  table.sections tr.total td:first-child { grid-column: 1 / -1; }
+}
+.kv .total-row { border-top: 1px solid var(--line); padding-top: 6px; font-weight: 700; color: var(--text); }

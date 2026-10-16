@@ -32,6 +32,7 @@ import {
   updatePolicy,
   wageBudgetMonthly,
   wageCommitments,
+  wagePlan,
   wageRank,
   wageSplit,
   WAGE_SECTIONS,
@@ -117,6 +118,8 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
         <aside className="budget-aside">
           <h3>Plán v kostce</h3>
           <dl className="kv">
+            <dt>Mzdový strop</dt>
+            <dd>{money(wageBudgetMonthly(game.clubs[game.owner.clubId]))} / měs.</dd>
             <dt>Příjmy</dt>
             <dd className="pos">{money(income)}</dd>
             <dt>Výdaje</dt>
@@ -146,6 +149,31 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
 
 type SetPolicy = (patch: Parameters<typeof updatePolicy>[1]) => void;
 
+/** Součet řádků plánu, které patří ke kroku rozpočtu. */
+function StepTotals({ game, keys, title, totalLabel }: { game: GameState; keys: string[]; title: string; totalLabel: string }) {
+  const lines = forecastSeason(game).lines.filter((l) => keys.includes(l.key));
+  const total = lines.reduce((a, l) => a + l.amount, 0);
+  return (
+    <div className="step-totals">
+      <h3>{title}</h3>
+      <table>
+        <tbody>
+          {lines.map((l) => (
+            <tr key={l.key}>
+              <td className="wrap">{l.label}</td>
+              <td className={`num ${l.amount < 0 ? 'neg' : ''}`}>{money(l.amount)}</td>
+            </tr>
+          ))}
+          <tr className="total">
+            <td>{totalLabel}</td>
+            <td className={`num ${total < 0 ? 'neg' : 'pos'}`}>{money(total)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function IncomeStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; onOpen?: Props['onOpen'] }) {
   const club = game.clubs[game.owner.clubId];
   const tier = tierOf(game, club.id);
@@ -172,6 +200,7 @@ function IncomeStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; on
         Smlouvy {money(sp.contracts * 12)} ročně, drobní sponzoři a reklama {money(sp.small * 12)}.{' '}
         {onOpen && <button className="linkbtn" onClick={() => onOpen('prijmy')}>Sponzorská místa a nabídky ›</button>}
       </p>
+      <StepTotals game={game} keys={['vstupne', 'stadion', 'tv', 'komercni', 'evropa']} title="Plánované příjmy za sezónu" totalLabel="Příjmy celkem" />
     </>
   );
 }
@@ -182,6 +211,8 @@ function PlayersStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; o
   const usage = sectionUsage(game);
   const scheme = bonusScheme(game);
   const commitments = wageCommitments(game);
+  const wp = wagePlan(game);
+  const sum = (k: 'cap' | 'bill' | 'expiring' | 'room') => usage.reduce((a, u) => a + u[k], 0);
   // Posun jedné sekce rozloží rozdíl poměrně mezi ostatní, součet zůstane 100 %.
   const changeSplit = (section: WageSection, value: number) => {
     const others = WAGE_SECTIONS.filter((s) => s !== section);
@@ -192,9 +223,15 @@ function PlayersStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; o
   };
   return (
     <>
-      <h3>Mzdový strop</h3>
+      <h3>Mzdový strop (rozpočet na platy hráčů)</h3>
+      <div className="cap-box">
+        <div><span className="muted small">Strop měsíčně</span><strong>{money(wageBudgetMonthly(club))}</strong></div>
+        <div><span className="muted small">Strop na sezónu</span><strong>{money(wp.cap)}</strong></div>
+        <div><span className="muted small">Platy ve smlouvách teď</span><strong>{money(wp.contracts / 12)} / měs.</strong></div>
+        <div><span className="muted small">Volné místo pod stropem</span><strong className={wp.cap - wp.contracts < 0 ? 'neg' : 'pos'}>{money((wp.cap - wp.contracts) / 12)} / měs.</strong></div>
+      </div>
       <label className="field">
-        <span>{money(wageBudgetMonthly(club))} měsíčně ({Math.round(club.policy.wageMultiplier * 100)} % běžného), {wageRank(game)}. místo v lize</span>
+        <span>{Math.round(club.policy.wageMultiplier * 100)} % běžného stropu pro klub této velikosti, {wageRank(game)}. místo v lize</span>
         <input type="range" min={50} max={200} step={5} value={Math.round(club.policy.wageMultiplier * 100)} onChange={(e) => set({ wageMultiplier: Number(e.target.value) / 100 })} />
       </label>
 
@@ -234,6 +271,14 @@ function PlayersStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; o
                 <td className={`num ${u.room < 0 ? 'neg' : 'pos'}`} data-label="Zbývá">{money(u.room)}</td>
               </tr>
             ))}
+            <tr className="total">
+              <td>Celkem</td>
+              <td className="num" data-label="Podíl">100 %</td>
+              <td className="num" data-label="Rozpočet">{money(sum('cap'))}</td>
+              <td className="num" data-label="Platy">{money(sum('bill'))}</td>
+              <td className="num hide-sm">{money(sum('expiring'))}</td>
+              <td className={`num ${sum('room') < 0 ? 'neg' : 'pos'}`} data-label="Zbývá">{money(sum('room'))}</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -274,6 +319,10 @@ function PlayersStep({ game, set, onOpen }: { game: GameState; set: SetPolicy; o
           </Fragment>
         ))}
       </dl>
+      <StepTotals game={game} keys={['platy', 'vedeni', 'prestupy']} title="Plánované výdaje na hráče a vedení" totalLabel="Hráči a vedení celkem" />
+      <p className="muted small">
+        Platy se plánují podle stropu ({money(wp.cap)}), protože do něj smí ředitel podepisovat. Současné smlouvy dělají {money(wp.contracts)}, prémie za body a cíl odhadem {money(wp.bonuses)}.
+      </p>
     </>
   );
 }
@@ -307,6 +356,25 @@ function DepartmentsStep({ game, set }: { game: GameState; set: SetPolicy }) {
         );
       })}
       <p className="muted small">Každá další koruna přinese méně: dvojnásobek běžné částky má poloviční účinek proti čtyřnásobku.</p>
+      <div className="step-totals">
+        <table>
+          <tbody>
+            {DEPARTMENT_KEYS.map((k) => (
+              <tr key={k}>
+                <td>{DEPARTMENT_LABEL[k]}</td>
+                <td className="num">{money(depts[k])}</td>
+                <td className="num muted">{money(ref[k])}</td>
+              </tr>
+            ))}
+            <tr className="total">
+              <td>Oddělení celkem (vy / běžně)</td>
+              <td className="num neg">{money(DEPARTMENT_KEYS.reduce((a, k) => a + depts[k], 0))}</td>
+              <td className="num muted">{money(DEPARTMENT_KEYS.reduce((a, k) => a + ref[k], 0))}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <StepTotals game={game} keys={['oddeleni', 'provoz']} title="Oddělení a provoz za sezónu" totalLabel="Oddělení a provoz celkem" />
     </>
   );
 }

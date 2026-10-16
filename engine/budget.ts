@@ -95,6 +95,23 @@ export function wageRank(state: GameState): number {
   return 1 + bills.filter((b) => b > own).length;
 }
 
+/**
+ * Mzdový rozpočet sezóny: počítá se s celým mzdovým stropem (to je rozpočet na platy),
+ * nebo se skutečnými platy, pokud strop převyšují. K tomu prémie podle očekávaných bodů a cíle.
+ */
+export function wagePlan(state: GameState): { cap: number; contracts: number; wages: number; bonuses: number } {
+  const club = ownClub(state);
+  const comp = competitionOf(state, club.id);
+  const position = comp ? expectedPosition(state, club.id) : 8;
+  const size = comp?.clubIds.length ?? 16;
+  const points = Math.round(45 * (1 + (size / 2 - position) / size));
+  const cap = wageBudgetMonthly(club) * 12;
+  const contracts = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0) * 12;
+  const goal = comp && position <= goalTarget(state.owner.seasonGoal, comp) ? goalBonusPoints(state) : 0;
+  const bonuses = bonusPerPoint(club) * (points * pointsBonusFactor(state, club.id) + goal);
+  return { cap, contracts, wages: Math.max(cap, contracts), bonuses: Math.round(bonuses) };
+}
+
 /** Plán sezóny podle aktuálního nastavení. */
 export function forecastSeason(state: GameState): BudgetPlan {
   const club = ownClub(state);
@@ -107,7 +124,6 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const ticketsNow = sold ? 0 : holders * seasonTicketPrice(state);
   const position = comp ? expectedPosition(state, club.id) : 8;
   const size = comp?.clubIds.length ?? 16;
-  const points = Math.round(45 * (1 + (size / 2 - position) / size));
   const europe = state.europe?.season === state.season ? state.europe.entries.find((e) => e.clubId === club.id) : undefined;
   const loanPayments =
     state.loans.reduce((a, l) => a + l.payment * Math.min(12, l.monthsLeft), 0) +
@@ -118,7 +134,7 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const scheduled = (state.payments ?? [])
     .filter((p) => p.due <= yearEnd)
     .reduce((a, p) => a + (p.to === club.id ? p.amount : p.from === club.id ? -p.amount : 0), 0);
-  const wages = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
+  const wp = wagePlan(state);
   const depts = departmentsOf(club, tier);
 
   const lines: BudgetLine[] = [
@@ -127,7 +143,7 @@ export function forecastSeason(state: GameState): BudgetPlan {
     { key: 'tv', label: 'TV práva a odměna za umístění', amount: tvMonthly(tier) * 12 + prizeMoney(tier, position, size), categories: ['tv'] },
     { key: 'komercni', label: 'Sponzoři a reklama', amount: sponsorForecast(state), categories: ['komercni'] },
     { key: 'evropa', label: 'Evropské poháry', amount: europe?.revenue ?? 0, categories: ['evropa'] },
-    { key: 'platy', label: 'Platy a prémie hráčů', amount: -(wages * 12 + bonusPerPoint(club) * (points * pointsBonusFactor(state, club.id) + (comp && position <= goalTarget(state.owner.seasonGoal, comp) ? goalBonusPoints(state) : 0))), categories: ['platy'] },
+    { key: 'platy', label: 'Platy hráčů (mzdový strop) a prémie', amount: -(wp.wages + wp.bonuses), categories: ['platy'] },
     { key: 'vedeni', label: 'Trenér a ředitelé', amount: -staffWages(state) * 12, categories: ['vedeni'] },
     { key: 'oddeleni', label: 'Oddělení (skauting, mládež, medicína, marketing)', amount: -DEPARTMENT_KEYS.reduce((a, k) => a + depts[k], 0), categories: ['oddeleni'] },
     { key: 'provoz', label: 'Provoz klubu a stadionu', amount: -operatingMonthly(club, tier) * financeFactor(state) * 12, categories: ['provoz'] },
@@ -292,7 +308,7 @@ export function prepareBudget(state: GameState): void {
   if (after.result + club.policy.transferBudget < -annualCosts(club, tier) * 0.15) {
     const bill = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
     const base = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
-    club.policy.wageMultiplier = Math.max(0.5, Math.min(club.policy.wageMultiplier, bill / Math.max(1, base)));
+    club.policy.wageMultiplier = Math.max(0.5, Math.min(club.policy.wageMultiplier, (bill * 1.05) / Math.max(1, base)));
   }
   addNews(state, {
     kind: 'info',

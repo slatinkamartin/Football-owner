@@ -44,7 +44,7 @@ export function FinanceCosts({ game, onChange, onBudget }: { game: GameState; on
     <div className="stack">
       <section className="card">
         <div className="row-between">
-          <h2>Platy hráčů po sekcích</h2>
+          <h2>Platy hráčů po sekcích <span className="muted small">· {money(usage.reduce((a, u) => a + u.bill, 0))} z {money(usage.reduce((a, u) => a + u.cap, 0))} měsíčně</span></h2>
           <button className="linkbtn" onClick={onBudget}>Rozdělení rozpočtu ›</button>
         </div>
         {issues.map((t, i) => <p key={i} className="warning soft">{t}</p>)}
@@ -104,6 +104,8 @@ export function FinanceCosts({ game, onChange, onBudget }: { game: GameState; on
                 </span>
               );
             })}
+            <dt className="total-row">Celkem ročně</dt>
+            <dd className="total-row">{money(DEPARTMENT_KEYS.reduce((a, k) => a + depts[k], 0))}</dd>
           </dl>
         </section>
         <section className="card">
@@ -115,6 +117,8 @@ export function FinanceCosts({ game, onChange, onBudget }: { game: GameState; on
             <dd>{money(club.stadium.capacity * 15)}</dd>
             <dt>Zázemí (trénink, akademie, medicína, VIP, catering {CATERING_SPEND[club.facilities.catering]} Kč/divák)</dt>
             <dd>{money(facilityUpkeep(club.facilities, tier))}</dd>
+            <dt className="total-row">Celkem měsíčně</dt>
+            <dd className="total-row">{money(admin + club.stadium.capacity * 15 + facilityUpkeep(club.facilities, tier))}</dd>
           </dl>
         </section>
         <section className="card">
@@ -126,6 +130,8 @@ export function FinanceCosts({ game, onChange, onBudget }: { game: GameState; on
                 <dd>{money(x.s!.wage)}</dd>
               </span>
             ))}
+            <dt className="total-row">Celkem měsíčně</dt>
+            <dd className="total-row">{money(staff.reduce((a, x) => a + x.s!.wage, 0))}</dd>
           </dl>
         </section>
       </div>
