@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
-import { approveBudget, changeImpact, forecastSeason, leagueBenchmarks, multiYearOutlook } from './budget';
+import { approveBudget, budgetChanged, changeImpact, policyImpact, forecastSeason, leagueBenchmarks, multiYearOutlook } from './budget';
 import { advanceDays, migrateSave, newGame, updatePolicy } from './game';
 import { campBonus, communityEffect, fanshopDetail, maintenanceMonthly } from './operations';
 import { budgetRemaining } from './transfers';
@@ -30,9 +30,14 @@ describe('řádky rozpočtu a jejich dopad', () => {
     expect(line(updatePolicy(start, { summerCamp: 'zahranici' }), 'soustredeni')).toBeLessThan(line(start, 'soustredeni'));
     expect(line(updatePolicy(start, { security: 'vysoka' }), 'bezpecnost')).toBeLessThan(line(start, 'bezpecnost'));
     expect(communityEffect({ ...club, policy: { ...club.policy, community: 0 } }, 1)).toBe(-1);
-    const camp = structuredClone(updatePolicy(start, { summerCamp: 'zahranici' }));
-    camp.date = `${camp.season}-08-10`;
-    expect(campBonus(camp)).toBeGreaterThan(0);
+    // Bonus jen za zaplacené soustředění: přepnutí po zaplacení nic nepřinese.
+    const cheap = advanceDays(updatePolicy(start, { summerCamp: 'zadne' }), 12).state;
+    const switched = updatePolicy(cheap, { summerCamp: 'zahranici' });
+    switched.date = `${switched.season}-08-10`;
+    expect(campBonus(switched)).toBeLessThan(0);
+    const paid = advanceDays(updatePolicy(start, { summerCamp: 'zahranici' }), 12).state;
+    paid.date = `${paid.season}-08-10`;
+    expect(campBonus(paid)).toBeGreaterThan(0);
     const after = advanceDays(updatePolicy(start, { summerCamp: 'zahranici' }), 12).state;
     expect(after.clubs.bohemians.finance.season.soustredeni).toBeLessThan(0);
   });
@@ -56,6 +61,21 @@ describe('řádky rozpočtu a jejich dopad', () => {
     const i = changeImpact(updatePolicy(s, { maintenance: 'vysoka' }))!;
     expect(i.after).toBeLessThan(i.before);
     expect(changeImpact(s)).toBeUndefined();
+  });
+
+  it('drahé ceny se ve výhledu projeví poklesem nálady a dopad změny jde spočítat', () => {
+    const i = policyImpact(start, { cateringPrice: 'vysoka', merchPrice: 'vysoka' });
+    expect(i.moodYear).toBeLessThan(-10);
+    const neutral = policyImpact(start, { maintenance: 'bezna' });
+    expect(neutral.result).toBe(0);
+    expect(budgetChanged(updatePolicy(approveBudget(start).state, { maintenance: 'bezna' }))).toBe(false);
+  });
+
+  it('prodejní klub: ředitel sám neprodá opory', () => {
+    const core = Object.values(start.players).filter((p) => p.clubId === 'bohemians').sort((a, b) => b.overall - a.overall).slice(0, 6).map((p) => p.id);
+    let s = updatePolicy(start, { salesPolicy: 'prodejni' });
+    for (let i = 0; i < 10; i++) s = advanceDays(s, 7).state;
+    for (const id of core) expect(s.players[id].clubId).toBe('bohemians');
   });
 
   it('minimální rezerva omezí peníze na přestupy', () => {

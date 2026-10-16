@@ -61,6 +61,14 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.12: přestupová politika a dopady změn
+
+- **Nová podzáložka Přestupy ve Financích:** rozpočet na odstupné, minimální rezerva, prodejní politika, samostatnost ředitele, splátky a podíly z dalších prodejů. Propisuje se do Příjmů (prodeje), Výdajů (nákupy) i do Rozpočtu (řádek Přestupy vede sem).
+- **Dovysvětlivky ke každé změně:** u posuvníků a voleb se hned ukáže dopad proti současnému nastavení (provozní výsledek, peníze na konci sezóny, nálada fanoušků za rok) a co to udělá ve hře (návštěva, trávník, zranění, domácí výhoda, síla týmu, výtržnosti, vztahy s městem).
+- **Přehlednější vodopád:** vodorovné řádky Příjmy → Platy → Ostatní provozní výdaje → Provozní výsledek → Přestupy → Investice a daň → Úvěry → Změna peněz, s legendou a vysvětlením po najetí.
+- **Opravy:** soustředění dává bonus jen podle zaplacené volby (po zaplacení je zamčené); prodejní klub nikdy sám neprodá 6 opor a stihne prodej před zavřením okna; výhled přestupů hlídá minimální rezervu; „běžná“ volba už nehlásí neschválenou změnu; srovnání s ligou počítá platy bez rezervy a provoz se všemi řádky; výhled počítá s tím, jak ceny a údržba během sezóny mění náladu fanoušků.
+- **Vyvážení:** poškozený trávník ubere 40 % domácí výhody; úsporná údržba zvýší zranění o 12 % a ubere 10 % domácí výhody, špičková stojí +15 % a zranění sníží o 10 %; soustředění v zahraničí +1 k síle týmu, bez soustředění −0,8; prémiové ceny cateringu a fanshopu víc štvou fanoušky.
+
 ### Novinky verze 0.11: řádky rozpočtu propojené se hrou
 
 - **Finance mají jasné role:** Přehled (grafický přehled), Rozpočet (výsledovka ke schválení, nic se v ní nenastavuje), Příjmy a Výdaje (každý řádek rozpočtu má kartu s ovládáním, „Ovlivňuje:“, srovnáním s ligou a pruhem skutečnost/výhled), Financování, Účetnictví. Klik na řádek výsledovky otevře jeho kartu.

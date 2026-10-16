@@ -24,16 +24,16 @@ const tierIdx = (tier: number) => Math.min(3, Math.max(1, tier));
 
 /** Útrata na diváka a cena VIP podle cenové úrovně. */
 export function cateringFactor(club: Club): number {
-  return financeLevel(club.policy.cateringPrice, 0.8, 1, 1.2);
+  return financeLevel(club.policy.cateringPrice, 0.8, 1, 1.15);
 }
 
 // ---------- Fanshop a dresy ----------
 
 /** Fanshop za měsíc: tržby (podle pověsti, nálady a cen) minus náklady na novou kolekci. */
-export function fanshopDetail(state: GameState): { gross: number; kitCost: number; net: number } {
+export function fanshopDetail(state: GameState, fanMood = own(state).fanMood): { gross: number; kitCost: number; net: number } {
   const club = own(state);
-  const mood = 0.7 + 0.6 * (club.fanMood / 100);
-  const price = financeLevel(club.policy.merchPrice, 0.82, 1, 1.12);
+  const mood = 0.7 + 0.6 * (fanMood / 100);
+  const price = financeLevel(club.policy.merchPrice, 0.82, 1, 1.1);
   const kit = club.policy.newKit ? 1.3 : 1;
   const base = (sponsorMarket(state) * 0.08) / 12;
   const gross = base * mood * price * kit;
@@ -46,7 +46,7 @@ export function fanshopDetail(state: GameState): { gross: number; kitCost: numbe
 /** Příjem z jedné akce (koncert, kemp, pronájem) podle kapacity a soutěže. */
 export function eventIncome(club: Club, tier: number): number {
   const k = [0, 1, 0.5, 0.25][tierIdx(tier)];
-  return Math.round(((200_000 + club.stadium.capacity * 40) * k) / 10_000) * 10_000;
+  return Math.round(((150_000 + club.stadium.capacity * 30) * k) / 10_000) * 10_000;
 }
 
 /** Šance, že akce poškodí trávník (podle údržby). */
@@ -63,12 +63,41 @@ export function adminMonthly(tier: number): number {
 
 export function maintenanceMonthly(club: Club, tier: number): number {
   const base = club.stadium.capacity * 15 + facilityUpkeep(club.facilities, tier);
-  return Math.round(base * financeLevel(club.policy.maintenance, 0.75, 1, 1.3));
+  return Math.round(base * financeLevel(club.policy.maintenance, 0.85, 1, 1.15));
 }
 
 /** Údržba mění riziko zranění (trávník, šatny, regenerace). */
 export function maintenanceInjury(club: Club): number {
-  return financeLevel(club.policy.maintenance, 1.07, 1, 0.95);
+  return financeLevel(club.policy.maintenance, 1.12, 1, 0.9);
+}
+
+/** Domácí výhoda podle stavu trávníku: poškozený ji výrazně sníží, špičková údržba přidá. */
+export function pitchFactor(club: Club, damaged: boolean): number {
+  if (damaged) return 0.6;
+  return financeLevel(club.policy.maintenance, 0.9, 1, 1.08);
+}
+
+// ---------- Nálada fanoušků z nastavení ----------
+
+/** Měsíční změna nálady fanoušků z cen cateringu a fanshopu a ze stavu stadionu. */
+export function policyMoodDrift(club: Club): number {
+  return financeLevel(club.policy.cateringPrice, 0.3, 0, -0.7) + financeLevel(club.policy.merchPrice, 0.3, 0, -0.7) + financeLevel(club.policy.maintenance, -0.5, 0, 0.2);
+}
+
+/** Měsíční pokles nálady kvůli drahým vstupenkám. */
+export function ticketMoodPenalty(club: Club, tier: number, defaultPrice: number): number {
+  void tier;
+  return Math.max(0, club.policy.ticketPrice / defaultPrice - TICKET_ANGER) * 8;
+}
+
+/** Od jaké ceny vstupenek (násobek běžné) začnou fanoušci ztrácet náladu. */
+export const TICKET_ANGER = 1.1;
+
+/** Odhad nálady fanoušků za n měsíců při současném nastavení (návrat k normálu, ceny, údržba). */
+export function projectMood(club: Club, tier: number, defaultPrice: number, target: number, months: number): number {
+  let mood = club.fanMood;
+  for (let i = 0; i < months; i++) mood = clamp(mood + (target - mood) * 0.05 - ticketMoodPenalty(club, tier, defaultPrice) + policyMoodDrift(club), 0, 100);
+  return mood;
 }
 
 // ---------- Soustředění ----------
@@ -81,11 +110,18 @@ export function campCost(tier: number, choice: CampChoice = 'doma'): number {
 /** Bonus k síle týmu v prvních týdnech podzimu a jara podle soustředění. */
 export function campBonus(state: GameState): number {
   const md = state.date.slice(5);
-  const club = own(state);
-  const effect = (c: CampChoice = 'doma') => ({ zadne: -0.5, doma: 0, zahranici: 0.6 })[c];
-  if (md >= '07-15' && md <= '09-15') return effect(club.policy.summerCamp);
-  if (md >= '02-01' && md <= '03-31') return effect(club.policy.winterCamp);
+  const paid = state.campsPaid?.season === state.season ? state.campsPaid : undefined;
+  const effect = (c: CampChoice = 'doma') => ({ zadne: -0.8, doma: 0, zahranici: 1 })[c];
+  // Bonus jen za soustředění, které se opravdu zaplatilo (volbu po zaplacení už nejde změnit).
+  if (md >= '07-15' && md <= '09-15') return effect(paid?.summer ?? 'doma');
+  if (md >= '02-01' && md <= '03-31') return effect(paid?.winter ?? 'doma');
   return 0;
+}
+
+/** Bylo už soustředění zaplacené (a tím zamčené)? */
+export function campLocked(state: GameState, which: 'summer' | 'winter'): CampChoice | undefined {
+  const paid = state.campsPaid?.season === state.season ? state.campsPaid : undefined;
+  return paid?.[which];
 }
 
 // ---------- Pořadatelé a bezpečnost ----------
@@ -149,9 +185,7 @@ export function monthlyOperations(state: GameState, rng: Rng): void {
   }
 
   // Nálada fanoušků: ceny cateringu a fanshopu, stav stadionu.
-  const mood =
-    financeLevel(club.policy.cateringPrice, 0.3, 0, -0.4) + financeLevel(club.policy.merchPrice, 0.3, 0, -0.4) + financeLevel(club.policy.maintenance, -0.3, 0, 0.2);
-  club.fanMood = clamp(club.fanMood + mood, 0, 100);
+  club.fanMood = clamp(club.fanMood + policyMoodDrift(club), 0, 100);
 
   // Komunita: město, patrioti a média.
   const e = communityEffect(club, tier);
@@ -165,7 +199,9 @@ export function dailyOperations(state: GameState): void {
   const club = own(state);
   const tier = tierOf(state, club.id);
   if (md === '07-10' || md === '01-10') {
-    const choice = md === '07-10' ? club.policy.summerCamp : club.policy.winterCamp;
+    const choice = (md === '07-10' ? club.policy.summerCamp : club.policy.winterCamp) ?? 'doma';
+    const paid = state.campsPaid?.season === state.season ? state.campsPaid : { season: state.season };
+    state.campsPaid = { ...paid, [md === '07-10' ? 'summer' : 'winter']: choice };
     const cost = campCost(tier, choice);
     if (cost > 0) book(state, club.id, 'soustredeni', -cost, `${md === '07-10' ? 'Letní' : 'Zimní'} soustředění (${CAMP_LABEL[choice ?? 'doma'].toLowerCase()})`);
   }

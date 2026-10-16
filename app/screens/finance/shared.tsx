@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { activeOverdraft, injectCapital, lendToClub, type ActionResult, type Benchmark, type BudgetLine, type BudgetPlan, type GameState } from '../../../engine';
+import { activeOverdraft, injectCapital, lendToClub, policyImpact, type ActionResult, type Benchmark, type BudgetLine, type BudgetPlan, type Club, type GameState } from '../../../engine';
 import { LineChart, type ChartPoint } from '../../chart';
 import { money } from '../../format';
 
@@ -90,22 +90,54 @@ export function SliderField({ label, value, min, max, step, format, reference, o
   );
 }
 
-/** Volba z několika možností (úroveň, politika) s krátkým vysvětlením každé. */
-export function Choices<T extends string>({ value, options, onChange, label }: {
+/** Volba z několika možností (úroveň, politika) s krátkým vysvětlením a dopadem každé. */
+export function Choices<T extends string>({ value, options, onChange, label, detail, disabled }: {
   value: T; label: string; options: { id: T; label: string; hint: string }[]; onChange: (v: T) => void;
+  /** Proměnná vysvětlivka: co by volba udělala proti současnému stavu. */
+  detail?: (id: T) => ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <div className="field">
       <span className="small muted">{label}</span>
       <div className="choices compact" role="radiogroup" aria-label={label}>
         {options.map((o) => (
-          <button key={o.id} role="radio" aria-checked={value === o.id} className={`choice ${value === o.id ? 'selected' : ''}`} onClick={() => onChange(o.id)}>
+          <button key={o.id} role="radio" aria-checked={value === o.id} disabled={disabled && value !== o.id} className={`choice ${value === o.id ? 'selected' : ''}`} onClick={() => onChange(o.id)}>
             <strong>{o.label}</strong>
             <span>{o.hint}</span>
+            {detail && <span className="choice-impact">{value === o.id ? 'současné nastavení' : detail(o.id)}</span>}
           </button>
         ))}
       </div>
     </div>
+  );
+}
+
+/** Výchozí hodnoty nastavení (nezměněné = běžná volba). */
+const DEFAULTS: Partial<Club['policy']> = { cashReserve: 0, stadiumEvents: 0, newKit: false, cateringPrice: 'bezna', merchPrice: 'bezna', maintenance: 'bezna', security: 'bezna', summerCamp: 'doma', winterCamp: 'doma', salesPolicy: 'dobra' };
+
+const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${money(Math.abs(v))}`;
+
+/** Krátký text dopadu změny: provozní výsledek, peníze na konci a nálada fanoušků. */
+export function impactText(game: GameState, patch: Partial<Club['policy']>, short = false): string {
+  const i = policyImpact(game, patch);
+  const parts: string[] = [];
+  if (Math.abs(i.result) >= 1_000) parts.push(`${short ? 'výsledek' : 'provozní výsledek'} ${signed(i.result)}`);
+  if (!short && Math.abs(i.cashEnd - i.result) >= 100_000) parts.push(`peníze na konci ${signed(i.cashEnd)}`);
+  if (Math.abs(i.moodYear) >= 0.5) parts.push(`nálada ${i.moodYear > 0 ? '+' : '−'}${Math.abs(Math.round(i.moodYear))} za rok`);
+  return parts.length ? parts.join(' · ') : 'bez vlivu na peníze';
+}
+
+/** Vysvětlivka dopadu změny proti současnému nastavení (mění se podle zvolené hodnoty). */
+export function Impact({ game, patch, extra }: { game: GameState; patch: Partial<Club['policy']>; extra?: (string | false | undefined)[] }) {
+  const club = game.clubs[game.owner.clubId];
+  const same = (Object.keys(patch) as (keyof Club['policy'])[]).every((k) => JSON.stringify(club.policy[k] ?? DEFAULTS[k]) === JSON.stringify(patch[k]));
+  const notes = (extra ?? []).filter(Boolean) as string[];
+  return (
+    <p className="impact small">
+      <span className="impact-label">Dopad:</span> {same ? 'současné nastavení' : `${impactText(game, patch)} (proti současnému)`}
+      {notes.length > 0 && <> · {notes.join(' · ')}</>}
+    </p>
   );
 }
 
@@ -123,10 +155,12 @@ export function LineCard({ id, title, lines, effects, bench, children, note }: {
     <section className="card line-card" id={`line-${id}`}>
       <div className="line-head">
         <h2>{title}</h2>
-        <div className="line-amount">
-          <strong className={amount < 0 ? 'neg' : amount > 0 ? 'pos' : ''}>{money(amount)}</strong>
-          <span className="muted small">za sezónu</span>
-        </div>
+        {lines.length > 0 && (
+          <div className="line-amount">
+            <strong className={amount < 0 ? 'neg' : amount > 0 ? 'pos' : ''}>{money(amount)}</strong>
+            <span className="muted small">za sezónu</span>
+          </div>
+        )}
       </div>
       {lines.length > 0 && amount !== 0 && (
         <div className="line-progress" title={`Skutečnost ${money(actual)} z ${money(amount)}`}>

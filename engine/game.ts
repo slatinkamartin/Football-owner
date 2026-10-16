@@ -63,7 +63,7 @@ import {
 } from './staff';
 import { computeTable, formScore } from './standings';
 import { aiDomesticTransfers, aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
-import { adminMonthly, campBonus, dailyOperations, homeMatchOperations, maintenanceInjury, monthlyOperations } from './operations';
+import { adminMonthly, pitchFactor, campBonus, dailyOperations, homeMatchOperations, maintenanceInjury, monthlyOperations } from './operations';
 import { NEW_CATEGORIES_V10, SAVE_VERSION, type Departments, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
 import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
 
@@ -624,7 +624,7 @@ function playMatchesOn(state: GameState, rng: Rng): void {
       { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach) + (home.id === ownId ? spirit : 0), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus, ...medicalFactors(home, damaged, tier) },
       { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach) + (away.id === ownId ? spirit : 0), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus, ...medicalFactors(away, false, tier) },
       attendance,
-      { date: state.date, season: state.season, detail: comp ? comp.id === ownCompId : involvesOwner, homeEdge: homeAdvantage(home, attendance, capacity) },
+      { date: state.date, season: state.season, detail: comp ? comp.id === ownCompId : involvesOwner, homeEdge: homeAdvantage(home, attendance, capacity) * (home.id === ownId ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) },
     );
     // Držitelé permanentek už zaplatili předem.
     const holders = home.id === ownId && comp ? seasonTicketHolders(state) : 0;

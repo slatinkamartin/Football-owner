@@ -447,9 +447,13 @@ function offerFeeFor(rng: Rng, value: number, foreignLevel: number | undefined, 
 export function generateOffers(state: GameState, rng: Rng): void {
   const own = state.owner.clubId;
   const policy = state.clubs[own].policy.salesPolicy ?? 'dobra';
-  // Prodejní klub: sportovní ředitel sám přijme doporučené nabídky, které majitel nechal propadnout.
+  // Prodejní klub: sportovní ředitel sám přijme doporučené nabídky na hráče mimo opory, které majitel
+  // nechal propadnout (nebo kterým by propadly až po zavření okna).
   if (policy === 'prodejni' && state.clubs[own].policy.autoSquad !== false && !state.owner.ousted) {
-    for (const o of state.market.offers.filter((x) => x.expires < state.date && x.advice === 'prijmout' && state.players[x.playerId]?.clubId === own)) {
+    const md = state.date.slice(5);
+    const closing = (md >= '08-24' && md <= '08-31') || (md >= '02-07' && md <= '02-14');
+    const core = new Set(squadOf(state, own).sort((a, b) => b.overall - a.overall).slice(0, 6).map((p) => p.id));
+    for (const o of state.market.offers.filter((x) => (x.expires < state.date || closing) && x.advice === 'prijmout' && !core.has(x.playerId) && state.players[x.playerId]?.clubId === own)) {
       const r = acceptOffer(state, o.id);
       if (r.ok) Object.assign(state, r.state);
     }
@@ -485,7 +489,8 @@ export function generateOffers(state: GameState, rng: Rng): void {
     const fee = offerFeeFor(rng, value, level, listed);
     if (fee <= 0) return;
     const key = rank < 5;
-    const goodPrice = policy === 'prodejni' ? value * 0.95 : policy === 'drzet' ? value * 1.4 : value * 1.15;
+    // Opory se prodávají jen za výrazně víc, než jsou, i v prodejním klubu.
+    const goodPrice = policy === 'drzet' ? value * 1.4 : policy === 'prodejni' && !key ? value * 0.95 : value * 1.15;
     const advice: IncomingOffer['advice'] =
       fee >= goodPrice || listed || (!key && playerAge(p, state.season) >= 30 && policy !== 'drzet') || (policy === 'prodejni' && !key) ? 'prijmout' : 'odmitnout';
     state.market.offers.push({

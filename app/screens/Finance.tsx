@@ -14,17 +14,19 @@ import { money } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
 import { BudgetCard } from './finance/Budget';
 import { FinanceExpenses } from './finance/Expenses';
+import { FinanceTransfers } from './finance/Transfers';
 import { FinanceFunding } from './finance/Funding';
 import { FinanceIncome } from './finance/Income';
 import { FinanceOverview } from './finance/Overview';
 
-export type FinanceTab = 'prehled' | 'rozpocet' | 'prijmy' | 'vydaje' | 'financovani' | 'ucetnictvi';
+export type FinanceTab = 'prehled' | 'rozpocet' | 'prijmy' | 'vydaje' | 'prestupy' | 'financovani' | 'ucetnictvi';
 
 const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'prehled', label: 'Přehled' },
   { id: 'rozpocet', label: 'Rozpočet' },
   { id: 'prijmy', label: 'Příjmy' },
   { id: 'vydaje', label: 'Výdaje' },
+  { id: 'prestupy', label: 'Přestupy' },
   { id: 'financovani', label: 'Financování' },
   { id: 'ucetnictvi', label: 'Účetnictví' },
 ];
@@ -52,7 +54,8 @@ export function Finance({ game, onChange, initialTab = 'prehled' }: { game: Game
       {tab === 'prehled' && <FinanceOverview game={game} onOpen={open} onChange={onChange} />}
       {tab === 'rozpocet' && <BudgetCard game={game} onChange={onChange} onOpen={open} />}
       {tab === 'prijmy' && <FinanceIncome game={game} onChange={onChange} onOpen={open} focus={focus} />}
-      {tab === 'vydaje' && <FinanceExpenses game={game} onChange={onChange} focus={focus} />}
+      {tab === 'vydaje' && <FinanceExpenses game={game} onChange={onChange} onOpen={open} focus={focus} />}
+      {tab === 'prestupy' && <FinanceTransfers game={game} onChange={onChange} onOpen={open} />}
       {tab === 'financovani' && <FinanceFunding game={game} onChange={onChange} />}
       {tab === 'ucetnictvi' && <Accounting game={game} />}
     </div>

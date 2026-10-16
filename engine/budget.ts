@@ -30,7 +30,8 @@ import { sponsorForecast, sponsorMonthly } from './sponsors';
 
 const sponsorMonthlyTotal = (state: GameState) => { const m = sponsorMonthly(state); return m.contracts + m.small; };
 import type { BudgetLine, BudgetPlan, BudgetPolicy, Club, FinanceCategory, GameState, StaffRole } from './types';
-import { adminMonthly, campCost, communitySpend, eventIncome, fanshopDetail, maintenanceMonthly, securityPerMatch } from './operations';
+import { adminMonthly, campCost, communityReference, policyMoodDrift, ticketMoodPenalty, communitySpend, eventIncome, fanshopDetail, maintenanceMonthly, projectMood, securityPerMatch, TICKET_ANGER } from './operations';
+import { budgetRemaining } from './transfers';
 import { addNews, clamp, competitionOf, tierOf } from './world';
 
 /**
@@ -71,11 +72,11 @@ export function seasonTicketHolders(state: GameState): number {
   return state.budget?.season === state.season ? state.budget.seasonTickets ?? 0 : 0;
 }
 
-function expectedAttendance(state: GameState): number {
+function expectedAttendance(state: GameState, fanMood = ownClub(state).fanMood): number {
   const club = ownClub(state);
   const tier = tierOf(state, club.id);
   const price = Math.pow(defaultTicketPrice(tier) / Math.max(club.policy.ticketPrice, 1), 0.8);
-  const mood = 0.85 + 0.3 * (club.fanMood / 100);
+  const mood = 0.85 + 0.3 * (fanMood / 100);
   return Math.min(club.stadium.capacity, baseAttendance(club.reputation, tier) * price * mood);
 }
 
@@ -187,9 +188,13 @@ export function forecastSeason(state: GameState): BudgetPlan {
   if (comp?.format === 'nadstavba' && !comp.groups) for (let i = 0; i < 2.5; i++) leftHome.push(`${state.season + 1}-05-${String(5 + i * 7).padStart(2, '0')}`);
   const sold = state.budget?.season === state.season && state.budget.seasonTickets !== undefined;
   const holders = sold ? state.budget!.seasonTickets! : seasonTicketDemand(state);
-  const att = Math.max(expectedAttendance(state), holders * 0.9);
+  // Nálada fanoušků se během sezóny posouvá podle cen a údržby: návštěva a fanshop s tím počítají.
+  const moodTarget = 50 + 6 * departmentEffect(club, tier, 'marketing');
+  const monthsAhead = (d: string) => Math.max(0, (Number(d.slice(0, 4)) - Number(state.date.slice(0, 4))) * 12 + Number(d.slice(5, 7)) - Number(state.date.slice(5, 7)));
+  const moodAt = (d: string) => projectMood(club, tier, defaultTicketPrice(tier), moodTarget, monthsAhead(d));
   if (!sold) add('vstupne', soon, holders * seasonTicketPrice(state));
   for (const d of leftHome) {
+    const att = Math.max(expectedAttendance(state, moodAt(d)), holders * 0.9);
     add('vstupne', d, Math.max(0, att - holders) * club.policy.ticketPrice);
     add('stadion', d, matchdayExtras(club, att, tier));
   }
@@ -224,7 +229,7 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const ff = financeFactor(state);
   monthly('provoz', -adminMonthly(tier) * ff);
   monthly('udrzba', -maintenanceMonthly(club, tier) * ff);
-  monthly('fanshop', fanshopDetail(state).net);
+  for (const d of months) add('fanshop', d, fanshopDetail(state, moodAt(d)).net);
   monthly('komunita', -communitySpend(club, tier) / 12);
   let acc = state.stadiumEventAcc ?? 0;
   for (const d of months) {
@@ -243,7 +248,8 @@ export function forecastSeason(state: GameState): BudgetPlan {
     if (p.to === own) add('prestupy', p.due, p.amount);
     if (p.from === own) add('prestupy', p.due, -p.amount);
   }
-  const room = Math.max(0, club.policy.transferBudget - state.market.spent + state.market.earned);
+  // Zbytek rozpočtu na přestupy (hlídá i minimální rezervu na účtu).
+  const room = budgetRemaining(state);
   const winter = `${state.season + 1}-01-20`;
   if (state.date < `${state.season}-08-31`) {
     add('prestupy', soon, -room * 0.7);
@@ -385,8 +391,7 @@ export function budgetWarnings(state: GameState, plan = forecastSeason(state)): 
   return out;
 }
 
-/** Od jaké ceny vstupenek (násobek běžné) začnou fanoušci ztrácet náladu. */
-export const TICKET_ANGER = 1.1;
+export { TICKET_ANGER } from './operations';
 
 function mil(v: number): string {
   if (Math.abs(v) < 1_000_000) return `${Math.round(v / 1_000).toLocaleString('cs-CZ')} tis. Kč`;
@@ -459,7 +464,7 @@ export function approveBudget(prev: GameState): ActionResult {
     tickets = ` Prodáno ${n.toLocaleString('cs-CZ')} permanentek.`;
   }
   const plan = forecastSeason(state);
-  state.budget = { ...state.budget!, approved: state.date, revised: !first, plan, approvedPolicy: policySnapshot(ownClub(state)) };
+  state.budget = { ...state.budget!, approved: state.date, revised: !first, plan, approvedPolicy: policySnapshot(ownClub(state), tierOf(state, state.owner.clubId)) };
   if (first) reactToBudget(state, plan);
   const message = `${first ? 'Rozpočet schválen' : 'Revize rozpočtu schválena'}: provozní výsledek ${(plan.result / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč.${tickets}`;
   addNews(state, { kind: 'info', title: message });
@@ -506,7 +511,7 @@ export function prepareBudget(state: GameState): void {
     const base = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
     club.policy.wageMultiplier = Math.max(0.5, Math.min(club.policy.wageMultiplier, (bill * 1.05) / Math.max(1, base)));
   }
-  state.budget.draft = policySnapshot(club);
+  state.budget.draft = policySnapshot(club, tier);
   const need = forecastSeason(state).ownerNeed ?? 0;
   addNews(state, {
     kind: need ? 'varovani' : 'info',
@@ -529,7 +534,7 @@ export function budgetDeadline(state: GameState): void {
   }
   if (state.budget?.season !== state.season || state.budget.seasonTickets === undefined) sellSeasonTickets(state);
   const plan = forecastSeason(state);
-  state.budget = { ...state.budget!, approved: state.date, plan, approvedPolicy: policySnapshot(club) };
+  state.budget = { ...state.budget!, approved: state.date, plan, approvedPolicy: policySnapshot(club, tier) };
   addNews(state, { kind: 'varovani', title: 'Rozpočet sezóny schválen automaticky', text });
 }
 
@@ -574,11 +579,31 @@ export function budgetDue(state: GameState): string {
 
 // ---------- Plán k dnešku, návrh, uzávěrka, kalendář ----------
 
-function policySnapshot(club: Club): BudgetPolicy {
+function policySnapshot(club: Club, tier = 1): BudgetPolicy {
   const { overdraft: _o, autoSquad: _a, ...rest } = club.policy;
   void _o;
   void _a;
-  return structuredClone(rest);
+  return normalizePolicy(structuredClone(rest), club, tier);
+}
+
+/** Doplní výchozí hodnoty, aby „běžná“ volba a nezměněné nastavení byly totéž. */
+function normalizePolicy(p: BudgetPolicy, club: Club, tier: number): BudgetPolicy {
+  const full: BudgetPolicy = {
+    ...p,
+    cateringPrice: p.cateringPrice ?? 'bezna',
+    merchPrice: p.merchPrice ?? 'bezna',
+    newKit: p.newKit ?? false,
+    stadiumEvents: p.stadiumEvents ?? 0,
+    salesPolicy: p.salesPolicy ?? 'dobra',
+    maintenance: p.maintenance ?? 'bezna',
+    summerCamp: p.summerCamp ?? 'doma',
+    winterCamp: p.winterCamp ?? 'doma',
+    security: p.security ?? 'bezna',
+    community: p.community ?? communityReference(tier),
+    cashReserve: p.cashReserve ?? 0,
+  };
+  void club;
+  return Object.fromEntries(Object.keys(full).sort().map((k) => [k, full[k as keyof BudgetPolicy]])) as BudgetPolicy;
 }
 
 /** Vrátí nastavení rozpočtu na návrh, který připravilo vedení. */
@@ -623,15 +648,40 @@ export function changeImpact(state: GameState): { before: number; after: number 
   if (!saved || !budgetChanged(state)) return undefined;
   const alt = structuredClone(state);
   const club = ownClub(alt);
-  club.policy = { ...structuredClone(saved), overdraft: club.policy.overdraft, autoSquad: club.policy.autoSquad };
+  club.policy = { ...normalizePolicy(structuredClone(saved), club, tierOf(alt, club.id)), overdraft: club.policy.overdraft, autoSquad: club.policy.autoSquad };
   return { before: forecastSeason(alt).result, after: forecastSeason(state).result };
+}
+
+export interface PolicyImpact {
+  /** Změna provozního výsledku sezóny (výhled). */
+  result: number;
+  /** Změna peněz na konci sezóny. */
+  cashEnd: number;
+  /** Změna nálady fanoušků za rok (z cen a údržby). */
+  moodYear: number;
+}
+
+/** Co by změna nastavení udělala s výhledem sezóny a s náladou fanoušků (proti současnému stavu). */
+export function policyImpact(state: GameState, patch: Partial<Club['policy']>): PolicyImpact {
+  const club = ownClub(state);
+  const tier = tierOf(state, club.id);
+  const alt = structuredClone(state);
+  const altClub = ownClub(alt);
+  altClub.policy = { ...altClub.policy, ...patch };
+  const before = forecastSeason(state);
+  const after = forecastSeason(alt);
+  const price = defaultTicketPrice(tier);
+  const drift = (c: Club) => policyMoodDrift(c) - ticketMoodPenalty(c, tier, price);
+  return { result: after.result - before.result, cashEnd: after.cashEnd - before.cashEnd, moodYear: (drift(altClub) - drift(club)) * 12 };
 }
 
 /** Liší se nastavení od schváleného rozpočtu? (Posun výhledu kvůli výsledkům se nepočítá.) */
 export function budgetChanged(state: GameState): boolean {
   const saved = state.budget?.season === state.season ? state.budget.approvedPolicy : undefined;
   if (!budgetApproved(state) || !saved) return false;
-  return JSON.stringify(policySnapshot(ownClub(state))) !== JSON.stringify(saved);
+  const club = ownClub(state);
+  const tier = tierOf(state, club.id);
+  return JSON.stringify(policySnapshot(club, tier)) !== JSON.stringify(normalizePolicy(saved, club, tier));
 }
 
 /** Skutečnost minulé sezóny pro řádek plánu. */
@@ -764,9 +814,9 @@ export function leagueBenchmarks(state: GameState, plan = forecastSeason(state))
     vstupne: line('vstupne'),
     stadion: line('stadion'),
     komercni: line('komercni') + line('fanshop'),
-    platy: -(line('platy') + line('rezerva')),
+    platy: -line('platy'),
     oddeleni: -line('oddeleni'),
-    provoz: -(line('provoz') + line('udrzba')),
+    provoz: -(line('provoz') + line('udrzba') + line('soustredeni') + line('bezpecnost') + line('komunita')),
     prijmy: line('vstupne') + line('stadion') + line('komercni') + line('fanshop') + tvMonthly(tier) * 12,
     zustatek: club.finance.balance,
   };

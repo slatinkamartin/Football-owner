@@ -3,7 +3,6 @@ import {
   activeOverdraft,
   annuity,
   applyGrant,
-  clubLabel,
   forecastSeason,
   formatDate,
   grantOptions,
@@ -49,7 +48,6 @@ export function FinanceFunding({ game, onChange }: { game: GameState; onChange: 
   const vote = previewVote(game, 'uver', offers[0] ?? invest);
   const tv = tvAdvanceOffer(game);
   const grants = grantOptions(game);
-  const payments = [...(game.payments ?? [])].sort((a, b) => (a.due < b.due ? -1 : 1));
   const problems = licenceProblems(game);
   const plan = forecastSeason(game);
 
@@ -158,22 +156,6 @@ export function FinanceFunding({ game, onChange }: { game: GameState; onChange: 
             <ul className="plain small muted">
               {[...(game.grants ?? [])].reverse().slice(0, 5).map((g) => (
                 <li key={g.id}>{formatDate(g.decided)} · {money(g.amount)} · {g.result === 'schvaleno' ? 'schváleno' : g.result === 'zamitnuto' ? 'zamítnuto' : 'čeká na rozhodnutí'}</li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="card">
-          <h2>Splátky přestupů</h2>
-          {payments.length === 0 ? (
-            <p className="muted small">Žádné rozložené platby. Při koupi i prodeji hráče v české lize lze odstupné rozložit do splátek.</p>
-          ) : (
-            <ul className="plain small">
-              {payments.map((p) => (
-                <li key={p.id} className="row-between">
-                  <span>{formatDate(p.due)} · {p.note} ({clubLabel(game, p.to === club.id ? p.from : p.to)})</span>
-                  <span className={p.to === club.id ? 'pos' : 'neg'}>{p.to === club.id ? '+' : '−'}{money(p.amount)}</span>
-                </li>
               ))}
             </ul>
           )}

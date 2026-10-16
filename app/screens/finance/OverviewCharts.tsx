@@ -5,77 +5,66 @@ import { money } from '../../format';
 const SERIES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#6250d6'];
 
 /**
- * Vodopád sezóny: příjmy, provozní výdaje, provozní výsledek, přestupy a daň, financování a výsledná změna peněz.
- * Plovoucí sloupce ukazují, jak se z příjmů dojde ke změně peněz na účtu.
+ * Vodopád sezóny vodorovně: každý řádek je jeden krok od příjmů ke změně peněz na účtu.
+ * Zelená přidává, červená ubírá, tmavé řádky jsou mezisoučty. Svislá čára je nula.
  */
 export function Waterfall({ plan }: { plan: BudgetPlan }) {
   const [hover, setHover] = useState<number | null>(null);
   const sum = (f: (l: BudgetLine) => boolean) => plan.lines.filter(f).reduce((a, l) => a + l.amount, 0);
   const income = sum((l) => l.group === 'provoz' && l.amount > 0);
-  const costs = sum((l) => l.group === 'provoz' && l.amount < 0);
-  const capital = sum((l) => l.group === 'kapital');
+  const wages = sum((l) => l.key === 'platy' || l.key === 'rezerva');
+  const otherCosts = sum((l) => l.group === 'provoz' && l.amount < 0 && l.key !== 'platy' && l.key !== 'rezerva');
+  const transfers = sum((l) => l.key === 'prestupy');
+  const capital = sum((l) => l.group === 'kapital' && l.key !== 'prestupy');
   const financing = sum((l) => l.group === 'financovani');
-  const steps: { label: string; value: number; total?: boolean }[] = [
-    { label: 'Příjmy', value: income },
-    { label: 'Provozní výdaje', value: costs },
-    { label: 'Provozní výsledek', value: income + costs, total: true },
-    { label: 'Přestupy, investice, daň', value: capital },
-    { label: 'Úvěry a vklady', value: financing },
-    { label: 'Změna peněz', value: income + costs + capital + financing, total: true },
+  const steps: { label: string; value: number; kind: 'step' | 'sub' | 'total'; hint: string }[] = [
+    { label: 'Příjmy', value: income, kind: 'step', hint: 'vstupné, TV, sponzoři, catering, fanshop, akce, pohár, Evropa' },
+    { label: 'Platy hráčů a prémie', value: wages, kind: 'step', hint: 'smlouvy, prémie a rezerva ve mzdovém stropu' },
+    { label: 'Ostatní provozní výdaje', value: otherCosts, kind: 'step', hint: 'vedení, oddělení, provoz, údržba, soustředění, bezpečnost, komunita' },
+    { label: 'Provozní výsledek', value: income + wages + otherCosts, kind: 'sub', hint: 'co klub vydělá nebo prodělá samotným provozem' },
+    { label: 'Přestupy', value: transfers, kind: 'step', hint: 'nákupy, prodeje a splátky' },
+    { label: 'Investice a daň', value: capital, kind: 'step', hint: 'stavby a daň z příjmů' },
+    { label: 'Úvěry a vklady', value: financing, kind: 'step', hint: 'čerpání a splátky úvěrů, půjčky a vklady majitele' },
+    { label: 'Změna peněz na účtu', value: income + wages + otherCosts + transfers + capital + financing, kind: 'total', hint: 'o kolik bude na konci sezóny víc nebo méně peněz' },
   ];
   let run = 0;
-  const bars = steps.map((s) => {
-    const from = s.total ? 0 : run;
-    const to = s.total ? s.value : run + s.value;
-    if (!s.total) run = to;
-    return { ...s, lo: Math.min(from, to), hi: Math.max(from, to) };
-  });
-  const lo = Math.min(0, ...bars.map((b) => b.lo));
-  const hi = Math.max(0, ...bars.map((b) => b.hi));
-  const W = 560;
-  const H = 260;
-  const pad = { top: 22, bottom: 40, left: 8, right: 8 };
-  const slot = (W - pad.left - pad.right) / bars.length;
-  const y = (v: number) => pad.top + ((hi - v) / Math.max(1, hi - lo)) * (H - pad.top - pad.bottom);
+  const rows = steps.map((st) => {
+    const from = st.kind === 'step' ? run : 0;
+    const to = st.kind === 'step' ? run + st.value : st.value;
+    if (st.kind === 'step') run = to;
+    return { ...st, from, to, lo: Math.min(from, to), hi: Math.max(from, to) };
+  }).filter((r) => r.kind !== 'step' || r.value !== 0 || r.label === 'Příjmy');
+  const lo = Math.min(0, ...rows.map((r) => r.lo));
+  const hi = Math.max(0, ...rows.map((r) => r.hi));
+  const pos = (v: number) => ((v - lo) / Math.max(1, hi - lo)) * 100;
   return (
     <figure className="chart waterfall">
-      <figcaption className="chart-title">Jak se z příjmů stane změna peněz (výhled sezóny)</figcaption>
-      <div className="chart-box">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Vodopád sezóny" onPointerLeave={() => setHover(null)}>
-          <line className="chart-grid" x1={pad.left} x2={W - pad.right} y1={y(0)} y2={y(0)} />
-          {bars.map((b, i) => {
-            const x = pad.left + i * slot + slot * 0.18;
-            const w = slot * 0.64;
-            const cls = b.total ? (b.value < 0 ? 'wf-total neg' : 'wf-total pos') : b.value < 0 ? 'wf-bar neg' : 'wf-bar pos';
-            return (
-              <g key={b.label} onPointerEnter={() => setHover(i)}>
-                <rect x={pad.left + i * slot} y={pad.top - 20} width={slot} height={H} fill="transparent" />
-                <rect className={cls} x={x} y={y(b.hi)} width={w} height={Math.max(2, y(b.lo) - y(b.hi))} rx={4} />
-                {i < bars.length - 1 && !bars[i + 1].total && (
-                  <line className="wf-link" x1={x + w} x2={x + slot} y1={y(b.total ? b.value : b.value < 0 ? b.lo : b.hi)} y2={y(b.total ? b.value : b.value < 0 ? b.lo : b.hi)} />
-                )}
-                <text className={`wf-value ${b.value < 0 ? 'neg' : ''}`} x={x + w / 2} y={y(b.hi) - 6} textAnchor="middle">{short(b.value)}</text>
-                <text className="chart-axis" x={x + w / 2} y={H - 22} textAnchor="middle">{b.label.split(' ')[0]}</text>
-                <text className="chart-axis" x={x + w / 2} y={H - 9} textAnchor="middle">{b.label.split(' ').slice(1).join(' ')}</text>
-              </g>
-            );
-          })}
-        </svg>
-        {hover !== null && (
-          <div className="chart-tip" style={{ left: `${((pad.left + (hover + 0.5) * slot) / W) * 100}%`, transform: `translateX(${hover > 2 ? '-105%' : '5%'})` }} role="status">
-            <strong>{money(bars[hover].value)}</strong>
-            <span>{bars[hover].label}</span>
-          </div>
-        )}
+      <figcaption className="chart-title">Od příjmů ke změně peněz (výhled sezóny)</figcaption>
+      <div className="wf-legend small muted">
+        <span><i className="pos" /> přidává</span>
+        <span><i className="neg" /> ubírá</span>
+        <span><i className="sub" /> mezisoučet</span>
       </div>
+      <ul className="plain wf-rows" onPointerLeave={() => setHover(null)}>
+        {rows.map((r, i) => (
+          <li key={r.label} className={`wf-row ${r.kind}`} onPointerEnter={() => setHover(i)} title={`${r.label}: ${money(r.value)} (${r.hint})`}>
+            <span className="wf-label">{r.label}</span>
+            <span className="wf-track">
+              <i className="wf-zero" style={{ left: `${pos(0)}%` }} />
+              <span
+                className={`wf-fill ${r.kind === 'step' ? (r.value < 0 ? 'neg' : 'pos') : r.value < 0 ? 'sub neg' : 'sub pos'}`}
+                style={{ left: `${pos(r.lo)}%`, width: `${Math.max(0.6, pos(r.hi) - pos(r.lo))}%` }}
+              />
+            </span>
+            <span className={`wf-amount num ${r.value < 0 ? 'neg' : r.value > 0 ? 'pos' : ''}`}>{r.kind === 'step' && r.value > 0 ? '+' : ''}{money(r.value)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="small muted wf-hint">{hover !== null ? `${rows[hover].label}: ${rows[hover].hint}.` : 'Najeďte na řádek pro vysvětlení.'}</p>
     </figure>
   );
 }
 
-function short(v: number): string {
-  const m = v / 1_000_000;
-  return `${m > 0 ? '+' : m < 0 ? '−' : ''}${Math.abs(m).toLocaleString('cs-CZ', { maximumFractionDigits: Math.abs(m) < 10 ? 1 : 0 })} mil.`;
-}
 
 /** Složení příjmů a výdajů: dva skládané pruhy po řádcích rozpočtu, největší položky zvlášť, zbytek „ostatní“. */
 export function Composition({ plan }: { plan: BudgetPlan }) {

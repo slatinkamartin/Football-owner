@@ -3,7 +3,6 @@ import {
   bonusText,
   budgetApproved,
   CATERING_SPEND,
-  clubLabel,
   competitionOf,
   contracts,
   defaultSeasonTicketPrice,
@@ -16,13 +15,13 @@ import {
   forecastSeason,
   formatDate,
   leagueBenchmarks,
-  playerName,
   prizeMoney,
   seasonLabel,
   seasonTicketDemand,
   seasonTicketHolders,
   seasonTicketPrice,
   signSponsor,
+  SALES_LABEL,
   SLOT_LABEL,
   SLOTS,
   sponsorMonthly,
@@ -33,14 +32,12 @@ import {
   type ActionResult,
   type GameState,
   type Level,
-  type SalesPolicy,
   type SponsorOffer,
 } from '../../../engine';
 import { Badge, Notice } from '../../components';
 import { money, num } from '../../format';
-import { PlayerLink } from '../../nav';
 import type { FinanceTab } from '../Finance';
-import { Choices, LineCard, SliderField } from './shared';
+import { Choices, Impact, impactText, LineCard, SliderField } from './shared';
 
 const STYLE_LABEL: Record<SponsorOffer['style'], string> = { jistota: 'Jistota na 3 roky', bonus: 'Nižší částka s bonusem', kratka: 'Krátká na 1 rok' };
 
@@ -74,7 +71,6 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
   const shop = fanshopDetail(game);
   const europe = game.europe?.season === game.season ? game.europe.entries.find((e) => e.clubId === club.id) : undefined;
   const receivables = (game.payments ?? []).filter((p) => p.to === club.id).sort((a, b) => (a.due < b.due ? -1 : 1));
-  const sellOn = Object.values(game.players).filter((p) => p.sellOn?.clubId === club.id);
   const homeGames = (comp?.fixtures ?? []).filter((f) => f.homeId === club.id && f.result);
   const avgAttendance = homeGames.length ? homeGames.reduce((a, f) => a + f.result!.attendance, 0) / homeGames.length : 0;
   const position = comp ? expectedPosition(game, club.id) : 8;
@@ -111,11 +107,23 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
           onChange={(v) => set({ ticketPrice: v })}
           preview={(v) => {
             const t = ticketPreview(game, v);
+            const now = ticketPreview(game, club.policy.ticketPrice);
+            const diff = now.attendance ? Math.round(((t.attendance - now.attendance) / now.attendance) * 100) : 0;
             return (
-              <p className="preview small">
-                Návštěva asi <strong>{num(t.attendance)}</strong> ({Math.round(t.fill * 100)} % stadionu), vstupné asi <strong>{money(t.perMatch)}</strong> za zápas.
-                {v > defaultTicketPrice(tier) * 1.1 && ' Dražší než o 10 % nad běžnou cenou: nálada fanoušků každý měsíc klesá.'}
-              </p>
+              <>
+                <p className="preview small">
+                  Návštěva asi <strong>{num(t.attendance)}</strong> ({Math.round(t.fill * 100)} % stadionu), vstupné asi <strong>{money(t.perMatch)}</strong> za zápas.
+                </p>
+                <Impact
+                  game={game}
+                  patch={{ ticketPrice: v }}
+                  extra={[
+                    diff !== 0 && `návštěva ${diff > 0 ? '+' : '−'}${Math.abs(diff)} %`,
+                    v > defaultTicketPrice(tier) * 1.1 && 'nad +10 % běžné ceny fanoušci každý měsíc ztrácejí náladu (méně diváků, slabší domácí prostředí, nižší tržby fanshopu)',
+                    v < defaultTicketPrice(tier) * 0.8 && 'levné vstupné zaplní stadion a posílí domácí prostředí',
+                  ]}
+                />
+              </>
             );
           }}
         />
@@ -133,7 +141,8 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
             <p className="preview small">
               {sold
                 ? `Prodáno ${num(seasonTicketHolders(game))} permanentek za ${money(game.budget?.seasonTicketRevenue ?? 0)}. Další prodej až příští sezónu.`
-                : <>Prodá se asi <strong>{num(seasonTicketDemand(game, v))}</strong> permanentek za <strong>{money(seasonTicketDemand(game, v) * v)}</strong>. Peníze přijdou při schválení rozpočtu, držitelé pak chodí jistě.</>}
+                : <>Prodá se asi <strong>{num(seasonTicketDemand(game, v))}</strong> permanentek za <strong>{money(seasonTicketDemand(game, v) * v)}</strong>. Peníze přijdou při schválení rozpočtu, držitelé pak chodí jistě (plnější stadion, silnější kotel).</>}
+              {!sold && <Impact game={game} patch={{ seasonTicketPrice: v }} extra={[v > defaultSeasonTicketPrice(tier) * 1.2 && 'méně permanentek = méně jistých diváků na každém zápase']} />}
             </p>
           )}
         />
@@ -147,10 +156,11 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
           label="Ceny v cateringu a VIP"
           value={club.policy.cateringPrice ?? 'bezna'}
           onChange={(v) => set({ cateringPrice: v })}
+          detail={(v) => impactText(game, { cateringPrice: v }, true)}
           options={[
             { id: 'nizka', label: 'Lidové', hint: 'útrata −20 %, fanoušci spokojenější' },
             { id: 'bezna', label: 'Běžné', hint: 'bez dopadu na náladu' },
-            { id: 'vysoka', label: 'Prémiové', hint: 'útrata +20 %, fanoušci reptají' },
+            { id: 'vysoka', label: 'Prémiové', hint: 'útrata +15 %, fanoušci reptají' },
           ]}
         />
       </LineCard>
@@ -160,10 +170,11 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
           label="Ceny ve fanshopu"
           value={club.policy.merchPrice ?? 'bezna'}
           onChange={(v) => set({ merchPrice: v })}
+          detail={(v) => impactText(game, { merchPrice: v }, true)}
           options={[
             { id: 'nizka', label: 'Dostupné', hint: 'tržby −18 %, fanoušci spokojenější' },
             { id: 'bezna', label: 'Běžné', hint: 'bez dopadu na náladu' },
-            { id: 'vysoka', label: 'Drahé', hint: 'tržby +12 %, fanoušci reptají' },
+            { id: 'vysoka', label: 'Drahé', hint: 'tržby +10 %, fanoušci reptají' },
           ]}
         />
         <label className="check">
@@ -171,6 +182,7 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
           <span>Nová kolekce dresů pro tuto sezónu: tržby +30 %, náklady na kolekci, fanoušci +3 při uvedení (2. 7.)</span>
         </label>
         <p className="preview small">Měsíčně tržby {money(shop.gross)}{shop.kitCost ? `, kolekce −${money(shop.kitCost)}` : ''}, čistě <strong>{money(shop.net)}</strong>.</p>
+        <Impact game={game} patch={{ newKit: !club.policy.newKit }} extra={[`${club.policy.newKit ? 'zrušení' : 'nová'} kolekce ${club.policy.newKit ? 'ubere' : 'přidá'} 30 % tržeb`, !club.policy.newKit && 'fanoušci +3 při uvedení na začátku sezóny']} />
       </LineCard>
 
       <LineCard id="akce" title="Akce na stadionu" lines={line('akce')} effects={['stav trávníku', 'zranění doma', 'návštěva']}>
@@ -183,9 +195,19 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
           format={(v) => `${v}×`}
           onChange={(v) => set({ stadiumEvents: v })}
           preview={(v) => (
-            <p className="preview small">
-              {v ? <>Asi <strong>{money(v * eventIncome(club, tier))}</strong> za sezónu ({money(eventIncome(club, tier))} za akci). Každá akce poškodí trávník s pravděpodobností {Math.round(eventDamageChance(club) * 100)} % (podle údržby ve Výdajích).</> : 'Stadion slouží jen fotbalu.'}
-            </p>
+            <>
+              <p className="preview small">
+                {v ? <>Asi <strong>{money(v * eventIncome(club, tier))}</strong> za sezónu ({money(eventIncome(club, tier))} za akci).</> : 'Stadion slouží jen fotbalu.'}
+              </p>
+              <Impact
+                game={game}
+                patch={{ stadiumEvents: v }}
+                extra={[
+                  v > 0 && `trávník se poškodí asi ${(v * eventDamageChance(club)).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })}× za sezónu (šance ${Math.round(eventDamageChance(club) * 100)} % na akci podle údržby)`,
+                  v > 0 && 'poškozený trávník: domácí výhoda −40 %, o 30 % víc zranění doma, o 10 % méně diváků',
+                ]}
+              />
+            </>
           )}
         />
       </LineCard>
@@ -266,37 +288,18 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
         </LineCard>
       </div>
 
-      <LineCard id="prodeje" title="Prodeje hráčů" lines={[]} effects={['nabídky na hráče', 'síla kádru', 'rozpočet na přestupy']}
+      <LineCard id="prodeje" title="Prodeje hráčů" lines={[]} effects={['nabídky na hráče', 'rozpočet na přestupy']}
         note="Prodeje se do výhledu přičtou, až nastanou (řádek Přestupy v Rozpočtu). Polovina tržby se vrací do rozpočtu na přestupy."
       >
-        <Choices<SalesPolicy>
-          label="Prodejní politika (pro sportovního ředitele i kupce)"
-          value={club.policy.salesPolicy ?? 'dobra'}
-          onChange={(v) => set({ salesPolicy: v })}
-          options={[
-            { id: 'drzet', label: 'Držet kádr', hint: 'méně nabídek, ředitel doporučí prodej jen za hodně peněz' },
-            { id: 'dobra', label: 'Za dobrou cenu', hint: 'běžný počet nabídek, prodej nad hodnotou' },
-            { id: 'prodejni', label: 'Prodejní klub', hint: 'dvakrát víc nabídek, ředitel sám prodá hráče mimo opory' },
-          ]}
-        />
         <dl className="kv">
-          <dt>Nabídky na stole</dt>
-          <dd>{game.market.offers.length} (Přestupy)</dd>
+          <dt>Prodejní politika</dt>
+          <dd>{SALES_LABEL[club.policy.salesPolicy ?? 'dobra']}</dd>
           <dt>Z prodejů zpět do rozpočtu na přestupy</dt>
           <dd>{money(game.market.earned)}</dd>
+          <dt>Pohledávky ze splátek</dt>
+          <dd>{money(receivables.reduce((x, p) => x + p.amount, 0))}</dd>
         </dl>
-        {(receivables.length > 0 || sellOn.length > 0) && (
-          <ul className="plain small">
-            {receivables.map((p) => (
-              <li key={p.id} className="row-between"><span>{formatDate(p.due)} · {p.note} ({clubLabel(game, p.from)})</span><span className="pos">{money(p.amount)}</span></li>
-            ))}
-            {sellOn.map((p) => (
-              <li key={p.id} className="row-between">
-                <span>Podíl {Math.round(p.sellOn!.pct * 100)} % z dalšího prodeje: <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> ({clubLabel(game, p.clubId)})</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <button onClick={() => onOpen('prestupy')}>Přestupová politika ›</button>
       </LineCard>
 
       <LineCard id="ostatni" title="Dotace a mimořádné příjmy" lines={line('ostatni')} effects={['vztah s městem', 'komunitní rozpočet zvyšuje šanci']}

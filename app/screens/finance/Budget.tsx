@@ -27,7 +27,7 @@ import type { FinanceTab } from '../Finance';
 import { CashChart, OwnerNeedActions } from './shared';
 
 const INCOME_KEYS = ['vstupne', 'stadion', 'fanshop', 'akce', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni'];
-const COST_CARDS = ['platy', 'vedeni', 'oddeleni', 'provoz', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita', 'prestupy'];
+const COST_CARDS = ['platy', 'vedeni', 'oddeleni', 'provoz', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita'];
 const MONTHS = ['červenci', 'srpnu', 'září', 'říjnu', 'listopadu', 'prosinci', 'lednu', 'únoru', 'březnu', 'dubnu', 'květnu', 'červnu'];
 const monthIn = (date: string) => MONTHS[(Number(date.slice(5, 7)) + 5) % 12];
 
@@ -36,6 +36,7 @@ function target(key: string): { tab: FinanceTab; card?: string } | undefined {
   if (INCOME_KEYS.includes(key)) return { tab: 'prijmy', card: key === 'pohar' ? 'evropa' : key };
   if (key === 'rezerva') return { tab: 'vydaje', card: 'platy' };
   if (COST_CARDS.includes(key)) return { tab: 'vydaje', card: key };
+  if (key === 'prestupy') return { tab: 'prestupy' };
   if (key === 'financovani') return { tab: 'financovani' };
   return undefined;
 }

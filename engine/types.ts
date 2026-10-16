@@ -806,6 +806,8 @@ export const SAVE_VERSION = 10;
 export interface GameState {
   /** Rozpracované akce na stadionu (zlomky, které se ještě nekonaly). */
   stadiumEventAcc?: number;
+  /** Zaplacená soustředění v sezóně (bonus jen za to, co se opravdu zaplatilo). */
+  campsPaid?: { season: number; summer?: CampChoice; winter?: CampChoice };
   version: typeof SAVE_VERSION;
   packId: string;
   seed: number;

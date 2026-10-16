@@ -820,3 +820,33 @@ table.sections td .muted.small { display: block; }
 }
 .grid.line-grid { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
 @media (max-width: 640px) { .grid.line-grid { grid-template-columns: 1fr; } }
+
+/* Vodopád vodorovně */
+.wf-legend { display: flex; gap: 14px; margin: 2px 0 8px; }
+.wf-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.wf-legend i.pos { background: var(--pos); opacity: 0.75; }
+.wf-legend i.neg { background: var(--neg); opacity: 0.75; }
+.wf-legend i.sub { background: var(--text); }
+.wf-rows li { display: grid; grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) 96px; gap: 10px; align-items: center; padding: 5px 0; font-size: 13px; }
+.wf-rows li.sub, .wf-rows li.total { border-top: 1px solid var(--line); font-weight: 600; }
+.wf-rows li.total { border-top: 2px solid var(--text); }
+.wf-track { position: relative; height: 16px; }
+.wf-zero { position: absolute; top: -5px; bottom: -5px; width: 1px; background: var(--muted); }
+.wf-fill { position: absolute; top: 2px; height: 12px; border-radius: 3px; }
+.wf-fill.pos { background: var(--pos); opacity: 0.75; }
+.wf-fill.neg { background: var(--neg); opacity: 0.75; }
+.wf-fill.sub { opacity: 1; top: 0; height: 16px; }
+.wf-fill.sub.pos { background: #145f39; }
+.wf-fill.sub.neg { background: #8f1d1d; }
+.wf-amount { text-align: right; white-space: nowrap; }
+.wf-hint { min-height: 2.6em; margin-top: 6px; }
+.choice-impact { display: block; margin-top: 4px; font-size: 11px; color: var(--accent); font-weight: 500; }
+.choice.selected .choice-impact { color: var(--muted); }
+.impact { margin: 4px 0 0; padding: 6px 10px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 6px 6px 0; }
+.impact-label { font-weight: 600; color: var(--accent); }
+@media (max-width: 640px) {
+  .wf-rows li { grid-template-columns: minmax(0, 1fr) 90px; }
+  .wf-track { grid-column: 1 / -1; grid-row: 2; }
+}
+.choice:disabled { opacity: 0.45; cursor: not-allowed; }
+.wide .composition { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }

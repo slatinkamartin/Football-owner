@@ -152,10 +152,10 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
       )}
 
       <div className="grid two">
-        <section className="card">
+        <section className="card wide">
           <Waterfall plan={plan} />
         </section>
-        <section className="card">
+        <section className="card wide">
           <h2>Složení sezóny</h2>
           <Composition plan={plan} />
         </section>
