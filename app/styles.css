@@ -760,3 +760,13 @@ table.sections td .muted.small { display: block; }
 @media (max-width: 640px) { .accounting-grid { grid-template-columns: 1fr; } }
 .bullets li { grid-template-columns: 230px minmax(0, 1fr) 200px; }
 @media (max-width: 760px) { .bullets li { grid-template-columns: minmax(0, 1fr) auto; } }
+
+/* Milníky sezóny */
+.advance .milestone-btn { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.next-milestone { color: var(--text); font-weight: 500; }
+.milestone-dialog { max-width: 520px; display: flex; flex-direction: column; gap: 8px; }
+.milestone-dialog h2 { margin: 0; }
+.milestone-dialog p { margin: 0; line-height: 1.5; }
+.milestone-dialog h3 { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.milestone-todo { display: flex; flex-wrap: wrap; gap: 8px; }
+.milestone-dialog > .primary { align-self: flex-start; margin-top: 8px; }

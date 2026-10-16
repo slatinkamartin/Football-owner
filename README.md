@@ -61,6 +61,12 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.10.1: milníky sezóny
+
+- Tlačítko „Týden ›“ se před důležitým bodem sezóny změní na konkrétní krok („Do startu ligy ›“, „Do konce okna ›“, „Do licence ›“, „Do konce sezóny ›“…) a posune přesně na něj. „Do zápasu ›“ milník nikdy nepřeskočí.
+- Na milníku vyskočí okno: co nastává, aktuální čísla (kádr, zbývající peníze na přestupy, stav licence, odhad odměny a daně, končící smlouvy) a tlačítka „Co teď udělat“.
+- Milníky: nová sezóna, termín rozpočtu, start ligy, Evropa, konec letního okna, zimní pauza, zimní okno (otevření a konec), start jara, licence a náprava licence, nadstavba, konec sezóny.
+
 ### Novinky verze 0.10: finance, které sedí
 
 - **Výhled = skutečnost + zbytek sezóny.** Rozpočet, Přehled i licence počítají peníze den po dni od dneška do konce června (zápasy podle rozpisu, výplaty prvního v měsíci, splátky, Evropa, pohár, odměna za umístění). V březnu už neukazují nesmysly.

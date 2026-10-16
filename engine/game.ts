@@ -889,8 +889,8 @@ export function advanceDays(prev: GameState, days: number, stopAtOwnMatch = fals
 }
 
 /** Hrát do příštího zápasu klubu majitele (nejvýš 60 dní). */
-export function advanceToNextMatch(prev: GameState): { state: GameState; fixtureId?: string } {
-  return advanceDays(prev, 60, true);
+export function advanceToNextMatch(prev: GameState, maxDays = 60): { state: GameState; fixtureId?: string } {
+  return advanceDays(prev, Math.max(1, Math.min(60, maxDays)), true);
 }
 
 // ---------- Rozhodnutí majitele ----------

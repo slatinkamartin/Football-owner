@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { advanceToNextMatch, advanceWeek, competitionOf, currentPhase, formatDate, ownerBlocked, seasonLabel, startNegotiation, type GameState } from '../engine';
+import { advanceDays, advanceToNextMatch, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance } from './screens/Finance';
@@ -41,6 +41,7 @@ export function App() {
   const [outdated, setOutdated] = useState(false);
   const [modals, setModals] = useState<ModalRef[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [milestone, setMilestone] = useState<Milestone | null>(null);
   const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
   const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
@@ -84,6 +85,14 @@ export function App() {
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
   const phase = currentPhase(game);
+  const nm = nextMilestone(game);
+  const nmDays = nm ? daysUntil(game, nm.date) : 99;
+  const step = nm && nmDays <= 7 ? { label: `Do ${nm.short} ›`, days: nmDays, milestone: nm } : { label: 'Týden ›', days: 7, milestone: undefined };
+  const advance = (next: GameState) => {
+    update(next);
+    const m = milestoneToday(next);
+    if (m && next.date !== game.date && !next.gameOver) setMilestone(m);
+  };
   const blocked = ownerBlocked(game);
   // Odvolaný majitel klub neřídí: změny v ostatních záložkách se neuloží.
   const managed = (next: GameState) => {
@@ -108,6 +117,7 @@ export function App() {
               </div>
               <div className={`phase-chip phase-${phase.tone}`}>
                 <strong>{phase.label}</strong> {phase.detail}
+                {nm && nmDays <= 21 && <span className="next-milestone"> · do {nm.short} {nmDays} {nmDays === 1 ? 'den' : nmDays < 5 ? 'dny' : 'dní'}</span>}
                 {game.events.length > 0 && (
                   <button className="linkbtn events-link" onClick={() => setTab('prehled')}>
                     · rozhodnutí: {game.events.length}
@@ -122,16 +132,21 @@ export function App() {
               <strong>{money(club.finance.balance)}</strong>
             </div>
             <div className="advance">
-              <button disabled={!!game.gameOver} onClick={() => update(advanceWeek(game))}>
-                Týden ›
+              <button
+                className={step.milestone ? 'milestone-btn' : ''}
+                disabled={!!game.gameOver}
+                title={step.milestone ? step.milestone.title : 'Posunout o týden'}
+                onClick={() => advance(advanceDays(game, step.days).state)}
+              >
+                {step.label}
               </button>
               <button
                 className="primary"
                 disabled={!!game.gameOver}
-                title="Hrát do příštího zápasu vašeho klubu a ukázat jeho souhrn"
+                title={nm && nmDays < 60 ? `Hrát do příštího zápasu, nejdál ale do milníku: ${nm.title}` : 'Hrát do příštího zápasu vašeho klubu a ukázat jeho souhrn'}
                 onClick={() => {
-                  const r = advanceToNextMatch(game);
-                  update(r.state);
+                  const r = advanceToNextMatch(game, nm ? nmDays : 60);
+                  advance(r.state);
                   if (r.fixtureId && !r.state.gameOver) setModals([{ type: 'match', id: r.fixtureId }]);
                 }}
               >
@@ -187,6 +202,27 @@ export function App() {
           </Sheet>
         );
       })()}
+
+      {milestone && !game.gameOver && (
+        <div className="overlay" onClick={() => setMilestone(null)}>
+          <div className="card dialog milestone-dialog" role="dialog" aria-modal="true" aria-label={milestone.title} onClick={(e) => e.stopPropagation()}>
+            <span className="muted small">{formatDate(game.date, true)}</span>
+            <h2>{milestone.title}</h2>
+            {milestone.text.map((t, i) => <p key={i}>{t}</p>)}
+            {milestone.todo.length > 0 && (
+              <>
+                <h3>Co teď udělat</h3>
+                <div className="milestone-todo">
+                  {milestone.todo.map((t) => (
+                    <button key={t.label} onClick={() => { setTab(t.tab); setMilestone(null); }}>{t.label} ›</button>
+                  ))}
+                </div>
+              </>
+            )}
+            <button className="primary" autoFocus onClick={() => setMilestone(null)}>Rozumím, pokračovat</button>
+          </div>
+        </div>
+      )}
 
       {game.gameOver && (
         <div className="overlay">

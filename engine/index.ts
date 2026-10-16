@@ -23,3 +23,4 @@ export * from './atmosphere';
 export * from './wages';
 export * from './sponsors';
 export * from './financing';
+export * from './milestones';
