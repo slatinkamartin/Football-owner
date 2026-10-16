@@ -1,3 +1,4 @@
+import { BusinessCard, CityCard, HallOfFame, UltrasCard } from './OwnerExtras';
 import { useState } from 'react';
 import {
   BAN_SEVERITY,
@@ -52,6 +53,13 @@ export function Owner({ game, onChange }: Props) {
       <Notice message={message?.text ?? null} ok={message?.ok} />
 
       {ousted && <ComebackCard game={game} onResult={apply} />}
+
+      <div className="grid two">
+        <BusinessCard game={game} onResult={apply} />
+        <HallOfFame game={game} />
+        <CityCard game={game} onResult={apply} />
+        <UltrasCard game={game} />
+      </div>
 
       <div className="grid">
         <section className="card">

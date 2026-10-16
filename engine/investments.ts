@@ -8,6 +8,7 @@ import type { ActionResult } from './staff';
 import { CATERING_SPEND, vipRate } from './stadium';
 import type { BigProject, BigProjectKind, GameState, ProgramKind, ScoutRegion } from './types';
 import { addNews, clamp, FOREIGN_PREFIX, hash01, tierOf } from './world';
+import { addTrophy, cityFactor, cityPermit } from './surroundings';
 
 /**
  * Velké investice: víceleté stavby (nový stadion, tréninkový areál, komerční areál) placené měsíčně
@@ -165,7 +166,7 @@ function cityShare(state: GameState, kind: BigProjectKind): number {
   const club = own(state);
   const base = kind === 'areal' ? 0.1 : 0.15;
   const city = state.shareholders.some((s) => s.kind === 'mesto') ? 0.05 : 0;
-  return clamp(base + 0.08 * communityEffect(club, tierOf(state, club.id)) + city, 0.05, 0.3);
+  return clamp((base + 0.08 * communityEffect(club, tierOf(state, club.id)) + city) * cityFactor(state), 0.05, 0.35);
 }
 
 /** Roční přínos nového stadionu: víc diváků (efekt nového stadionu), lepší catering a skyboxy. */
@@ -248,6 +249,7 @@ export function bigProjectOptions(state: GameState): BigOption[] {
     else if (o.kind === 'areal' && club.facilities.training < 3) blocked = 'Nejdřív tréninkové centrum aspoň na 3 hvězdy.';
     else if (o.kind === 'komercni' && club.facilities.commercial) blocked = 'Klub už komerční areál má.';
     else if ((o.kind === 'stadion' || o.kind === 'velkystadion') && club.facilities.newStadium && cap >= (o.capacity ?? 0)) blocked = 'Klub už nový stadion této velikosti má.';
+    else if ((o.kind === 'stadion' || o.kind === 'velkystadion' || o.kind === 'komercni') && cityPermit(state)) blocked = cityPermit(state);
     else if (club.finance.balance < Math.max(monthly * 3, (o.cost - grant) * OWN_SHARE)) blocked = `Banka financuje nejvýš 80 %: klub musí mít aspoň ${mil(Math.max(monthly * 3, (o.cost - grant) * OWN_SHARE))} vlastních peněz. Pomůže vklad nebo půjčka majitele.`;
     return { ...o, grant, monthly, yearlyGain: gain, payback, blocked };
   });
@@ -380,6 +382,7 @@ export function completeBigProjects(state: GameState): void {
       f.complex = true;
     }
     if (p.kind === 'komercni') f.commercial = p.cost;
+    if (p.kind === 'stadion' || p.kind === 'velkystadion') addTrophy(state, 'stadion', `Otevření nového stadionu (${(p.capacity ?? 0).toLocaleString('cs-CZ')} míst)`);
     const asset = club.finance.assets?.find((a) => a.projectId === p.id);
     if (asset) {
       asset.projectId = undefined;

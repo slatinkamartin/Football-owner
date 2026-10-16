@@ -1,3 +1,4 @@
+import { checkRecordSale, ultrasOnSale } from './surroundings';
 import { ffpBlocksSigning } from './finplus';
 import { AGENT_STYLE_LABEL, agentFeeFactor, agentOf, agentWageFactor, changeAgentRelation, closeDomino, deadlineDay, deadlineDiscount, releaseClauseFor, startDomino, tipDiscount } from './market';
 import { crisisDiscount, noteTimeline } from './league';
@@ -640,6 +641,8 @@ export function acceptOffer(prev: GameState, offerId: string, sellOn = false): A
   if (key) state.owner.trust.trener = clamp(state.owner.trust.trener - 5, 0, 100);
   if (squad.indexOf(p) < 3) noteTimeline(state, `prodej opory ${p.lastName}`);
   if (squad.indexOf(p) < 5) startDomino(state, p, fee);
+  if (squad.indexOf(p) < 3) ultrasOnSale(state);
+  checkRecordSale(state, playerName(p), fee);
   if (offer.advice === 'prijmout') changeAgentRelation(state, p.id, 2);
   const message = `${playerName(p)} přestoupil do ${clubLabel(state, offer.buyerId)} za ${fee.toLocaleString('cs-CZ')} Kč${offer.instalments ? ' (ve splátkách)' : ''}${sellOn && !isForeign(offer.buyerId) ? `, s podílem ${Math.round(SELL_ON_PCT * 100)} % z dalšího prodeje` : ''}.`;
   addNews(state, { kind: 'info', title: `Prodej: ${playerName(p)}`, text: key ? `${message} Trenér nese odchod opory nelibě.` : message });

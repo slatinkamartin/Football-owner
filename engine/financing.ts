@@ -113,7 +113,7 @@ function grantChance(state: GameState): number {
   const city = state.shareholders.find((s) => s.kind === 'mesto')?.satisfaction ?? 50;
   const club = own(state);
   const community = communityEffect(club, tierOf(state, club.id));
-  return clamp(0.3 + city / 250 + state.owner.media / 500 + state.owner.league / 500 + community * 0.08 - (state.grey.scandalUntil && state.grey.scandalUntil > state.date ? 0.25 : 0), 0.1, 0.9);
+  return clamp((0.3 + city / 250 + state.owner.media / 500 + state.owner.league / 500 + community * 0.08 - (state.grey.scandalUntil && state.grey.scandalUntil > state.date ? 0.25 : 0)) * (0.85 + (state.city?.relation ?? 50) / 333), 0.1, 0.9);
 }
 
 export function grantOptions(state: GameState): GrantOption[] {

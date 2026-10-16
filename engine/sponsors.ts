@@ -46,7 +46,9 @@ export function sponsorMarket(state: GameState): number {
   const club = ownClub(state);
   const tier = tierOf(state, club.id);
   const marketing = 1 + 0.08 * departmentEffect(club, tier, 'marketing');
-  return sponsorsAnnual({ ...club, sponsorDeal: undefined }, tier) * marketing * ownerCommercialFactor(state) * commercialFactor(state);
+  // Odkaz majitele (trofeje, nový stadion) přitahuje sponzory, až +20 %.
+  const legacy = 1 + Math.min(0.2, (state.trophies ?? []).reduce((a, t) => a + t.points, 0) / 500);
+  return sponsorsAnnual({ ...club, sponsorDeal: undefined }, tier) * marketing * ownerCommercialFactor(state) * commercialFactor(state) * legacy;
 }
 
 export function contracts(state: GameState): SponsorContract[] {

@@ -216,7 +216,10 @@ export function homeMatchOperations(state: GameState, rng: Rng, label: string): 
   const club = own(state);
   const tier = tierOf(state, club.id);
   book(state, club.id, 'bezpecnost', -securityPerMatch(tier, club.policy.security), `Pořadatelé a bezpečnost: ${label}`);
-  if (rng.chance(incidentChance(club.policy.security))) {
+  // Naštvaný kotel zlobí víc, spokojený méně.
+  const ultras = state.ultras?.relation ?? 55;
+  const mood = state.ultras?.boycottUntil && state.ultras.boycottUntil >= state.date ? 1 : ultras < 30 ? 1.5 : ultras >= 70 ? 0.8 : 1;
+  if (rng.chance(incidentChance(club.policy.security) * mood)) {
     const fine = incidentFine(tier);
     book(state, club.id, 'ostatni', -fine, `Pokuta za výtržnosti fanoušků: ${label}`);
     club.fanMood = clamp(club.fanMood - 2, 0, 100);

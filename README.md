@@ -61,6 +61,24 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.20: majitel a okolí (etapa F)
+
+- **Vaše podnikání** (Majitel):
+  - příjem z firem kolísá podle roku v oboru (skvělý rok ×1,6, krize ×0,3);
+  - osobní peníze jdou investovat bezpečně (asi 3 %) nebo rizikově (v průměru 8 %, kolísá);
+  - klub může sponzorovat vaše firma: rychlé peníze, ale střet zájmů (šedá zóna, nespokojení investoři).
+- **Nabídka na převzetí celého klubu** (o 30 % nad hodnotou): prodat a skončit s hodnocením éry, vyjednat víc, nebo odmítnout.
+- **Město**:
+  - primátor s postojem ke klubu a vztah s klubem;
+  - volby každé čtyři roky;
+  - vztah rozhoduje o povolení stadionu a komerčního areálu, o příspěvku města a šanci na dotace;
+  - primátora jde pozvat do VIP.
+- **Kotel a fanklub**:
+  - vztah podle cen, výsledků, prodejů opor a přísnosti ochranky;
+  - nadšený kotel zvedá domácí prostředí a návštěvu, naštvaný zlobí;
+  - při odmítnutí schůzky hrozí bojkot.
+- **Síň slávy**: tituly, poháry, postupy, Evropa, nový stadion, rekordní prodeje a odchovanci. Odkaz éry přitahuje sponzory (až +20 %).
+
 ### Novinky verze 0.19: finance (etapa E)
 
 - **Vedlejší cíle sezóny** na Přehledu, s průběžným plněním. Vyhodnocení na konci sezóny přinese bonus nebo ztrátu vztahu.

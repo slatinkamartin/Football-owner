@@ -68,6 +68,7 @@ import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emer
 import { decisiveness, settingsOf } from './settings';
 import { recordPulse, pulseValues, snapshotPulse } from './pulse';
 import { weeklyStories } from './stories';
+import { businessIncome, monthlyBusiness, monthlyCity, monthlyUltras, seasonBusiness, seasonTrophies, ultrasEffect } from './surroundings';
 import { createSideGoals, seasonFfp, seasonRating, settleSideGoals } from './finplus';
 import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
@@ -76,6 +77,7 @@ import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyR
 import { milestoneToday, nextMilestone } from './milestones';
 import { aiForeignSignings, monthlyForeign, refreshForeignMarket, returnLoans, weeklyForeign } from './foreign';
 import { analyticsBonus, completeBigProjects, monthlyBigProjects, monthlyPrograms } from './investments';
+import { communityEffect } from './operations';
 import { adminMonthly, pitchFactor, campBonus, dailyOperations, homeMatchOperations, maintenanceInjury, monthlyOperations } from './operations';
 import { NEW_CATEGORIES_V10, NEW_CATEGORIES_V11, SAVE_VERSION, type Departments, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
 import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
@@ -569,6 +571,7 @@ function endSeason(state: GameState, rng: Rng): void {
       book(state, own.id, 'platy', -goalBonusPoints(state) * bonusPerPoint(own), 'Prémie hráčům za splnění cíle sezóny');
     }
   }
+  if (ownComp) seasonTrophies(state, ownIndex + 1, ownComp.tier > 1 && ownIndex + 1 <= ownComp.promote, state.cups.pohar?.winner);
   // Finanční konec sezóny: vedlejší cíle, vysvědčení a fair play.
   settleSideGoals(state);
   seasonRating(state);
@@ -664,7 +667,9 @@ function playMatchesOn(state: GameState, rng: Rng): void {
     const plan = involvesOwner ? planEffect(state, f) : { bonus: 0, ticketFactor: 1, homeEdge: 0 };
     const ticketPrice = home.policy.ticketPrice;
     if (plan.ticketFactor !== 1) home.policy.ticketPrice = Math.round(ticketPrice * plan.ticketFactor);
-    const attendance = Math.min(capacity, Math.max(Math.round(ownHolders * 0.88), matchAttendance(rng, home, away, tier, form, capacity, damaged)));
+    // Kotel: bojkot nebo nadšení mění návštěvu i domácí prostředí.
+    const ultras = home.id === ownId ? ultrasEffect(state) : { homeEdge: 0, attendance: 1, incidents: 1 };
+    const attendance = Math.min(capacity, Math.max(Math.round(ownHolders * 0.88), Math.round(matchAttendance(rng, home, away, tier, form, capacity, damaged) * ultras.attendance)));
     const homeCoach = coachOf(state, home.id);
     const awayCoach = coachOf(state, away.id);
     const half = involvesOwner ? halftimeAdjust(state, f) : undefined;
@@ -679,7 +684,7 @@ function playMatchesOn(state: GameState, rng: Rng): void {
         season: state.season,
         decisive: decisiveness(state),
         detail: comp ? comp.id === ownCompId : involvesOwner,
-        homeEdge: homeAdvantage(home, attendance, capacity) * (ownHome ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) + plan.homeEdge,
+        homeEdge: homeAdvantage(home, attendance, capacity) * (ownHome ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) + plan.homeEdge + ultras.homeEdge,
         halftime: half ? (ownHome ? { home: half } : { away: half }) : undefined,
       },
     );
@@ -792,7 +797,10 @@ function monthlyFinance(state: GameState, rng: Rng): void {
     }
   }
 
-  state.owner.wallet += DIFFICULTY[state.owner.difficulty].monthlyIncome;
+  state.owner.wallet += businessIncome(state, DIFFICULTY[state.owner.difficulty].monthlyIncome);
+  monthlyBusiness(state, rng);
+  monthlyCity(state, rng, communityEffect(state.clubs[state.owner.clubId], tierOf(state, state.owner.clubId)));
+  monthlyUltras(state);
   monthlyShareholders(state, rng);
   monthlyGrey(state, rng);
   monthlyEurope(state);
@@ -910,6 +918,7 @@ function processDay(state: GameState, rng: Rng): void {
     ensureInterimStaff(state, rng);
     refreshForeignMarket(state, rng);
     createSideGoals(state);
+    seasonBusiness(state, rng);
     {
       // Podmíněné doplatky za loňský postup nebo Evropu.
       const last = state.history[state.history.length - 1];

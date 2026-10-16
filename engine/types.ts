@@ -1022,6 +1022,14 @@ export interface GameState {
   domino?: { soldName: string; soldOverall: number; position: Position; budget: number; until: string };
   /** Deadline day: hráči nabídnutí v posledních dnech okna se slevou. */
   deadlineDeals?: string[];
+  /** Podnikání majitele: rok v oboru, investice, sponzoring vlastní firmou (roční částka). */
+  business?: { mood: 'boom' | 'normal' | 'krize'; safe: number; risky: number; ownSponsor: number };
+  /** Vedení města. */
+  city?: { mayor: string; stance: 'sport' | 'neutral' | 'skeptik'; relation: number; nextElection: string; lastLobby?: string };
+  /** Kotel a fanklub. */
+  ultras?: { relation: number; boycottUntil?: string };
+  /** Síň slávy: úspěchy éry majitele. */
+  trophies?: import('./surroundings').Trophy[];
   /** Vedlejší cíle sezóny (sponzor, město, akcionáři). */
   sideGoals?: { season: number; goals: import('./finplus').SideGoal[] };
   /** Finanční vysvědčení poslední sezóny. */

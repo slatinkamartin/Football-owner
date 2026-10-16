@@ -14,6 +14,7 @@ import { resolveStoryEvent } from './stories';
 import { resolvePress } from './matchday';
 import { PEOPLE_COOLDOWN, peopleTemplates } from './people';
 import { FINANCE_COOLDOWN, financeTemplates } from './finplus';
+import { takeoverTemplate, ultrasTemplates } from './surroundings';
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -94,6 +95,9 @@ export const TEMPLATES: Record<string, Template> = {
   ...peopleTemplates({ trust, teamMorale }),
   // Sponzoři s aktivacemi a finanční šoky (engine/finplus.ts).
   ...financeTemplates({ teamMorale, media }),
+  // Převzetí klubu a kotel (engine/surroundings.ts).
+  prevzeti: takeoverTemplate(),
+  ...ultrasTemplates(),
   // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
   'tiskovka-zapas': {
     weight: () => 0,
@@ -1187,7 +1191,7 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
   state.eventLog ??= {};
   const recent = (id: string) => {
     const last = state.eventLog![id];
-    return !!last && addDays(last, COOLDOWN[id] ?? PEOPLE_COOLDOWN[id] ?? FINANCE_COOLDOWN[id] ?? 90) > state.date;
+    return !!last && addDays(last, COOLDOWN[id] ?? PEOPLE_COOLDOWN[id] ?? FINANCE_COOLDOWN[id] ?? ({ prevzeti: 400, 'kotel-schuzka': 90 } as Record<string, number>)[id] ?? 90) > state.date;
   };
   const weighted = Object.entries(TEMPLATES)
     .filter(([id]) => !open.has(id) && !recent(id) && (!state.owner.ousted || OUSTED_TEMPLATES.has(id)))
