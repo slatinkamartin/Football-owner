@@ -312,4 +312,6 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 
 **Verze 0.7 (hotovo):** spolumajitelé (podíl při startu, hlasování, valná hromada s dividendou a hlasováním o důvěře, odvolání a návrat, nákup a prodej akcií, navýšení kapitálu, odhadní hodnota klubu), pověst majitele u médií a svazu, šedá zóna na hraně etiky, další situace k rozhodnutí, finanční a obchodní ředitel, šéf akademie a tiskový mluvčí, rozestavení v náhledu zápasu, kalendář v horní liště.
 
-**Další krok:** skuteční hráči v datovém balíčku, evropské poháry, scénáře.
+**Verze 0.8 (hotovo):** ekonomika zdola (platy jako hlavní náklad, sponzoři podle trhu, oddělení, provoz), rozpočet sezóny se schválením, hlasováním akcionářů a plánem proti skutečnosti, permanentky, evropské poháry, rychlejší pověst za úspěch, hospodaření ostatních klubů, domácí prostředí, motivace trenéra, kabina, spokojenost s platem, sestupová klauzule, ředitel drží kádr.
+
+**Další krok:** skuteční hráči v datovém balíčku, odehrané evropské zápasy, scénáře.

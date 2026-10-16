@@ -8,6 +8,7 @@ import {
   interest,
   playerAge,
   playerName,
+  playerWage,
   playerValue,
   POSITION_LABEL,
   scouted,
@@ -105,6 +106,17 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
         <dl className="kv">
           <dt>Plat</dt>
           <dd>{p.clubId === FREE ? `nárok ${money(p.wage)}` : `${money(p.wage)} měsíčně`}</dd>
+          {own && (() => {
+            const ratio = p.wage / Math.max(5_000, playerWage(p.overall, game.clubs[p.clubId].reputation));
+            return (
+              <>
+                <dt>Spokojenost s platem</dt>
+                <dd className={ratio < 0.85 ? 'neg' : ratio > 1.2 ? 'pos' : ''}>
+                  {ratio < 0.7 ? 'cítí se podhodnocený' : ratio < 0.85 ? 'chtěl by víc' : ratio > 1.2 ? 'nadstandardní' : 'odpovídá trhu'}
+                </dd>
+              </>
+            );
+          })()}
           <dt>Smlouva do</dt>
           <dd className={contractExpiring(game, p) ? 'neg' : ''}>{p.clubId === FREE ? '–' : `30. 6. ${p.contractUntil}`}</dd>
           {own && p.bookValue !== undefined && (

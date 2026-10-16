@@ -239,10 +239,20 @@ export type FinanceCategory =
   | 'investice'
   | 'uver'
   | 'dane'
-  | 'vklad';
+  | 'vklad'
+  | 'oddeleni'
+  | 'evropa';
 
-export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'tv', 'komercni', 'pohar', 'ostatni', 'uver', 'vklad'];
-export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'provoz', 'prestupy', 'investice', 'dane'];
+export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'uver', 'vklad'];
+export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'oddeleni', 'provoz', 'prestupy', 'investice', 'dane'];
+
+/** Roční rozpočty oddělení klubu v Kč. */
+export interface Departments {
+  skauting: number;
+  mladez: number;
+  medicina: number;
+  marketing: number;
+}
 
 /** Účetní položky sezóny (jen klub majitele). Na rozdíl od peněz rozkládají cenu hráče do let smlouvy. */
 export interface Accounting {
@@ -291,6 +301,12 @@ export interface ClubFinance {
 
 export interface ClubPolicy {
   ticketPrice: number;
+  /** Cena permanentky na sezónu (jen klub majitele). */
+  seasonTicketPrice?: number;
+  /** Roční rozpočty oddělení (ostatní kluby mají běžnou výši). */
+  departments?: Departments;
+  /** Sportovní ředitel sám prodlužuje smlouvy a doplňuje kádr (výchozí ano). */
+  autoSquad?: boolean;
   /** Násobek běžného mzdového rozpočtu (0,7 až 1,5). */
   wageMultiplier: number;
   /** Rozpočet na odstupné za posily na celou sezónu v Kč. */
@@ -456,6 +472,8 @@ export interface MatchDetail {
   events: MatchEvent[];
   /** Hráč zápasu. */
   potm?: string;
+  /** Domácí výhoda v zápase (body síly). */
+  homeEdge?: number;
 }
 
 export interface Fixture {
@@ -592,7 +610,51 @@ export interface TimelinePoint {
   points: number;
 }
 
-export const SAVE_VERSION = 7;
+export interface BudgetLine {
+  key: string;
+  label: string;
+  amount: number;
+  categories: FinanceCategory[];
+}
+
+export interface BudgetPlan {
+  lines: BudgetLine[];
+  result: number;
+  cashMin: number;
+  cashEnd: number;
+  months: { date: string; balance: number }[];
+}
+
+export interface SeasonBudget {
+  season: number;
+  /** Datum schválení (nebo poslední revize). */
+  approved?: string;
+  revised?: boolean;
+  plan?: BudgetPlan;
+  /** Prodané permanentky. */
+  seasonTickets?: number;
+}
+
+export type EuropeCompetition = 'LM' | 'EL' | 'KL';
+
+export interface EuropeEntry {
+  season: number;
+  clubId: string;
+  /** Kam klub nastoupil (předkola). */
+  entry: EuropeCompetition;
+  /** Kde skončil: ligová fáze některé soutěže, nebo vyřazení v předkolech. */
+  result: EuropeCompetition | 'predkola';
+  revenue: number;
+}
+
+export interface EuropeSeason {
+  season: number;
+  entries: EuropeEntry[];
+  /** Vyhodnoceno a vyplaceno (konec srpna). */
+  resolved?: boolean;
+}
+
+export const SAVE_VERSION = 8;
 
 export interface GameState {
   version: typeof SAVE_VERSION;
@@ -618,6 +680,11 @@ export interface GameState {
   /** Kdy naposledy nastala která situace. */
   eventLog?: Record<string, string>;
   loans: Loan[];
+  /** Rozpočet sezóny klubu majitele. */
+  budget?: SeasonBudget;
+  /** Evropské poháry českých klubů v aktuální sezóně a historie. */
+  europe?: EuropeSeason;
+  europeHistory?: EuropeEntry[];
   /** Kluby mimo modelované soutěže (divize a níže). */
   pool: string[];
   news: NewsItem[];

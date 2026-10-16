@@ -7,6 +7,8 @@ import type { GameState, IncomingOffer, Negotiation, Player, Position, TransferP
 import { addNews, clamp, clubLabel, FOREIGN_PREFIX, FREE, hash01, isForeign, plural, tierOf, transferWindow } from './world';
 
 const MIN_SQUAD = 18;
+/** Velikost kádru, kterou drží sportovní ředitel. */
+const SQUAD_TARGET = 22;
 const MAX_FREE_AGENTS = 150;
 
 export function playerName(p: Player): string {
@@ -583,16 +585,23 @@ export function seasonEndContracts(state: GameState, rng: Rng): void {
   const leaving: string[] = [];
   const renewed: string[] = [];
 
-  // Sportovní ředitel sám prodlouží smlouvy důležitým hráčům, pokud nechtějí příliš.
-  if (directorOf(state, own) && state.owner.trust.reditel >= 30) {
+  // Sportovní ředitel sám prodlouží smlouvy hráčům, které kádr potřebuje, pokud nechtějí příliš
+  // a vejdou se do mzdového stropu. Majitel to může ve Financích vypnout.
+  const club = state.clubs[own];
+  if (directorOf(state, own) && state.owner.trust.reditel >= 30 && club.policy.autoSquad !== false) {
     const squad = squadOf(state, own).sort((a, b) => b.overall - a.overall);
-    for (const p of squad.slice(0, 16)) {
-      if (!contractExpiring(state, p) || playerAge(p, state.season) > 31) continue;
+    let bill = wageBill(state, own);
+    const cap = wageBudgetMonthly(club);
+    for (const p of squad.slice(0, SQUAD_TARGET)) {
+      if (!contractExpiring(state, p) || playerAge(p, state.season) > 32) continue;
+      if ((p.morale ?? 60) < 25) continue;
       const demand = renewalDemand(state, p);
       if (demand > fairWage(state, p, own) * 1.25) continue;
-      if (p.overall - squadQualityForReputation(state.clubs[own].reputation) > 10) continue;
+      if (p.overall - squadQualityForReputation(club.reputation) > 10) continue;
+      if (bill - p.wage + demand > cap) continue;
+      bill += demand - p.wage;
       p.wage = demand;
-      p.contractUntil = state.season + 1 + rng.int(2, 3);
+      p.contractUntil = state.season + 1 + rng.int(1, 3);
       renewed.push(playerName(p));
     }
   }
@@ -611,6 +620,7 @@ export function seasonEndContracts(state: GameState, rng: Rng): void {
     }
   }
   state.market.listed = state.market.listed.filter((id) => state.players[id]?.clubId === own);
+  trimFreeAgents(state);
   if (leaving.length) {
     addNews(state, {
       kind: 'varovani',
@@ -632,7 +642,14 @@ export function refreshFreeAgents(state: GameState, rng: Rng): void {
     p.wage = roundMoney(15_000 * Math.pow(1.06, p.overall - 40), 1_000);
     state.players[p.id] = p;
   }
-  const rest = Object.values(state.players).filter((p) => p.clubId === FREE).sort((a, b) => b.overall - a.overall);
+  trimFreeAgents(state);
+}
+
+/** Volných hráčů je nejvýš 150 (nejslabší a nejstarší odcházejí z fotbalu). */
+export function trimFreeAgents(state: GameState): void {
+  const rest = Object.values(state.players)
+    .filter((p) => p.clubId === FREE)
+    .sort((a, b) => b.overall - a.overall);
   for (const p of rest.slice(MAX_FREE_AGENTS)) delete state.players[p.id];
 }
 
@@ -642,6 +659,7 @@ export function closeWindow(state: GameState, rng: Rng): void {
   state.market.offers = [];
   if (state.market.negotiation && state.market.negotiation.stage !== 'hotovo') state.market.negotiation = undefined;
   emergencyFill(state, rng, 'na konci přestupního okna');
+  trimFreeAgents(state);
 }
 
 /** Když klubu majitele chybí hráči, ředitel (nebo asistent) doplní kádr levnými volnými hráči. */
@@ -653,22 +671,30 @@ export function emergencyFill(state: GameState, rng: Rng, when: string): void {
     (Object.keys(SQUAD_SHAPE) as Position[]).filter(
       (pos) => squadOf(state, own).filter((p) => p.position === pos).length < (pos === 'GK' ? 2 : SQUAD_SHAPE[pos] - 2),
     );
+  const club = state.clubs[own];
+  // S ředitelem a zapnutou péčí o kádr se doplňuje na 22 hráčů nejlepšími, které se vejdou do mzdového stropu.
+  const auto = !!directorOf(state, own) && club.policy.autoSquad !== false;
+  const target = auto ? SQUAD_TARGET : MIN_SQUAD;
   let guard = 0;
-  while ((squadCount() < MIN_SQUAD || needs().length) && guard++ < 20) {
-    const pos = needs()[0] ?? rng.pick(['DF', 'MF', 'FW'] as Position[]);
-    const fa = Object.values(state.players)
-      .filter((p) => p.clubId === FREE && p.position === pos && interest(state, p, own).ok)
-      .sort((a, b) => a.wage - b.wage)[0];
+  while ((squadCount() < target || needs().length) && guard++ < 24) {
+    const pos = needs()[0] ?? weakestPosition(squadOf(state, own)).position;
+    const room = wageBudgetMonthly(club) - wageBill(state, own);
+    const pool = Object.values(state.players).filter((p) => p.clubId === FREE && p.position === pos && interest(state, p, own).ok);
+    const affordable = pool.filter((p) => wageDemand(state, p, own) <= room).sort((a, b) => b.overall - a.overall);
+    if (squadCount() >= MIN_SQUAD && !needs().length && !affordable.length) break;
+    const fa = (auto ? affordable[0] : undefined) ?? pool.sort((a, b) => a.wage - b.wage)[0];
     const p = fa ?? generatePlayer(rng, state, { clubId: FREE, position: pos, season: state.season, quality: squadQualityForReputation(state.clubs[own].reputation) - 10, age: rng.int(17, 19) });
     state.players[p.id] = p;
-    executeTransfer(state, p, own, 0, Math.max(5_000, wageDemand(state, p, own)), 1);
+    executeTransfer(state, p, own, 0, Math.max(5_000, wageDemand(state, p, own)), auto ? 2 : 1);
     signed.push(playerName(p));
   }
   if (signed.length) {
     addNews(state, {
       kind: 'varovani',
-      title: 'Kádr byl doplněn z nouze',
-      text: `Klubu chyběli hráči, a tak se ${when} podepsaly krátké smlouvy s levnými volnými hráči: ${signed.join(', ')}.`,
+      title: auto ? 'Sportovní ředitel doplnil kádr' : 'Kádr byl doplněn z nouze',
+      text: auto
+        ? `Ředitel ${when} podepsal volné hráče v rámci mzdového stropu: ${signed.join(', ')}.`
+        : `Klubu chyběli hráči, a tak se ${when} podepsaly krátké smlouvy s levnými volnými hráči: ${signed.join(', ')}.`,
     });
   }
 }

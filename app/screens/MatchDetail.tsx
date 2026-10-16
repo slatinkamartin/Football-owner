@@ -60,6 +60,7 @@ export function MatchDetail({ game, fixtureId, onClose, onBack }: { game: GameSt
             {d && <>xG {d.home.xg.toFixed(2)} : {d.away.xg.toFixed(2)} · </>}
             {num(r.attendance)} diváků · {home.stadium.name}
             {d?.potm && <> · Hráč zápasu: <strong>{nameOf(d.potm)}</strong></>}
+            {d?.homeEdge !== undefined && <> · Domácí prostředí: {d.homeEdge >= 7.2 ? 'bouřlivé' : d.homeEdge >= 5.6 ? 'běžné' : 'vlažné'} ({d.homeEdge.toFixed(1).replace('.', ',')})</>}
           </p>
         )}
 

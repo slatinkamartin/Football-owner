@@ -1,11 +1,11 @@
-import { book } from './finance';
+import { book, departmentEffect } from './finance';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { newId, playersByClub, squadQualityForReputation, teamStrength } from './players';
 import { createRng, type Rng } from './rng';
 import { finalStandings } from './competitions';
 import { computeTable } from './standings';
 import type { Club, ClubStaff, CoachStyle, Competition, GameState, SeasonGoal, Staff, StaffRole } from './types';
-import { addNews, clamp, competitionOf, FREE } from './world';
+import { addNews, clamp, competitionOf, FREE, tierOf } from './world';
 
 export const ROLE_LABEL: Record<StaffRole, string> = {
   trener: 'Hlavní trenér',
@@ -468,7 +468,9 @@ export function refreshStaffPool(state: GameState, rng: Rng): void {
 
 /** Úroveň skautingu vlastního klubu: přibližná hodnocení cizích hráčů. */
 export function scoutingError(state: GameState): number {
-  return (100 - directorAbility(state)) / 12;
+  const club = state.clubs[state.owner.clubId];
+  const dept = departmentEffect(club, tierOf(state, club.id), 'skauting');
+  return ((100 - directorAbility(state)) / 12) * (1 - 0.35 * dept);
 }
 
 export function squadLevel(state: GameState, clubId: string): number {

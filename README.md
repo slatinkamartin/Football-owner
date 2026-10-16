@@ -23,7 +23,7 @@ npm run build      # produkční sestavení do složky dist/
 | `app/` | Uživatelské rozhraní (React) |
 | `data/cz-zaklad/` | Datový balíček: soutěže a kluby české pyramidy (1. až 3. liga) |
 
-## Co umí verze 0.7
+## Co umí verze 0.8
 
 - Výběr klubu z 1. až 3. ligy, startovních podmínek (osobní kapitál majitele) a podílu v klubu (100 %, 60 % nebo 35 %).
 - Týdenní tahy, celé sezóny se 4 soutěžemi (1. liga, 2. liga, ČFL, MSFL), postupy a sestupy včetně pravidel pro B-týmy.
@@ -60,6 +60,18 @@ npm run build      # produkční sestavení do složky dist/
 - **Smlouvy:** prodlužování, uvolnění hráče, odchody po skončení smlouvy (důležitým hráčům prodlužuje ředitel sám).
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
+
+### Novinky verze 0.8
+
+- **Ekonomika zdola:** platy hráčů jsou hlavním nákladem klubů (55–65 % nákladů). Sponzoři platí podle velikosti a pověsti klubu a nálady fanoušků. Provoz klubu a stadionu se počítá zvlášť od oddělení. Běžný klub 1. ligy hospodaří zhruba vyrovnaně a ztráty kryjí prodeje hráčů nebo majitel.
+- **Rozpočet sezóny:** na začátku sezóny ho připraví finanční ředitel (nebo účetní) a majitel ho do 15. 7. upraví a schválí. Nastavuje se vstupné, permanentky, mzdový strop, peníze na přestupy a rozpočty oddělení. Hra ukáže plánovaný výsledek, zůstatek po měsících, kontrolu licence a soulad s cílem sezóny. Spolumajitelé o rozpočtu hlasují. Během sezóny se plán porovnává se skutečností.
+- **Oddělení:** skauting (přesnost odhadů), mládež (kvalita dorostu), medicína (zranění) a marketing (sponzoři a fanoušci), s klesajícím výnosem.
+- **Permanentky:** prodají se při schválení rozpočtu, jejich držitelé pak neplatí vstupné.
+- **Evropské poháry:** první čtyři kluby ligy a vítěz poháru hrají předkola. Postup do ligové fáze podle síly kádru přináší desítky až stovky milionů a pověst.
+- **Úspěch se vyplácí:** pověst roste rychleji, když klub překoná očekávání, za titul a pohár. Velké kluby bez úspěchů naopak pomalu ztrácejí.
+- **Ostatní kluby hospodaří:** utrácí, co vydělají, přebytky investují a peníze z Evropy nehromadí.
+- **Lidé na hřišti:** domácí prostředí podle zaplnění stadionu a nálady fanoušků, motivace trenéra podle jeho důvěry v majitele, nálada v kabině a spokojenost hráčů s platem.
+- **Opravy:** při postupu nebo sestupu se přepočítá vstupné a rozpočty. Smlouvy mají sestupovou klauzuli (platy −30 %). Sportovní ředitel sám prodlužuje smlouvy a doplňuje kádr na 22 hráčů v rámci mzdového stropu (dá se vypnout). Počet volných hráčů je omezený.
 
 ## Známá zjednodušení
 

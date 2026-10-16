@@ -20,14 +20,18 @@ const MEDICAL_UPKEEP = [0, 50_000, 120_000, 250_000, 400_000, 600_000];
 /** Útrata diváka za občerstvení a suvenýry podle úrovně cateringu. */
 export const CATERING_SPEND = [20, 45, 70, 100];
 
+/** Ceny provozu zázemí podle soutěže (v nižších soutěžích jsou mzdy i energie levnější). */
+const UPKEEP_SCALE: Record<number, number> = { 1: 0.8, 2: 0.35, 3: 0.12 };
+
 /** Měsíční provoz zázemí. */
-export function facilityUpkeep(f: Facilities): number {
-  return TRAINING_UPKEEP[f.training] + ACADEMY_UPKEEP[f.academy] + MEDICAL_UPKEEP[f.medical] + f.vip * 10_000 + f.catering * 30_000 + (f.heating ? 60_000 : 0);
+export function facilityUpkeep(f: Facilities, tier = 1): number {
+  const k = UPKEEP_SCALE[Math.min(3, Math.max(1, tier))];
+  return Math.round((TRAINING_UPKEEP[f.training] + ACADEMY_UPKEEP[f.academy] + MEDICAL_UPKEEP[f.medical] + f.vip * 10_000 + f.catering * 30_000 + (f.heating ? 60_000 : 0)) * k);
 }
 
 /** O kolik dražší (nebo levnější) je provoz zázemí proti běžnému pro klub této velikosti. */
 export function facilityUpkeepDelta(club: Club, tier: number): number {
-  return facilityUpkeep(club.facilities) - facilityUpkeep(defaultFacilities(club.reputation, tier));
+  return facilityUpkeep(club.facilities, tier) - facilityUpkeep(defaultFacilities(club.reputation, tier), tier);
 }
 
 export function vipRate(tier: number): number {

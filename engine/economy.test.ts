@@ -26,10 +26,10 @@ describe('kalibrace podle české ligy', () => {
 
   it('platy odpovídají úrovni soutěže', () => {
     expect(Math.max(...wages(start, 'slavia'))).toBeGreaterThan(800_000);
-    expect(median(wages(start, 'bohemians'))).toBeGreaterThan(40_000);
-    expect(median(wages(start, 'bohemians'))).toBeLessThan(120_000);
-    expect(median(wages(start, 'zizkov'))).toBeLessThan(40_000);
-    expect(median(wages(start, 'kozlovice'))).toBeLessThan(15_000);
+    expect(median(wages(start, 'bohemians'))).toBeGreaterThan(100_000);
+    expect(median(wages(start, 'bohemians'))).toBeLessThan(250_000);
+    expect(median(wages(start, 'zizkov'))).toBeLessThan(70_000);
+    expect(median(wages(start, 'kozlovice'))).toBeLessThan(20_000);
   });
 
   it('lepší umístění přinese víc peněz', () => {

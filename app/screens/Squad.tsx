@@ -16,11 +16,15 @@ import {
   teamStrength,
   toggleListed,
   type ActionResult,
+  coachMotivation,
+  dressingRoom,
+  homeAdvantage,
+  TYPICAL_HOME_ADVANTAGE,
   type GameState,
   type Player,
   type Position,
 } from '../../engine';
-import { Badge, Notice } from '../components';
+import { Badge, Meter, Notice } from '../components';
 import { Chips, DataTable, useStoredState } from '../table';
 import { PlayerLink, useNav } from '../nav';
 import { money } from '../format';
@@ -74,9 +78,13 @@ export function Squad({ game, onChange }: Props) {
           <dt>Platy měsíčně</dt><dd>{money(wages)}</dd>
           <dt>Hodnota kádru</dt><dd>{money(value)}</dd>
         </dl>
+        <TeamSpirit game={game} />
         {expiring > 0 && (
           <p className="warning">
-            {expiring} hráčům končí smlouva 30. 6. {game.season + 1}. Sportovní ředitel prodlouží jen důležité hráče, ostatní odejdou zadarmo.
+            {expiring} hráčům končí smlouva 30. 6. {game.season + 1}.{' '}
+            {game.clubs[game.owner.clubId].policy.autoSquad !== false
+              ? 'Sportovní ředitel prodlouží ty, které kádr potřebuje a vejdou se do mzdového stropu, ostatní odejdou zadarmo.'
+              : 'Automatické prodlužování ředitelem máte vypnuté (Finance → Rozpočet).'}
           </p>
         )}
       </section>
@@ -245,5 +253,24 @@ function PlayerActions({
         <p className="muted small">Uvolnění stojí polovinu platu do konce smlouvy (nejvýš za 12 měsíců).</p>
       </div>
     </div>
+  );
+}
+
+/** Lidský faktor: nálada v kabině, motivace trenéra a domácí prostředí. */
+function TeamSpirit({ game }: { game: GameState }) {
+  const room = dressingRoom(game);
+  const motivation = coachMotivation(game);
+  const club = game.clubs[game.owner.clubId];
+  const sign = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(1).replace('.', ',')}`;
+  return (
+    <dl className="kv meters spirit">
+      <dt>Nálada v kabině ({room.label})</dt>
+      <dd><Meter value={room.morale} /> {sign(room.bonus)}</dd>
+      <dt>Motivace trenéra (důvěra {Math.round(game.owner.trust.trener)})</dt>
+      <dd><Meter value={game.owner.trust.trener} /> {sign(motivation)}</dd>
+      <dt>Domácí prostředí (fanoušci {Math.round(club.fanMood)})</dt>
+      <dd><Meter value={club.fanMood} /> {sign(homeAdvantage(club, club.stadium.capacity * 0.7, club.stadium.capacity) - TYPICAL_HOME_ADVANTAGE)}</dd>
+      <dd className="muted small spirit-note">Čísla jsou vliv na sílu týmu v zápase (domácí prostředí proti běžnému při 70% zaplnění stadionu).</dd>
+    </dl>
   );
 }

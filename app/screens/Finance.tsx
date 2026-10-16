@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import {
   CATEGORY_LABEL,
-  competitionOf,
-  defaultTicketPrice,
-  defaultTransferBudget,
   EXPENSE_CATEGORIES,
   formatShortDate,
   INCOME_CATEGORIES,
@@ -17,29 +14,26 @@ import {
   profitAndLoss,
   TAX_RATE,
   injectCapital,
-  updatePolicy,
-  wageBudgetMonthly,
   type FinanceCategory,
   type FinanceTotals,
   type GameState,
 } from '../../engine';
 import { VoteInfo } from '../VoteInfo';
+import { BudgetCard } from './Budget';
 import { money } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
 import { LineChart } from '../chart';
 
 export function Finance({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
   const club = game.clubs[game.owner.clubId];
-  const tier = competitionOf(game, club.id)?.tier ?? 3;
   const [capital, setCapital] = useState('');
-  const [ticket, setTicket] = useState(String(club.policy.ticketPrice));
-  const [transfer, setTransfer] = useState(String(club.policy.transferBudget / 1_000_000));
 
   const capitalValue = Number(capital.replace(',', '.')) * 1_000_000;
   const canInject = capitalValue > 0 && capitalValue <= game.owner.wallet;
 
   return (
     <div className="grid two">
+      <BudgetCard game={game} onChange={onChange} />
       <section className="card">
         <h2>Stav</h2>
         <dl className="kv">
@@ -67,55 +61,6 @@ export function Finance({ game, onChange }: { game: GameState; onChange: (g: Gam
             Vložit
           </button>
         </div>
-      </section>
-
-      <section className="card">
-        <h2>Rozhodnutí majitele</h2>
-
-        <label className="field">
-          <span>Cena vstupenky (běžně {defaultTicketPrice(tier)} Kč)</span>
-          <div className="inline-form">
-            <input inputMode="numeric" value={ticket} onChange={(e) => setTicket(e.target.value)} />
-            <span>Kč</span>
-            <button
-              disabled={Number(ticket) === club.policy.ticketPrice || !(Number(ticket) >= 0)}
-              onClick={() => onChange(updatePolicy(game, { ticketPrice: Number(ticket) }))}
-            >
-              Nastavit
-            </button>
-          </div>
-          <small className="muted">Vyšší cena přinese víc za vstupenku, ale přijde méně diváků.</small>
-        </label>
-
-        <label className="field">
-          <span>Mzdový rozpočet: {Math.round(club.policy.wageMultiplier * 100)} % běžného ({money(wageBudgetMonthly(club))} měsíčně)</span>
-          <input
-            type="range"
-            min={70}
-            max={150}
-            step={5}
-            value={Math.round(club.policy.wageMultiplier * 100)}
-            onChange={(e) => onChange(updatePolicy(game, { wageMultiplier: Number(e.target.value) / 100 }))}
-          />
-          <small className="muted">Strop pro platy hráčů, který hlídá sportovní ředitel. Vyšší rozpočet přiláká i hráče, kteří by jinak nepřišli. Platy ve smlouvách se změnou rozpočtu nemění.</small>
-        </label>
-
-        <label className="field">
-          <span>Rozpočet na odstupné za sezónu (běžně {money(defaultTransferBudget(club))})</span>
-          <div className="inline-form">
-            <input inputMode="decimal" value={transfer} onChange={(e) => setTransfer(e.target.value)} />
-            <span>mil. Kč</span>
-            <button
-              disabled={!(Number(transfer.replace(',', '.')) >= 0)}
-              onClick={() => onChange(updatePolicy(game, { transferBudget: Number(transfer.replace(',', '.')) * 1_000_000 }))}
-            >
-              Nastavit
-            </button>
-          </div>
-          <small className="muted">
-            Platí pro letní i zimní okno, polovina peněz z prodejů se do něj vrací. Teď nastaveno {money(club.policy.transferBudget)}.
-          </small>
-        </label>
       </section>
 
       <section className="card">

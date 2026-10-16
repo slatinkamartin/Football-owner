@@ -18,7 +18,7 @@ const SHOTS_PER_MATCH = 12.5;
 /** Vliv rozdílu síly zvlášť na počet střel a na jejich kvalitu (dohromady asi 0,03 na bod v počtu gólů). */
 const STRENGTH_FACTOR = 0.015;
 /** Domácí výhoda vyjádřená v bodech síly týmu. */
-const HOME_EDGE = 2.5;
+const HOME_EDGE = 6;
 const MAX_SUBS = 5;
 const BENCH_SIZE = 7;
 
@@ -40,6 +40,8 @@ export interface MatchOptions {
   season: number;
   /** Uložit podrobnosti (sestavy, statistiky, události). */
   detail?: boolean;
+  /** Domácí výhoda v bodech síly (podle diváků a nálady fanoušků). */
+  homeEdge?: number;
 }
 
 export function isAvailable(p: Player, date: string): boolean {
@@ -141,6 +143,7 @@ interface SideState {
 
 export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attendance: number, opts?: MatchOptions): MatchResult {
   const date = opts?.date ?? '2026-08-01';
+  const homeEdge = opts?.homeEdge ?? HOME_EDGE;
   const season = opts?.season ?? Number(date.slice(0, 4));
   const events: MatchEvent[] = [];
   const scorers: MatchResult['scorers'] = [];
@@ -201,7 +204,7 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
   for (let minute = 1; minute <= length; minute++) {
     for (const [s, o, isHome] of [[H, A, true], [A, H, false]] as const) {
       if (!s.onPitch.length) continue;
-      const diff = s.strength - o.strength + (isHome ? HOME_EDGE / 2 : -HOME_EDGE / 2);
+      const diff = s.strength - o.strength + (isHome ? homeEdge / 2 : -homeEdge / 2);
       const edge = Math.exp(diff * STRENGTH_FACTOR);
       const manDiff = s.onPitch.length - o.onPitch.length;
       const numbers = manDiff < 0 ? 0.7 : manDiff > 0 ? 1.25 : 1;
@@ -387,6 +390,7 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
       away: team(A, awayLines),
       events: events.sort((a, b) => a.minute - b.minute),
       potm: all.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0]?.id,
+      homeEdge: Math.round(homeEdge * 10) / 10,
     };
     result.detail = detail;
   }

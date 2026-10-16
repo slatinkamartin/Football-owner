@@ -13,6 +13,10 @@ import {
   transferWindow,
   type GameState,
   shareholderConfidence,
+  budgetApproved,
+  budgetDue,
+  dressingRoom,
+  EUROPE_LABEL,
 } from '../../engine';
 import { Badge } from '../components';
 import { findFixture } from './MatchDetail';
@@ -21,7 +25,7 @@ import { LineChart } from '../chart';
 import { PlayerLink } from '../nav';
 import { money } from '../format';
 
-type Target = 'prestupy' | 'vedeni' | 'kadr' | 'majitel';
+type Target = 'prestupy' | 'vedeni' | 'kadr' | 'majitel' | 'finance';
 
 export function Overview({
   game,
@@ -103,6 +107,23 @@ export function Overview({
           <p className="muted">Klub nehraje žádnou soutěž.</p>
         )}
       </section>
+
+      {game.europe?.season === game.season && game.europe.entries.some((e) => e.clubId === game.owner.clubId) && (() => {
+        const e = game.europe!.entries.find((x) => x.clubId === game.owner.clubId)!;
+        return (
+          <section className="card">
+            <h2>Evropské poháry</h2>
+            <dl className="kv">
+              <dt>Start</dt>
+              <dd>předkola: {EUROPE_LABEL[e.entry]}</dd>
+              <dt>Výsledek</dt>
+              <dd>{game.europe!.resolved ? (e.result === 'predkola' ? EUROPE_LABEL.predkola : `ligová fáze: ${EUROPE_LABEL[e.result]}`) : 'rozhodne se do konce srpna'}</dd>
+              <dt>{game.europe!.resolved ? 'Příjmy' : 'Odhad příjmů'}</dt>
+              <dd>{money(e.revenue)}</dd>
+            </dl>
+          </section>
+        );
+      })()}
 
       <section className="card">
         <div className="row-between">
@@ -197,6 +218,9 @@ function ToDo({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target)
   const director = directorOf(game, own);
   const window = transferWindow(game.date);
   const items: { text: string; tab: Target; tone: 'good' | 'warn' | 'bad' | 'neutral' }[] = [];
+  if (!budgetApproved(game) && !game.owner.ousted) items.push({ text: `Schvalte rozpočet sezóny (do ${formatDate(budgetDue(game))})`, tab: 'finance', tone: 'warn' });
+  const room = dressingRoom(game);
+  if (room.bonus < 0) items.push({ text: `Nálada v kabině: ${room.label}`, tab: 'kadr', tone: room.bonus <= -1 ? 'bad' : 'warn' });
   if (!coach) items.push({ text: 'Klub nemá hlavního trenéra', tab: 'vedeni', tone: 'bad' });
   if (!director) items.push({ text: 'Klub nemá sportovního ředitele', tab: 'vedeni', tone: 'warn' });
   if (game.market.offers.length) items.push({ text: `Nabídky na naše hráče: ${game.market.offers.length}`, tab: 'prestupy', tone: 'warn' });

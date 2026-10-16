@@ -151,6 +151,7 @@ describe('přestupy', () => {
 
   it('nevyřešená smlouva na konci sezóny vyprší, prodloužená ne', { timeout: 30000 }, () => {
     const s = structuredClone(start);
+    s.clubs[s.owner.clubId].policy.autoSquad = false;
     const [a, b] = squadOf(s, 'slavia').sort((x, y) => x.overall - y.overall);
     a.contractUntil = s.season + 1;
     b.contractUntil = s.season + 1;
