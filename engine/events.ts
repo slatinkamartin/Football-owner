@@ -187,7 +187,7 @@ export const TEMPLATES: Record<string, Template> = {
         amount,
         defaultOption: 'odlozit',
         options: [
-          { id: 'koupit', label: 'Koupit vybavení hned', hint: `−${mil(amount)}, regenerace +20 (ze 100), morálka týmu +3` },
+          { id: 'koupit', label: 'Koupit vybavení hned', hint: `−${mil(amount)}, regenerace +1 hvězda, morálka týmu +3` },
           { id: 'odlozit', label: 'Odložit', hint: 'Morálka týmu −3' },
         ],
       };

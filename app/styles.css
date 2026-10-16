@@ -850,3 +850,5 @@ table.sections td .muted.small { display: block; }
 }
 .choice:disabled { opacity: 0.45; cursor: not-allowed; }
 .wide .composition { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.stars { color: #e0a030; letter-spacing: 1px; font-size: 15px; white-space: nowrap; }
+.stars-empty { color: var(--line); }

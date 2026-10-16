@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { facilityScore, homeEdgeScore, ratingScore, toScore } from './scales';
+import { facilityStars, homeEdgeScore, ratingText, toScore } from './scales';
 
-describe('jednotná škála 0–100', () => {
+describe('škály v rozhraní', () => {
   it('převádí vnitřní jednotky na 0–100 a drží meze', () => {
-    expect(ratingScore(6.8)).toBe(68);
-    expect(ratingScore(10)).toBe(100);
-    expect(facilityScore(3, 5)).toBe(60);
-    expect(facilityScore(2, 3)).toBe(67);
+    expect(ratingText(6.8)).toBe('6,8');
+    expect(ratingText(6.857, 2)).toBe('6,86');
+    expect(facilityStars(3, 'other')).toEqual({ stars: 3, max: 5 });
+    expect(facilityStars(0, 'catering')).toEqual({ stars: 1, max: 4 });
     expect(homeEdgeScore(3)).toBe(0);
     expect(homeEdgeScore(8.6)).toBe(100);
     expect(homeEdgeScore(12)).toBe(100);

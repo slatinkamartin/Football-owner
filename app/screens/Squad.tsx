@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ratingScore, homeEdgeScore, strengthDelta,
+import { ratingText, homeEdgeScore, strengthDelta,
   contractExpiring,
   playerValue,
   playerAge,
@@ -185,13 +185,13 @@ export function Squad({ game, onChange }: Props) {
             { key: 'cards', label: 'ŽK/ČK', num: true, hideSm: true, value: (p) => p.yellows + p.reds * 3, render: (p) => `${p.yellows}/${p.reds}` },
             {
               key: 'avg',
-              label: 'Ø hodn.',
+              label: 'Ø zn.',
               num: true,
-              title: 'Průměrné hodnocení v zápasech (0–100)',
+              title: 'Průměrná známka v zápasech (1–10)',
               value: (p) => averageRating(p) ?? 0,
               render: (p) => {
                 const avg = averageRating(p);
-                return avg ? <span className={avg >= 7.2 ? 'pos' : avg < 6.2 ? 'neg' : ''}>{ratingScore(avg)}</span> : <span className="muted">–</span>;
+                return avg ? <span className={avg >= 7.2 ? 'pos' : avg < 6.2 ? 'neg' : ''}>{ratingText(avg, 2)}</span> : <span className="muted">–</span>;
               },
             },
             { key: 'value', label: 'Hodnota', num: true, value: (p) => playerValue(game, p), render: (p) => money(playerValue(game, p)) },

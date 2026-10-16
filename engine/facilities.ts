@@ -1,4 +1,3 @@
-import { facilityScore } from './scales';
 import { addDays } from './calendar';
 import { book, ownerAccounting } from './finance';
 import { ownerBlocked, previewVote, voteMessage } from './ownership';
@@ -39,11 +38,11 @@ export function projectOptions(state: GameState): ProjectOption[] {
     { kind: 'kapacita', label: 'Nová tribuna (+1 000 míst)', description: 'Víc diváků a vyšší příjmy ze vstupného. Během stavby je 15 % kapacity uzavřeno.', cost: 40_000_000, weeks: 30, value: 1000, years: 30 },
     { kind: 'kapacita', label: 'Velká přestavba (+3 000 míst)', description: 'Výrazně větší stadion pro klub, který na něj má fanoušky.', cost: 110_000_000, weeks: 48, value: 3000, years: 30 },
     { kind: 'vip', label: 'VIP skyboxy (+4)', description: `Každý skybox přinese za domácí zápas ${vipRate(tierOf(state, club.id)).toLocaleString('cs-CZ')} Kč.`, cost: 12_000_000, weeks: 20, value: 4, years: 25 },
-    { kind: 'catering', label: `Catering a fanshop (${facilityScore(f.catering, 3)} → ${facilityScore(f.catering + 1, 3)} ze 100)`, description: `Útrata diváka vzroste z ${CATERING_SPEND[f.catering]} na ${CATERING_SPEND[Math.min(3, f.catering + 1)]} Kč.`, cost: 3_000_000 * (f.catering + 1), weeks: 8, value: f.catering + 1, years: 10 },
+    { kind: 'catering', label: `Catering a fanshop (${f.catering + 1} → ${f.catering + 2} ze 4 hvězd)`, description: `Útrata diváka vzroste z ${CATERING_SPEND[f.catering]} na ${CATERING_SPEND[Math.min(3, f.catering + 1)]} Kč.`, cost: 3_000_000 * (f.catering + 1), weeks: 8, value: f.catering + 1, years: 10 },
     { kind: 'vyhrivani', label: 'Vyhřívaný trávník', description: 'Podmínka licence pro 1. ligu. Bez něj platí klub v 1. lize každý měsíc pokutu.', cost: 18_000_000, weeks: 10, value: 1, years: 20 },
-    { kind: 'trenink', label: `Tréninkové centrum (${facilityScore(f.training, 5)} → ${facilityScore(f.training + 1, 5)} ze 100)`, description: 'Hráči se rychleji zlepšují, hlavně mladí.', cost: TRAINING_COST[Math.min(5, f.training + 1)], weeks: 40, value: f.training + 1, years: 30 },
-    { kind: 'akademie', label: `Akademie (${facilityScore(f.academy, 5)} → ${facilityScore(f.academy + 1, 5)} ze 100)`, description: 'Víc a lepších dorostenců každé léto.', cost: ACADEMY_COST[Math.min(5, f.academy + 1)], weeks: 30, value: f.academy + 1, years: 30 },
-    { kind: 'medicina', label: `Regenerace a medicína (${facilityScore(f.medical, 5)} → ${facilityScore(f.medical + 1, 5)} ze 100)`, description: 'Méně zranění a rychlejší návrat do hry.', cost: MEDICAL_COST[Math.min(5, f.medical + 1)], weeks: 12, value: f.medical + 1, years: 10 },
+    { kind: 'trenink', label: `Tréninkové centrum (${f.training} → ${f.training + 1} z 5 hvězd)`, description: 'Hráči se rychleji zlepšují, hlavně mladí.', cost: TRAINING_COST[Math.min(5, f.training + 1)], weeks: 40, value: f.training + 1, years: 30 },
+    { kind: 'akademie', label: `Akademie (${f.academy} → ${f.academy + 1} z 5 hvězd)`, description: 'Víc a lepších dorostenců každé léto.', cost: ACADEMY_COST[Math.min(5, f.academy + 1)], weeks: 30, value: f.academy + 1, years: 30 },
+    { kind: 'medicina', label: `Regenerace a medicína (${f.medical} → ${f.medical + 1} z 5 hvězd)`, description: 'Méně zranění a rychlejší návrat do hry.', cost: MEDICAL_COST[Math.min(5, f.medical + 1)], weeks: 12, value: f.medical + 1, years: 10 },
   ];
   return options.map((o) => {
     let blocked: string | undefined;

@@ -19,3 +19,14 @@ export function Notice({ message, ok }: { message: string | null; ok?: boolean }
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'good' | 'warn' | 'bad' }) {
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
+
+/** Hvězdičky (zázemí): plné a prázdné, čtečka přečte „3 z 5 hvězd“. */
+export function Stars({ value, max = 5 }: { value: number; max?: number }) {
+  const full = Math.max(0, Math.min(max, Math.round(value)));
+  return (
+    <span className="stars" role="img" aria-label={`${full} z ${max} hvězd`} title={`${full} z ${max} hvězd`}>
+      {'★'.repeat(full)}
+      <span className="stars-empty">{'☆'.repeat(max - full)}</span>
+    </span>
+  );
+}

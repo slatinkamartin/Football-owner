@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { homeEdgeScore, ratingScore,
+import { homeEdgeScore, ratingText,
   allFixtures,
   formatDate,
   POSITION_SHORT,
@@ -120,11 +120,11 @@ function Pitch({ home, away, homeClub, awayClub, events, potm }: {
         const g = goals.get(l.id) ?? 0;
         return (
           <g key={l.id} transform={`translate(${x} ${y})`}>
-            <title>{`${l.name}${l.rating !== undefined ? `, hodnocení ${ratingScore(l.rating)}` : ''}`}</title>
+            <title>{`${l.name}${l.rating !== undefined ? `, známka ${ratingText(l.rating)}` : ''}`}</title>
             <circle r="3.6" fill={club.colors[0]} stroke={club.colors[1] ?? '#fff'} strokeWidth="0.9" />
             {l.id === potm && <circle r="5" fill="none" stroke="#f5c518" strokeWidth="0.8" />}
             <text y="7.4" className="pt-name">{surname}</text>
-            {l.rating !== undefined && <text y="11" className={`pt-rating ${ratingTone(l.rating)}`}>{ratingScore(l.rating)}</text>}
+            {l.rating !== undefined && <text y="11" className={`pt-rating ${ratingTone(l.rating)}`}>{ratingText(l.rating)}</text>}
             {g > 0 && <text x="4.6" y="-2.6" className="pt-mark">{g > 1 ? `${g}×⚽` : '⚽'}</text>}
             {subbed.has(l.id) && <text x="-4.6" y="-2.6" className="pt-mark pt-sub">↓</text>}
             {sentOff.has(l.id) && <rect x="3.6" y="-1" width="1.8" height="2.6" fill="#d33" />}
@@ -271,7 +271,7 @@ function Lineup({ title, team, events, potm }: { title: string; team: TeamMatchS
       <td className="wrap">
         <PlayerLink id={line.id}>{line.name}</PlayerLink> <span className="marks">{marks(line)}</span>
       </td>
-      <td className="num">{line.rating !== undefined ? <span className={`rating ${ratingTone(line.rating)}`}>{ratingScore(line.rating)}</span> : <span className="muted">–</span>}</td>
+      <td className="num">{line.rating !== undefined ? <span className={`rating ${ratingTone(line.rating)}`}>{ratingText(line.rating)}</span> : <span className="muted">–</span>}</td>
     </tr>
   );
   const used = team.bench.filter((b) => b.minutes > 0);

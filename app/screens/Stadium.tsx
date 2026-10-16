@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { facilityScore,
+import {
   CATERING_SPEND,
   effectiveCapacity,
   facilityUpkeepDelta,
@@ -12,7 +12,7 @@ import { facilityScore,
   type ActionResult,
   type GameState,
 } from '../../engine';
-import { Badge, Meter, Notice } from '../components';
+import { Badge, Meter, Notice, Stars } from '../components';
 import { VoteInfo } from '../VoteInfo';
 import { money, num } from '../format';
 
@@ -54,7 +54,7 @@ export function Stadium({ game, onChange }: Props) {
             <dt>VIP skyboxy</dt>
             <dd>{f.vip} <span className="muted small">· {money(vipRate(tier))} za zápas</span></dd>
             <dt>Catering a fanshop</dt>
-            <dd><Meter value={facilityScore(f.catering, 3)} tone="good" /> {facilityScore(f.catering, 3)} <span className="muted small">· {CATERING_SPEND[f.catering]} Kč na diváka</span></dd>
+            <dd><Stars value={f.catering + 1} max={4} /> <span className="muted small">· {CATERING_SPEND[f.catering]} Kč na diváka</span></dd>
             <dt>Vyhřívaný trávník</dt>
             <dd>{f.heating ? 'ano' : tier === 1 ? <Badge tone="bad">chybí (licence)</Badge> : 'ne'}</dd>
             <dt>Stav trávníku</dt>
@@ -66,11 +66,11 @@ export function Stadium({ game, onChange }: Props) {
           <h2>Zázemí</h2>
           <dl className="kv meters">
             <dt>Tréninkové centrum</dt>
-            <dd><Meter value={facilityScore(f.training, 5)} tone="good" /> {facilityScore(f.training, 5)}</dd>
+            <dd><Stars value={f.training} /></dd>
             <dt>Akademie</dt>
-            <dd><Meter value={facilityScore(f.academy, 5)} tone="good" /> {facilityScore(f.academy, 5)}</dd>
+            <dd><Stars value={f.academy} /></dd>
             <dt>Regenerace a medicína</dt>
-            <dd><Meter value={facilityScore(f.medical, 5)} tone="good" /> {facilityScore(f.medical, 5)}</dd>
+            <dd><Stars value={f.medical} /></dd>
           </dl>
           <ul className="plain small muted">
             <li>Trénink: {LEVEL_TEXT.training[f.training]}, vývoj hráčů {Math.round((0.8 + 0.1 * f.training) * 100)} % běžného.</li>
