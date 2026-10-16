@@ -40,6 +40,8 @@ export function vipRate(tier: number): number {
 
 /** Příjmy ze zápasu kromě vstupného: catering, fanshop a VIP skyboxy. */
 export function matchdayExtras(club: Club, attendance: number, tier: number): number {
-  return attendance * CATERING_SPEND[club.facilities.catering] + club.facilities.vip * vipRate(tier);
+  // Cenová úroveň cateringu a VIP (jen klub majitele ji mění).
+  const price = club.policy?.cateringPrice === 'nizka' ? 0.8 : club.policy?.cateringPrice === 'vysoka' ? 1.2 : 1;
+  return (attendance * CATERING_SPEND[club.facilities.catering] + club.facilities.vip * vipRate(tier)) * price;
 }
 

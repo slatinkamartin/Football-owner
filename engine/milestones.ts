@@ -23,7 +23,8 @@ export interface Milestone {
   short: string;
   title: string;
   text: string[];
-  todo: { label: string; tab: MilestoneTab }[];
+  /** Kam vede tlačítko; u Financí i konkrétní podzáložka. */
+  todo: { label: string; tab: MilestoneTab; sub?: 'prehled' | 'rozpocet' | 'prijmy' | 'vydaje' | 'financovani' }[];
 }
 
 const mil = (v: number) => (Math.abs(v) >= 1_000_000 ? `${(v / 1_000_000).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč` : `${Math.round(v / 1000).toLocaleString('cs-CZ')} tis. Kč`);
@@ -48,7 +49,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
       'Přestupní okno je otevřené do 31. 8. Stanovte cíl sezóny, podle něj vás budou hodnotit fanoušci, média i spolumajitelé.',
     ],
     todo: [
-      { label: 'Rozpočet sezóny', tab: 'finance' },
+      { label: 'Rozpočet sezóny', tab: 'finance', sub: 'rozpocet' },
       { label: 'Cíl sezóny', tab: 'vedeni' },
       { label: 'Přestupy', tab: 'prestupy' },
     ],
@@ -61,7 +62,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
       short: 'termínu rozpočtu',
       title: 'Zítra končí termín pro schválení rozpočtu',
       text: ['Pokud rozpočet neschválíte, platí od zítřka návrh vedení. Když s ním nesouhlasí spolumajitelé, prosadí úspornou variantu.', 'Při schválení se prodají permanentky za cenu, kterou nastavíte.'],
-      todo: [{ label: 'Schválit rozpočet', tab: 'finance' }],
+      todo: [{ label: 'Schválit rozpočet', tab: 'finance', sub: 'rozpocet' }],
     });
   }
 
@@ -100,7 +101,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
             : `Klub postoupil do ligové fáze. Peníze přijdou ve čtyřech splátkách od října do ledna, celkem asi ${mil(eu.revenue)}.`
           : 'Dnes se rozhoduje o postupu z předkol.',
       ],
-      todo: [{ label: 'Příjmy', tab: 'finance' }],
+      todo: [{ label: 'Příjmy', tab: 'finance', sub: 'prijmy' }],
     });
   }
 
@@ -133,7 +134,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
       ],
       todo: [
         { label: 'Tabulka', tab: 'tabulky' },
-        { label: 'Výhled financí', tab: 'finance' },
+        { label: 'Výhled financí', tab: 'finance', sub: 'prehled' },
       ],
     });
   }
@@ -177,7 +178,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
       'Svaz kontroluje vlastní kapitál (půjčka majitele se počítá jako vlastní zdroje) a neuhrazené závazky.',
       problems.length ? `Teď by licence neprošla: ${problems.join(', ')}. Na nápravu bude čas do 31. 5.` : 'Teď by licence prošla.',
     ],
-    todo: [{ label: 'Financování', tab: 'finance' }],
+    todo: [{ label: 'Financování', tab: 'finance', sub: 'financovani' }],
   });
   if (state.licence?.season === y && state.licence.status === 'podminka') {
     add({
@@ -186,7 +187,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
       short: 'termínu licence',
       title: 'Zítra končí termín na nápravu licence',
       text: [problems.length ? `Pořád chybí: ${problems.join(', ')}. Hrozí pokuta a odečet 5 bodů v příští sezóně.` : 'Podmínky jsou teď splněné.'],
-      todo: [{ label: 'Financování', tab: 'finance' }],
+      todo: [{ label: 'Financování', tab: 'finance', sub: 'financovani' }],
     });
   }
 
@@ -216,7 +217,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
         expiring ? `${expiring} hráčům končí smlouva. Kdo nebude prodloužený, odejde zadarmo.` : 'Žádnému hráči nekončí smlouva.',
       ],
       todo: [
-        { label: 'Končící smlouvy', tab: 'finance' },
+        { label: 'Končící smlouvy', tab: 'finance', sub: 'vydaje' },
         { label: 'Kádr', tab: 'kadr' },
       ],
     });

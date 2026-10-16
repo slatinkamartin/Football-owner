@@ -24,7 +24,8 @@ export const SLOT_LABEL: Record<SponsorSlot, string> = {
 };
 /** Podíl místa na sponzorském trhu klubu. Zbytek (20 %) tvoří drobní sponzoři a reklama. */
 export const SLOT_SHARE: Record<SponsorSlot, number> = { generalni: 0.3, dres: 0.1, stadion: 0.12, dodavatel: 0.1, pivovar: 0.07, trenink: 0.06, mladez: 0.05 };
-export const SMALL_SPONSORS_SHARE = 0.2;
+/** Drobní sponzoři a reklama (fanshop je od verze 10 samostatný řádek). */
+export const SMALL_SPONSORS_SHARE = 0.12;
 
 const NAMES: Record<SponsorSlot, string[]> = {
   generalni: ['Fortuna', 'Tipsport', 'Moneta', 'ČEZ', 'Raiffeisenbank', 'Kaufland', 'Penny', 'Agrofert', 'Synot'],

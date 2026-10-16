@@ -2,6 +2,7 @@ import { addDays } from './calendar';
 import {
   annualCosts,
   baseAttendance,
+  sponsorsAnnual,
   bonusPerPoint,
   book,
   defaultTicketPrice,
@@ -28,7 +29,8 @@ import { overdraftLimit } from './financing';
 import { sponsorForecast, sponsorMonthly } from './sponsors';
 
 const sponsorMonthlyTotal = (state: GameState) => { const m = sponsorMonthly(state); return m.contracts + m.small; };
-import type { BudgetLine, BudgetPlan, Club, FinanceCategory, GameState, SeasonBudget, StaffRole } from './types';
+import type { BudgetLine, BudgetPlan, BudgetPolicy, Club, FinanceCategory, GameState, StaffRole } from './types';
+import { adminMonthly, campCost, communitySpend, eventIncome, fanshopDetail, maintenanceMonthly, securityPerMatch } from './operations';
 import { addNews, clamp, competitionOf, tierOf } from './world';
 
 /**
@@ -113,7 +115,7 @@ export function wagePlan(state: GameState): { cap: number; contracts: number; wa
 }
 
 /** Provozní kategorie: z nich se počítá provozní výsledek (bez přestupů, investic, daní a financování). */
-export const OPERATING_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'platy', 'vedeni', 'oddeleni', 'provoz'];
+export const OPERATING_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'fanshop', 'akce', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'platy', 'vedeni', 'oddeleni', 'provoz', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita'];
 
 /** Provozní výsledek sezóny k dnešku podle účtu. */
 export function operatingActual(state: GameState): number {
@@ -219,7 +221,22 @@ export function forecastSeason(state: GameState): BudgetPlan {
   monthly('rezerva', -Math.max(0, wp.cap / 12 - bill));
   monthly('vedeni', -staffWages(state));
   monthly('oddeleni', -departmentsMonthly(club, tier));
-  monthly('provoz', -operatingMonthly(club, tier) * financeFactor(state));
+  const ff = financeFactor(state);
+  monthly('provoz', -adminMonthly(tier) * ff);
+  monthly('udrzba', -maintenanceMonthly(club, tier) * ff);
+  monthly('fanshop', fanshopDetail(state).net);
+  monthly('komunita', -communitySpend(club, tier) / 12);
+  let acc = state.stadiumEventAcc ?? 0;
+  for (const d of months) {
+    acc += (club.policy.stadiumEvents ?? 0) / 12;
+    while (acc >= 1) {
+      acc -= 1;
+      add('akce', d, eventIncome(club, tier));
+    }
+  }
+  add('soustredeni', `${state.season}-07-10`, -campCost(tier, club.policy.summerCamp));
+  add('soustredeni', `${state.season + 1}-01-10`, -campCost(tier, club.policy.winterCamp));
+  for (const d of leftHome) add('bezpecnost', d, -securityPerMatch(tier, club.policy.security));
 
   // Přestupy: naplánované splátky a zbytek rozpočtu, dokud je nebo bude otevřené okno.
   for (const p of state.payments ?? []) {
@@ -245,7 +262,9 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const actualOf = (cats: FinanceCategory[]) => cats.reduce((a, c) => a + (totals[c] ?? 0), 0);
   const def: [string, string, FinanceCategory[], BudgetLine['group']][] = [
     ['vstupne', 'Vstupné a permanentky', ['vstupne'], 'provoz'],
-    ['stadion', 'Catering, fanshop a VIP', ['stadion'], 'provoz'],
+    ['stadion', 'Catering a VIP', ['stadion'], 'provoz'],
+    ['fanshop', 'Fanshop a dresy', ['fanshop'], 'provoz'],
+    ['akce', 'Akce na stadionu', ['akce'], 'provoz'],
     ['tv', 'TV práva a odměna za umístění', ['tv'], 'provoz'],
     ['komercni', 'Sponzoři a reklama', ['komercni'], 'provoz'],
     ['evropa', 'Evropské poháry', ['evropa'], 'provoz'],
@@ -255,7 +274,11 @@ export function forecastSeason(state: GameState): BudgetPlan {
     ['rezerva', 'Rezerva ve mzdovém stropu (zatím nevyužitá)', [], 'provoz'],
     ['vedeni', 'Trenér a ředitelé', ['vedeni'], 'provoz'],
     ['oddeleni', 'Oddělení (skauting, mládež, medicína, marketing)', ['oddeleni'], 'provoz'],
-    ['provoz', 'Provoz klubu a stadionu', ['provoz'], 'provoz'],
+    ['provoz', 'Administrativa, cestování a energie', ['provoz'], 'provoz'],
+    ['udrzba', 'Údržba stadionu a trávníku', ['udrzba'], 'provoz'],
+    ['soustredeni', 'Soustředění', ['soustredeni'], 'provoz'],
+    ['bezpecnost', 'Pořadatelé a bezpečnost', ['bezpecnost'], 'provoz'],
+    ['komunita', 'Komunita, ženský a dětský fotbal', ['komunita'], 'provoz'],
     ['prestupy', 'Přestupy (nákupy, prodeje, splátky)', ['prestupy'], 'kapital'],
     ['investice', 'Investice do stadionu a zázemí', ['investice'], 'kapital'],
     ['dane', 'Daň z příjmů', ['dane'], 'kapital'],
@@ -345,6 +368,8 @@ export function budgetWarnings(state: GameState, plan = forecastSeason(state)): 
     if (plan.licenceBalance < -od - tolerance) out.push({ tone: 'bad', text: `Licence 31. 3.: účet by byl v minusu ${mil(-plan.licenceBalance)}${od ? ' i nad kontokorent' : ''}. Svaz to bere jako neuhrazené závazky.` });
     else if (equity < -tolerance) out.push({ tone: 'bad', text: `Licence 31. 3.: vlastní kapitál by byl záporný (asi ${mil(equity)}). Pomůže vklad nebo půjčka majitele, svaz ji počítá jako vlastní zdroje.` });
   }
+  const minimum = club.policy.cashReserve ?? 0;
+  if (minimum > 0 && !plan.ownerNeed && plan.cashMin < minimum) out.push({ tone: 'warn', text: `Peníze: zůstatek klesne pod vaši minimální rezervu ${mil(minimum)} (nejníž ${mil(plan.cashMin)}). Ředitel pod ni nebude utrácet za přestupy.` });
   if (comp) {
     const target = goalTarget(state.owner.seasonGoal, comp);
     const rank = wageRank(state);
@@ -470,7 +495,7 @@ export function prepareBudget(state: GameState): void {
   // Finanční ředitel navíc drží rezervu 5 % nákladů, účetní jen nulu.
   club.policy.transferBudget = defaultTransferBudget(club);
   const plan = forecastSeason(state);
-  const reserve = annualCosts(club, tier) * (cfo !== undefined ? 0.05 : 0.01);
+  const reserve = Math.max(annualCosts(club, tier) * (cfo !== undefined ? 0.05 : 0.01), club.policy.cashReserve ?? 0);
   if (plan.cashMin < reserve) {
     club.policy.transferBudget = Math.max(0, Math.round((club.policy.transferBudget - (reserve - plan.cashMin)) / 100_000) * 100_000);
   }
@@ -549,17 +574,11 @@ export function budgetDue(state: GameState): string {
 
 // ---------- Plán k dnešku, návrh, uzávěrka, kalendář ----------
 
-function policySnapshot(club: Club): NonNullable<SeasonBudget['draft']> {
-  const p = club.policy;
-  return {
-    ticketPrice: p.ticketPrice,
-    seasonTicketPrice: p.seasonTicketPrice,
-    wageMultiplier: p.wageMultiplier,
-    transferBudget: p.transferBudget,
-    departments: p.departments ? { ...p.departments } : undefined,
-    wageSplit: p.wageSplit ? { ...p.wageSplit } : undefined,
-    bonusScheme: p.bonusScheme,
-  };
+function policySnapshot(club: Club): BudgetPolicy {
+  const { overdraft: _o, autoSquad: _a, ...rest } = club.policy;
+  void _o;
+  void _a;
+  return structuredClone(rest);
 }
 
 /** Vrátí nastavení rozpočtu na návrh, který připravilo vedení. */
@@ -596,6 +615,16 @@ export function planToDate(state: GameState, line: BudgetLine, from = `${state.s
   const atEnd = line.atEnd ?? 0;
   const rest = line.amount - base - upfront - atEnd;
   return Math.round(base + (state.date > from ? upfront : 0) + rest * f + (f >= 0.999 ? atEnd : 0));
+}
+
+/** Dopad neschválených změn: výhled se schváleným nastavením proti výhledu s aktuálním. */
+export function changeImpact(state: GameState): { before: number; after: number } | undefined {
+  const saved = state.budget?.season === state.season ? state.budget.approvedPolicy : undefined;
+  if (!saved || !budgetChanged(state)) return undefined;
+  const alt = structuredClone(state);
+  const club = ownClub(alt);
+  club.policy = { ...structuredClone(saved), overdraft: club.policy.overdraft, autoSquad: club.policy.autoSquad };
+  return { before: forecastSeason(alt).result, after: forecastSeason(state).result };
 }
 
 /** Liší se nastavení od schváleného rozpočtu? (Posun výhledu kvůli výsledkům se nepočítá.) */
@@ -694,8 +723,98 @@ export function moneyCalendar(state: GameState): { monthly: { label: string; amo
     { label: 'Platy hráčů', amount: -wages },
     { label: 'Trenér a ředitelé', amount: -staff },
     { label: 'Oddělení', amount: -DEPARTMENT_KEYS.reduce((a, k) => a + departmentsOf(club, tier)[k], 0) / 12 },
-    { label: 'Provoz', amount: -operatingMonthly(club, tier) * financeFactor(state) },
+    { label: 'Fanshop a dresy', amount: fanshopDetail(state).net },
+    { label: 'Administrativa a provoz', amount: -adminMonthly(tier) * financeFactor(state) },
+    { label: 'Údržba stadionu', amount: -maintenanceMonthly(club, tier) * financeFactor(state) },
+    { label: 'Komunita', amount: -communitySpend(club, tier) / 12 },
     ...(loans ? [{ label: 'Splátky úvěrů', amount: -loans }] : []),
   ].map((x) => ({ ...x, amount: Math.round(x.amount) }));
   return { monthly, items };
+}
+
+// ---------- Srovnání s ligou a závazky do budoucna ----------
+
+export interface Benchmark {
+  own: number;
+  avg: number;
+  max: number;
+  /** Pořadí klubu v soutěži (1 = nejvíc). */
+  rank: number;
+  clubs: number;
+}
+
+/** Roční odhad hlavních položek ostatních klubů soutěže (pro srovnání v rozpočtu). */
+export function leagueBenchmarks(state: GameState, plan = forecastSeason(state)): Record<'vstupne' | 'stadion' | 'komercni' | 'platy' | 'oddeleni' | 'provoz' | 'prijmy' | 'zustatek', Benchmark> {
+  const club = ownClub(state);
+  const comp = competitionOf(state, club.id);
+  const tier = tierOf(state, club.id);
+  const others = (comp?.clubIds ?? []).filter((id) => id !== club.id).map((id) => state.clubs[id]);
+  const line = (k: string) => plan.lines.find((l) => l.key === k)?.amount ?? 0;
+  const estimate = (c: Club) => {
+    const att = Math.min(c.stadium.capacity, baseAttendance(c.reputation, tier));
+    const vstupne = att * defaultTicketPrice(tier) * 15;
+    const stadion = matchdayExtras(c, att, tier) * 15;
+    const komercni = sponsorsAnnual(c, tier);
+    const platy = squadOf(state, c.id).reduce((a, p) => a + p.wage, 0) * 12 + bonusPerPoint(c) * 45;
+    const oddeleni = DEPARTMENT_KEYS.reduce((a, k) => a + departmentReference(c, tier)[k], 0);
+    const provoz = operatingMonthly(c, tier) * 12;
+    return { vstupne, stadion, komercni, platy, oddeleni, provoz, prijmy: vstupne + stadion + komercni + tvMonthly(tier) * 12, zustatek: c.finance.balance };
+  };
+  const ownValues = {
+    vstupne: line('vstupne'),
+    stadion: line('stadion'),
+    komercni: line('komercni') + line('fanshop'),
+    platy: -(line('platy') + line('rezerva')),
+    oddeleni: -line('oddeleni'),
+    provoz: -(line('provoz') + line('udrzba')),
+    prijmy: line('vstupne') + line('stadion') + line('komercni') + line('fanshop') + tvMonthly(tier) * 12,
+    zustatek: club.finance.balance,
+  };
+  const rows = others.map(estimate);
+  const out = {} as Record<keyof typeof ownValues, Benchmark>;
+  for (const k of Object.keys(ownValues) as (keyof typeof ownValues)[]) {
+    const vals = rows.map((r) => r[k]);
+    const all = [...vals, ownValues[k]];
+    out[k] = {
+      own: Math.round(ownValues[k]),
+      avg: Math.round(all.reduce((a, v) => a + v, 0) / Math.max(1, all.length)),
+      max: Math.round(Math.max(...all)),
+      rank: 1 + vals.filter((v) => v > ownValues[k]).length,
+      clubs: all.length,
+    };
+  }
+  return out;
+}
+
+export interface FutureSeason {
+  season: number;
+  wages: number;
+  transfers: number;
+  loans: number;
+  sponsors: number;
+  tv: number;
+  players: number;
+}
+
+/** Co je už dnes podepsané na tři další sezóny: platy, splátky přestupů a úvěrů, sponzorské smlouvy, TV. */
+export function multiYearOutlook(state: GameState, years = 3): FutureSeason[] {
+  const club = ownClub(state);
+  const tier = tierOf(state, club.id);
+  const squad = squadOf(state, club.id);
+  const out: FutureSeason[] = [];
+  let loanMonthsUsed = Math.max(0, remainingMonthStarts(state).length);
+  for (let k = 1; k <= years; k++) {
+    const season = state.season + k;
+    const from = `${season}-07-01`;
+    const to = `${season + 1}-06-30`;
+    const list = squad.filter((p) => p.contractUntil > season);
+    const transfers = (state.payments ?? [])
+      .filter((p) => p.due >= from && p.due <= to)
+      .reduce((a, p) => a + (p.to === club.id ? p.amount : p.from === club.id ? -p.amount : 0), 0);
+    const loans = state.loans.reduce((a, l) => a + l.payment * Math.max(0, Math.min(12, l.monthsLeft - loanMonthsUsed)), 0);
+    loanMonthsUsed += 12;
+    const sponsors = (club.sponsors ?? []).filter((c) => c.untilSeason >= season).reduce((a, c) => a + c.annual, 0);
+    out.push({ season, wages: -list.reduce((a, p) => a + p.wage, 0) * 12, transfers, loans: -loans, sponsors, tv: tvMonthly(tier) * 12, players: list.length });
+  }
+  return out;
 }

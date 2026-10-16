@@ -2,6 +2,7 @@ import { addDays } from './calendar';
 import { createEvent } from './events';
 import { annualCosts, balanceSheet, book, departmentsOf, ownerAccounting, tvMonthly } from './finance';
 import type { Rng } from './rng';
+import { communityEffect } from './operations';
 import type { ActionResult } from './staff';
 import type { GameState, GrantApplication } from './types';
 import { addNews, clamp, competitionOf, tierOf } from './world';
@@ -110,7 +111,9 @@ const GRANT_LABEL: Record<GrantApplication['kind'], string> = {
 
 function grantChance(state: GameState): number {
   const city = state.shareholders.find((s) => s.kind === 'mesto')?.satisfaction ?? 50;
-  return clamp(0.3 + city / 250 + state.owner.media / 500 + state.owner.league / 500 - (state.grey.scandalUntil && state.grey.scandalUntil > state.date ? 0.25 : 0), 0.1, 0.85);
+  const club = own(state);
+  const community = communityEffect(club, tierOf(state, club.id));
+  return clamp(0.3 + city / 250 + state.owner.media / 500 + state.owner.league / 500 + community * 0.08 - (state.grey.scandalUntil && state.grey.scandalUntil > state.date ? 0.25 : 0), 0.1, 0.9);
 }
 
 export function grantOptions(state: GameState): GrantOption[] {

@@ -100,7 +100,11 @@ export function scouted(state: GameState, p: Player): { overall: number; potenti
 
 export function budgetRemaining(state: GameState): number {
   const club = state.clubs[state.owner.clubId];
-  return Math.max(0, club.policy.transferBudget - state.market.spent + state.market.earned);
+  const room = club.policy.transferBudget - state.market.spent + state.market.earned;
+  // Minimální rezerva: pod ni se kvůli přestupům nejde.
+  const reserve = club.policy.cashReserve ?? 0;
+  const cash = reserve > 0 ? club.finance.balance - reserve : Infinity;
+  return Math.max(0, Math.min(room, cash));
 }
 
 export function wageBill(state: GameState, clubId: string): number {
@@ -442,8 +446,18 @@ function offerFeeFor(rng: Rng, value: number, foreignLevel: number | undefined, 
 
 export function generateOffers(state: GameState, rng: Rng): void {
   const own = state.owner.clubId;
+  const policy = state.clubs[own].policy.salesPolicy ?? 'dobra';
+  // Prodejní klub: sportovní ředitel sám přijme doporučené nabídky, které majitel nechal propadnout.
+  if (policy === 'prodejni' && state.clubs[own].policy.autoSquad !== false && !state.owner.ousted) {
+    for (const o of state.market.offers.filter((x) => x.expires < state.date && x.advice === 'prijmout' && state.players[x.playerId]?.clubId === own)) {
+      const r = acceptOffer(state, o.id);
+      if (r.ok) Object.assign(state, r.state);
+    }
+  }
   state.market.offers = state.market.offers.filter((o) => o.expires >= state.date && state.players[o.playerId]?.clubId === own);
   if (!transferWindow(state.date)) return;
+  const interest = { drzet: 0.4, dobra: 1, prodejni: 2 }[policy];
+  const maxOffers = policy === 'prodejni' ? 6 : 4;
 
   const squad = squadOf(state, own).sort((a, b) => b.overall - a.overall);
   const ownRep = state.clubs[own].reputation;
@@ -452,13 +466,13 @@ export function generateOffers(state: GameState, rng: Rng): void {
     .filter((id) => id !== own && !state.clubs[id].reserveOf && state.clubs[id].reputation >= ownRep - 5);
 
   squad.forEach((p, rank) => {
-    if (state.market.offers.length >= 4 || state.market.offers.some((o) => o.playerId === p.id)) return;
+    if (state.market.offers.length >= maxOffers || state.market.offers.some((o) => o.playerId === p.id)) return;
     const listed = state.market.listed.includes(p.id) || (p.morale ?? 60) < 25;
     const value = playerValue(state, p);
 
     // Zahraničí: hlavní odbytiště pro nejlepší hráče české ligy.
-    const foreignChance = p.overall >= 60 ? (0.015 + (p.overall - 60) * 0.006) * (listed ? 3 : 1) : 0;
-    const domesticChance = domestic.length ? 0.025 * (listed ? 4 : 1) * (rank < 5 ? 1.5 : 1) : 0;
+    const foreignChance = p.overall >= 60 ? (0.015 + (p.overall - 60) * 0.006) * (listed ? 3 : 1) * interest : 0;
+    const domesticChance = domestic.length ? 0.025 * (listed ? 4 : 1) * (rank < 5 ? 1.5 : 1) * interest : 0;
     let buyerId: string | undefined;
     let level: number | undefined;
     if (rng.chance(foreignChance)) {
@@ -471,7 +485,9 @@ export function generateOffers(state: GameState, rng: Rng): void {
     const fee = offerFeeFor(rng, value, level, listed);
     if (fee <= 0) return;
     const key = rank < 5;
-    const advice: IncomingOffer['advice'] = fee >= value * 1.15 || listed || (!key && playerAge(p, state.season) >= 30) ? 'prijmout' : 'odmitnout';
+    const goodPrice = policy === 'prodejni' ? value * 0.95 : policy === 'drzet' ? value * 1.4 : value * 1.15;
+    const advice: IncomingOffer['advice'] =
+      fee >= goodPrice || listed || (!key && playerAge(p, state.season) >= 30 && policy !== 'drzet') || (policy === 'prodejni' && !key) ? 'prijmout' : 'odmitnout';
     state.market.offers.push({
       id: `o${++state.nextId}`,
       playerId: p.id,

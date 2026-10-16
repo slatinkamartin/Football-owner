@@ -24,3 +24,4 @@ export * from './wages';
 export * from './sponsors';
 export * from './financing';
 export * from './milestones';
+export * from './operations';

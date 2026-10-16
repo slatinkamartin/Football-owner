@@ -316,10 +316,23 @@ export type FinanceCategory =
   | 'dane'
   | 'vklad'
   | 'oddeleni'
-  | 'evropa';
+  | 'evropa'
+  | 'fanshop'
+  | 'akce'
+  | 'udrzba'
+  | 'soustredeni'
+  | 'bezpecnost'
+  | 'komunita';
 
-export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'uver', 'vklad'];
-export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'oddeleni', 'provoz', 'prestupy', 'investice', 'dane'];
+/** Kategorie přidané ve verzi 10 (pro převod uložených her). */
+export const NEW_CATEGORIES_V10: FinanceCategory[] = ['fanshop', 'akce', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita'];
+
+export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'fanshop', 'akce', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'uver', 'vklad'];
+export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'oddeleni', 'provoz', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita', 'prestupy', 'investice', 'dane'];
+
+export type Level = 'nizka' | 'bezna' | 'vysoka';
+export type SalesPolicy = 'drzet' | 'dobra' | 'prodejni';
+export type CampChoice = 'zadne' | 'doma' | 'zahranici';
 
 /** Roční rozpočty oddělení klubu v Kč. */
 export interface Departments {
@@ -391,6 +404,26 @@ export interface ClubPolicy {
   wageMultiplier: number;
   /** Rozpočet na odstupné za posily na celou sezónu v Kč. */
   transferBudget: number;
+  /** Cenová úroveň cateringu a VIP. */
+  cateringPrice?: Level;
+  /** Fanshop: cenová úroveň a nová kolekce dresů v této sezóně. */
+  merchPrice?: Level;
+  newKit?: boolean;
+  /** Akce na stadionu mimo zápasy za sezónu (koncerty, kempy, pronájmy). */
+  stadiumEvents?: number;
+  /** Prodejní politika: držet kádr, prodávat za dobrou cenu, prodejní klub. */
+  salesPolicy?: SalesPolicy;
+  /** Údržba stadionu a trávníku: nizka = úsporná, vysoka = špičková. */
+  maintenance?: Level;
+  /** Letní a zimní soustředění. */
+  summerCamp?: CampChoice;
+  winterCamp?: CampChoice;
+  /** Pořadatelská služba a bezpečnost: nizka = úsporná, vysoka = posílená. */
+  security?: Level;
+  /** Roční rozpočet na komunitu, ženský a dětský fotbal. */
+  community?: number;
+  /** Minimální rezerva peněz, pod kterou ředitel nesmí jít. */
+  cashReserve?: number;
 }
 
 export interface Club {
@@ -729,6 +762,9 @@ export interface BudgetPlan {
   ownerNeed?: number;
 }
 
+/** Nastavení, které tvoří rozpočet (návrh vedení, schválená verze). */
+export type BudgetPolicy = Omit<ClubPolicy, 'overdraft' | 'autoSquad'>;
+
 export interface SeasonBudget {
   season: number;
   /** Datum schválení (nebo poslední revize). */
@@ -740,8 +776,8 @@ export interface SeasonBudget {
   seasonTicketRevenue?: number;
   /** Návrh vedení (pro „vrátit na návrh“). */
   /** Nastavení v době schválení (pro upozornění na neschválené změny). */
-  approvedPolicy?: Pick<ClubPolicy, 'ticketPrice' | 'seasonTicketPrice' | 'wageMultiplier' | 'transferBudget' | 'departments' | 'wageSplit' | 'bonusScheme'>;
-  draft?: Pick<ClubPolicy, 'ticketPrice' | 'seasonTicketPrice' | 'wageMultiplier' | 'transferBudget' | 'departments' | 'wageSplit' | 'bonusScheme'>;
+  approvedPolicy?: BudgetPolicy;
+  draft?: BudgetPolicy;
   /** Stav účtů na začátku měsíce (měsíční uzávěrka). */
   monthStart?: FinanceTotals;
 }
@@ -765,9 +801,11 @@ export interface EuropeSeason {
   resolved?: boolean;
 }
 
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 export interface GameState {
+  /** Rozpracované akce na stadionu (zlomky, které se ještě nekonaly). */
+  stadiumEventAcc?: number;
   version: typeof SAVE_VERSION;
   packId: string;
   seed: number;

@@ -13,6 +13,11 @@ import { hash01, tierOf } from './world';
 
 const round1000 = (v: number) => Math.round(v / 1000) * 1000;
 
+/** Hodnota podle úrovně nastavení (nízká / běžná / vysoká). */
+export function financeLevel(level: string | undefined, low: number, normal: number, high: number): number {
+  return level === 'nizka' ? low : level === 'vysoka' ? high : normal;
+}
+
 /** Velké kluby platí za stejnou kvalitu víc, nejnižší soutěže jsou poloprofesionální. */
 export function clubPayFactor(reputation: number): number {
   const pts: [number, number][] = [[30, 0.7], [40, 1], [45, 1.6], [50, 2.3], [55, 3], [62, 3.6], [76, 3.8], [86, 4], [95, 4.4]];
@@ -182,7 +187,7 @@ export function matchAttendance(rng: Rng, home: Club, away: Club, tier: number, 
 }
 
 export function emptyTotals(): FinanceTotals {
-  return { vstupne: 0, stadion: 0, tv: 0, komercni: 0, evropa: 0, pohar: 0, ostatni: 0, uver: 0, platy: 0, vedeni: 0, oddeleni: 0, provoz: 0, prestupy: 0, investice: 0, dane: 0, vklad: 0 };
+  return { vstupne: 0, stadion: 0, tv: 0, komercni: 0, evropa: 0, pohar: 0, ostatni: 0, uver: 0, platy: 0, vedeni: 0, oddeleni: 0, provoz: 0, prestupy: 0, investice: 0, dane: 0, vklad: 0, fanshop: 0, akce: 0, udrzba: 0, soustredeni: 0, bezpecnost: 0, komunita: 0 };
 }
 
 export function book(state: GameState, clubId: string, category: FinanceCategory, amount: number, note: string): void {
@@ -190,7 +195,7 @@ export function book(state: GameState, clubId: string, category: FinanceCategory
   if (!club) return;
   const value = Math.round(amount);
   club.finance.balance += value;
-  club.finance.season[category] += value;
+  club.finance.season[category] = (club.finance.season[category] ?? 0) + value;
   if (clubId === state.owner.clubId) {
     club.finance.transactions.unshift({ date: state.date, category, amount: value, note });
     club.finance.transactions.length = Math.min(club.finance.transactions.length, 300);
@@ -214,6 +219,12 @@ export const CATEGORY_LABEL: Record<FinanceCategory, string> = {
   uver: 'Úvěr (čerpání a splátky)',
   dane: 'Daň z příjmů',
   vklad: 'Vklady majitele',
+  fanshop: 'Fanshop a dresy',
+  akce: 'Akce na stadionu',
+  udrzba: 'Údržba stadionu a trávníku',
+  soustredeni: 'Soustředění a cestování',
+  bezpecnost: 'Pořadatelé a bezpečnost',
+  komunita: 'Komunita, ženský a dětský fotbal',
 };
 
 // ---------- Účetnictví (klub majitele) ----------
@@ -254,6 +265,8 @@ export function profitAndLoss(totals: FinanceTotals, acc: Accounting = emptyAcco
     { label: CATEGORY_LABEL.tv, amount: totals.tv },
     { label: CATEGORY_LABEL.komercni, amount: totals.komercni },
     { label: CATEGORY_LABEL.stadion, amount: totals.stadion ?? 0 },
+    { label: CATEGORY_LABEL.fanshop, amount: totals.fanshop ?? 0 },
+    { label: CATEGORY_LABEL.akce, amount: totals.akce ?? 0 },
     { label: CATEGORY_LABEL.evropa, amount: totals.evropa ?? 0 },
     { label: CATEGORY_LABEL.pohar, amount: totals.pohar },
     { label: CATEGORY_LABEL.ostatni, amount: totals.ostatni ?? 0 },
@@ -264,6 +277,10 @@ export function profitAndLoss(totals: FinanceTotals, acc: Accounting = emptyAcco
     { label: CATEGORY_LABEL.vedeni, amount: totals.vedeni },
     { label: CATEGORY_LABEL.oddeleni, amount: totals.oddeleni ?? 0 },
     { label: CATEGORY_LABEL.provoz, amount: totals.provoz },
+    { label: CATEGORY_LABEL.udrzba, amount: totals.udrzba ?? 0 },
+    { label: CATEGORY_LABEL.soustredeni, amount: totals.soustredeni ?? 0 },
+    { label: CATEGORY_LABEL.bezpecnost, amount: totals.bezpecnost ?? 0 },
+    { label: CATEGORY_LABEL.komunita, amount: totals.komunita ?? 0 },
     { label: 'Odpisy hráčských registrací', amount: -acc.amortization },
     { label: 'Odpis při uvolnění hráčů', amount: -acc.writeOffs },
     { label: 'Odměny agentům', amount: -acc.agentFees },

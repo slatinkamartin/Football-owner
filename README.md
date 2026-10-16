@@ -61,6 +61,15 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.11: řádky rozpočtu propojené se hrou
+
+- **Finance mají jasné role:** Přehled (grafický přehled), Rozpočet (výsledovka ke schválení, nic se v ní nenastavuje), Příjmy a Výdaje (každý řádek rozpočtu má kartu s ovládáním, „Ovlivňuje:“, srovnáním s ligou a pruhem skutečnost/výhled), Financování, Účetnictví. Klik na řádek výsledovky otevře jeho kartu.
+- **Nové řádky příjmů:** ceny cateringu a VIP, fanshop a dresy (ceny, nová kolekce), akce na stadionu (příjem proti poškození trávníku), prodejní politika (víc nebo méně nabídek, ředitel sám prodává).
+- **Nové řádky výdajů:** údržba stadionu a trávníku (zranění, trávník, nálada), letní a zimní soustředění (forma na startu podzimu a jara), pořadatelé a bezpečnost (riziko pokut za výtržnosti), komunita, ženský a dětský fotbal (město, patrioti, dotace, média), minimální rezerva peněz.
+- **Rozpočet:** výsledovka Příjmy → Provozní výdaje → Provozní výsledek → Přestupy, investice a daň → Změna peněz, sloupce Schváleno / Výhled / Skutečnost / Loni, závazky na tři další sezóny. Upozornění na neschválené změny ukazuje jejich skutečný dopad.
+- **Přehled:** vodopád sezóny, složení příjmů a výdajů, „Kde jsme v lize“ (příjmy, platy, sponzoři, vstupné, peníze).
+- Okna milníků vedou rovnou na správnou podzáložku Financí. Uložené hry se převedou (verze 10).
+
 ### Novinky verze 0.10.1: milníky sezóny
 
 - Tlačítko „Týden ›“ se před důležitým bodem sezóny změní na konkrétní krok („Do startu ligy ›“, „Do konce okna ›“, „Do licence ›“, „Do konce sezóny ›“…) a posune přesně na něj. „Do zápasu ›“ milník nikdy nepřeskočí.

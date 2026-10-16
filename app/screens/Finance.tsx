@@ -13,41 +13,46 @@ import {
 import { money } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
 import { BudgetCard } from './finance/Budget';
-import { FinanceCosts } from './finance/Costs';
+import { FinanceExpenses } from './finance/Expenses';
 import { FinanceFunding } from './finance/Funding';
 import { FinanceIncome } from './finance/Income';
 import { FinanceOverview } from './finance/Overview';
 
-export type FinanceTab = 'prehled' | 'rozpocet' | 'prijmy' | 'naklady' | 'financovani' | 'ucetnictvi';
+export type FinanceTab = 'prehled' | 'rozpocet' | 'prijmy' | 'vydaje' | 'financovani' | 'ucetnictvi';
 
 const TABS: { id: FinanceTab; label: string }[] = [
   { id: 'prehled', label: 'Přehled' },
   { id: 'rozpocet', label: 'Rozpočet' },
   { id: 'prijmy', label: 'Příjmy' },
-  { id: 'naklady', label: 'Náklady' },
+  { id: 'vydaje', label: 'Výdaje' },
   { id: 'financovani', label: 'Financování' },
   { id: 'ucetnictvi', label: 'Účetnictví' },
 ];
 
-export function Finance({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
-  // Finance se vždy otevírají na Přehledu.
-  const [tab, setTab] = useState<FinanceTab>('prehled');
+/** Finance se otevírají na Přehledu (nebo na záložce, kam vede okno milníku). */
+export function Finance({ game, onChange, initialTab = 'prehled' }: { game: GameState; onChange: (g: GameState) => void; initialTab?: FinanceTab }) {
+  const [tab, setTab] = useState<FinanceTab>(initialTab);
+  const [focus, setFocus] = useState<string | undefined>(undefined);
+  const open = (t: FinanceTab, line?: string) => {
+    setFocus(line);
+    setTab(t);
+  };
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [tab]);
+    if (!focus) window.scrollTo(0, 0);
+  }, [tab, focus]);
   return (
     <div className="stack">
       <nav className="subtabs" aria-label="Části financí">
         {TABS.map((t) => (
-          <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+          <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => open(t.id)}>
             {t.label}
           </button>
         ))}
       </nav>
-      {tab === 'prehled' && <FinanceOverview game={game} onOpen={setTab} onChange={onChange} />}
-      {tab === 'rozpocet' && <BudgetCard game={game} onChange={onChange} onOpen={setTab} />}
-      {tab === 'prijmy' && <FinanceIncome game={game} onChange={onChange} onBudget={() => setTab('rozpocet')} />}
-      {tab === 'naklady' && <FinanceCosts game={game} onChange={onChange} onBudget={() => setTab('rozpocet')} />}
+      {tab === 'prehled' && <FinanceOverview game={game} onOpen={open} onChange={onChange} />}
+      {tab === 'rozpocet' && <BudgetCard game={game} onChange={onChange} onOpen={open} />}
+      {tab === 'prijmy' && <FinanceIncome game={game} onChange={onChange} onOpen={open} focus={focus} />}
+      {tab === 'vydaje' && <FinanceExpenses game={game} onChange={onChange} focus={focus} />}
       {tab === 'financovani' && <FinanceFunding game={game} onChange={onChange} />}
       {tab === 'ucetnictvi' && <Accounting game={game} />}
     </div>

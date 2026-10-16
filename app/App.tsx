@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { advanceDays, advanceToNextMatch, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
-import { Finance } from './screens/Finance';
+import { Finance, type FinanceTab } from './screens/Finance';
 import { GameMenu } from './screens/GameMenu';
 import { MatchDetail } from './screens/MatchDetail';
 import { ClubCard } from './screens/ClubCard';
@@ -42,6 +42,7 @@ export function App() {
   const [modals, setModals] = useState<ModalRef[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [milestone, setMilestone] = useState<Milestone | null>(null);
+  const [financeTab, setFinanceTab] = useState<{ tab: FinanceTab; n: number }>({ tab: 'prehled', n: 0 });
   const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
   const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
@@ -159,7 +160,7 @@ export function App() {
         <CalendarStrip game={game} />
         <nav className="tabs">
           {TABS.map((t) => (
-            <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+            <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => { if (t.id === 'finance') setFinanceTab({ tab: 'prehled', n: financeTab.n }); setTab(t.id); }}>
               {t.label}
               {t.id === 'majitel' && blocked && <span className="tab-dot" aria-label="odvolán" />}
             </button>
@@ -181,7 +182,7 @@ export function App() {
         {tab === 'vedeni' && <People game={game} onChange={managed} />}
         {tab === 'majitel' && <Owner game={game} onChange={update} />}
         {tab === 'stadion' && <Stadium game={game} onChange={managed} />}
-        {tab === 'finance' && <Finance game={game} onChange={managed} />}
+        {tab === 'finance' && <Finance key={financeTab.n} game={game} onChange={managed} initialTab={financeTab.tab} />}
         {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
       </main>
 
@@ -214,7 +215,7 @@ export function App() {
                 <h3>Co teď udělat</h3>
                 <div className="milestone-todo">
                   {milestone.todo.map((t) => (
-                    <button key={t.label} onClick={() => { setTab(t.tab); setMilestone(null); }}>{t.label} ›</button>
+                    <button key={t.label} onClick={() => { if (t.sub) setFinanceTab({ tab: t.sub, n: financeTab.n + 1 }); setTab(t.tab); setMilestone(null); }}>{t.label} ›</button>
                   ))}
                 </div>
               </>

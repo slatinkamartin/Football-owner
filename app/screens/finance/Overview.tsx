@@ -10,6 +10,7 @@ import {
   hierarchyIssues,
   INCOME_CATEGORIES,
   INSOLVENCY_MONTHS,
+  leagueBenchmarks,
   licenceProblems,
   moneyCalendar,
   operatingActual,
@@ -21,6 +22,7 @@ import {
 import { Notice } from '../../components';
 import { money } from '../../format';
 import type { FinanceTab } from '../Finance';
+import { Composition, LeagueRanks, Waterfall } from './OverviewCharts';
 import { CashChart, OwnerNeedActions } from './shared';
 
 type Status = 'good' | 'warn' | 'bad';
@@ -34,7 +36,7 @@ const MONTHS = ['červenci', 'srpnu', 'září', 'říjnu', 'listopadu', 'prosin
 const monthIn = (date: string) => MONTHS[(Number(date.slice(5, 7)) + 5) % 12];
 
 /** Přehled financí: stav peněz s výhledem, hlavní čísla, upozornění, průběh sezóny a kalendář. */
-export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; onOpen: (tab: FinanceTab) => void; onChange: (g: GameState) => void }) {
+export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; onOpen: (tab: FinanceTab, line?: string) => void; onChange: (g: GameState) => void }) {
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const apply = (r: ActionResult) => {
     if (r.state !== game) onChange(r.state);
@@ -43,6 +45,7 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
   const club = game.clubs[game.owner.clubId];
   const plan = forecastSeason(game);
   const warnings = budgetWarnings(game, plan);
+  const bench = leagueBenchmarks(game, plan);
   const sheet = balanceSheet(game);
   const totals = club.finance.season;
   const od = activeOverdraft(game);
@@ -73,7 +76,7 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
   const licenceFailed = game.licence?.season === game.season && game.licence.status !== 'ok';
   if (licenceFailed) alerts.push({ tone: 'bad', text: game.licence!.note, tab: 'financovani' });
   else if (licence.length) alerts.push({ tone: 'warn', text: `Licence by teď neprošla: ${licence.join(', ')}.`, tab: 'financovani' });
-  for (const h of hierarchyIssues(game)) alerts.push({ tone: 'warn', text: h, tab: 'naklady' });
+  for (const h of hierarchyIssues(game)) alerts.push({ tone: 'warn', text: h, tab: 'vydaje' });
   const month = Number(game.date.slice(5, 7));
   const ending = month >= 1 && month <= 6 ? expiringSponsors(game) : [];
   if (ending.length) alerts.push({ tone: 'warn', text: `V létě končí sponzorské smlouvy: ${ending.map((c) => `${SLOT_LABEL[c.slot]} (${c.name})`).join(', ')}. Nabídky na prodloužení chodí od března.`, tab: 'prijmy' });
@@ -147,6 +150,32 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
           </ul>
         </section>
       )}
+
+      <div className="grid two">
+        <section className="card">
+          <Waterfall plan={plan} />
+        </section>
+        <section className="card">
+          <h2>Složení sezóny</h2>
+          <Composition plan={plan} />
+        </section>
+      </div>
+
+      <section className="card">
+        <div className="row-between">
+          <h2>Kde jsme v lize</h2>
+          <span className="muted small">pruh = vy, čárka = průměr ligy</span>
+        </div>
+        <LeagueRanks
+          items={[
+            { label: 'Příjmy za sezónu', b: bench.prijmy },
+            { label: 'Platy hráčů', b: bench.platy, hint: 'víc = silnější kádr' },
+            { label: 'Sponzoři a fanshop', b: bench.komercni },
+            { label: 'Vstupné', b: bench.vstupne },
+            { label: 'Peníze na účtu', b: bench.zustatek },
+          ]}
+        />
+      </section>
 
       <section className="card">
         <div className="row-between">
