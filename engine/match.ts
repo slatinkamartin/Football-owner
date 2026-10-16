@@ -44,6 +44,8 @@ export interface MatchOptions {
   homeEdge?: number;
   /** Jak moc rozhoduje rozdíl v síle (nastavení náhody; 1 = běžně). */
   decisive?: number;
+  /** Změna od 46. minuty (rozhodnutí o poločase). */
+  halftime?: { home?: { style?: CoachStyle; bonus?: number }; away?: { style?: CoachStyle; bonus?: number } };
 }
 
 export function isAvailable(p: Player, date: string): boolean {
@@ -205,6 +207,14 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
   };
 
   for (let minute = 1; minute <= length; minute++) {
+    if (minute === 46 && opts?.halftime) {
+      for (const [s, change] of [[H, opts.halftime.home], [A, opts.halftime.away]] as const) {
+        if (!change) continue;
+        if (change.style) s.style = change.style;
+        if (change.bonus) s.side = { ...s.side, bonus: (s.side.bonus ?? 0) + change.bonus };
+        recompute(s);
+      }
+    }
     for (const [s, o, isHome] of [[H, A, true], [A, H, false]] as const) {
       if (!s.onPitch.length) continue;
       const diff = (s.strength - o.strength) * (opts?.decisive ?? 1) + (isHome ? homeEdge / 2 : -homeEdge / 2);

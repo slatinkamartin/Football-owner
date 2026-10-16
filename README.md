@@ -61,6 +61,22 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.16: zápasy a liga (etapa B)
+
+- **Příprava na zápas** na Přehledu:
+  - taktika jako doporučení trenérovi (přijme podle důvěry a ega), rotace opor, mimořádná prémie za výhru, akce pro fanoušky (poloviční vstupné, choreo) a návštěva kabiny;
+  - u zápasů se sázkou (derby, přímý soupeř, souboj o čelo, záchrana, pohár, závěr sezóny) příprava sama vyskočí;
+  - výsledek zápasu se sázkou má dvojnásobný vliv na fanoušky a média.
+- **Živý přenos** na tlačítko: první poločas, rozhodnutí do kabiny (nic neměnit / víc riskovat / bránit), pak druhý poločas. Náhled je poctivý: skutečný zápas proběhne do 45. minuty stejně.
+- **Tisková konference** po výjimečných zápasech (derby, rozdíl 4 gólů, vyloučení, sporná situace), nejvýš jednou za dva týdny: pochvala, kritika, podpora trenéra, výpad proti rozhodčímu s rizikem pokuty, odvolání proti trestu.
+- **Zátěž a kalendář** a **cesta pohárem** v Zápasech.
+- **Tabulky**:
+  - šance na titul, Evropu a sestup z 300 simulací zbytku sezóny a šance na cíl sezóny;
+  - rivalové (derby, přímý soupeř);
+  - zpravodaj kola (překvapení, střelec, sestava kola: pochvala zvedá morálku i zájem kupců);
+  - graf vývoje sezóny s rivaly a zlomovými okamžiky (odvolaný trenér, prodej opory, zranění).
+- **Soupeři mají povahu majitele**: rozhazovačný, šetřílek (v krizi prodává levněji), nervózní (vyhazuje trenéry), akademie. Ukazuje ji karta klubu.
+
 ### Novinky verze 0.15: příběhy, nálady, porada a tempo (etapa A)
 
 - **Týdenní porada** nahoře na Přehledu: až pět úkolů na tento týden podle stavu klubu (rozhodnutí s termínem, nabídky, rozpočet, chybějící peníze, licence, vedení, konec okna, nespokojené opory, končící smlouvy, nevyužité peníze). Každý úkol vede tam, kde se řeší.

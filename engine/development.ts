@@ -1,3 +1,4 @@
+import { rivalPositions } from './league';
 import { finalStandings } from './competitions';
 import { playerAge } from './players';
 import type { Rng } from './rng';
@@ -117,5 +118,5 @@ export function recordTimeline(state: GameState, round: number): void {
   const table = finalStandings(comp, state);
   const i = table.findIndex((r) => r.clubId === state.owner.clubId);
   if (i < 0) return;
-  state.timeline = [...state.timeline.filter((t) => t.round !== round), { round, date: state.date, position: i + 1, points: table[i].points }];
+  state.timeline = [...state.timeline.filter((t) => t.round !== round), { round, date: state.date, position: i + 1, points: table[i].points, rivals: rivalPositions(state) }];
 }

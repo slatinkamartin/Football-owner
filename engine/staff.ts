@@ -1,3 +1,4 @@
+import { noteTimeline, ownerTypeOf } from './league';
 import { book, departmentEffect } from './finance';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { newId, playersByClub, squadQualityForReputation, teamStrength } from './players';
@@ -60,7 +61,9 @@ export function commercialFactor(state: GameState, clubId = state.owner.clubId):
 /** Bonus ke kvalitě dorostenců (šéf akademie). */
 export function academyBonus(state: GameState, clubId: string): number {
   const a = clubId === state.owner.clubId ? staffAbility(state, 'akademie') : undefined;
-  return a === undefined ? 0 : (a - 40) / 10;
+  // Soupeř, jehož majitel sází na akademii, má lepší odchovance.
+  const profile = clubId !== state.owner.clubId && ownerTypeOf(clubId) === 'akademie' ? 1.5 : 0;
+  return (a === undefined ? 0 : (a - 40) / 10) + profile;
 }
 
 /** Co pozice v klubu přinese (pro rozhraní). */
@@ -348,6 +351,7 @@ export function fireStaff(prev: GameState, role: StaffRole): ActionResult {
   const state = structuredClone(prev);
   const cost = severance(state, state.staff[id]);
   const gone = releaseCurrent(state, role, true)!;
+  if (role === 'trener') noteTimeline(state, `odvolán trenér ${gone.lastName}`);
   const message = `${ROLE_LABEL[role]} ${gone.firstName} ${gone.lastName} byl odvolán. Odstupné ${Math.round(cost).toLocaleString('cs-CZ')} Kč.`;
   addNews(state, { kind: 'info', title: message });
   return { state, ok: true, message };

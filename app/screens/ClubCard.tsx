@@ -11,6 +11,10 @@ import {
   scouted,
   squadOf,
   STYLE_LABEL,
+  clubMoment,
+  isRival,
+  OWNER_TYPE_LABEL,
+  ownerTypeOf,
   type GameState,
 } from '../../engine';
 import { money, num } from '../format';
@@ -46,6 +50,14 @@ export function ClubCard({ game, clubId }: { game: GameState; clubId: string }) 
               {club.city} · {comp?.name ?? 'mimo soutěž'}
               {parent && ` · B-tým klubu ${parent.shortName}`}
             </p>
+            {!own && (
+              <p className="small">
+                Majitel: <strong>{OWNER_TYPE_LABEL[ownerTypeOf(clubId)].label}</strong> <span className="muted">({OWNER_TYPE_LABEL[ownerTypeOf(clubId)].hint})</span>
+                {clubMoment(game, clubId) === 'krize' && <> · <span className="neg">v krizi</span></>}
+                {clubMoment(game, clubId) === 'snura' && <> · <span className="pos">vítězná šňůra</span></>}
+                {isRival(game, clubId) && <> · <strong>váš rival ({isRival(game, clubId)!.label})</strong></>}
+              </p>
+            )}
           </div>
         </div>
       </header>

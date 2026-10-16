@@ -11,6 +11,7 @@ import type { Club, GameEvent, GameState, Player, Position } from './types';
 import { addNews, clamp, competitionOf, FOREIGN_PREFIX, tierOf } from './world';
 import { dramaFactor, maxOpenEvents } from './settings';
 import { resolveStoryEvent } from './stories';
+import { resolvePress } from './matchday';
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -87,6 +88,13 @@ function tappingTarget(s: GameState): Player | undefined {
 }
 
 export const TEMPLATES: Record<string, Template> = {
+  // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
+  'tiskovka-zapas': {
+    weight: () => 0,
+    create: () => null,
+    resolve: (s, e, o) => resolvePress(s, e, o, { media, league, fine }),
+  },
+
   soustredeni: {
     weight: (s) => (month(s) === 12 || (month(s) === 1 && s.date.slice(8) < '10') ? 3 : 0),
     create: (s) => {

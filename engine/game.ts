@@ -68,6 +68,8 @@ import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emer
 import { decisiveness, settingsOf } from './settings';
 import { recordPulse, pulseValues, snapshotPulse } from './pulse';
 import { weeklyStories } from './stories';
+import { afterOwnMatch, halftimeAdjust, pendingPrematch, planEffect } from './matchday';
+import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyRivalOwners } from './league';
 import { milestoneToday, nextMilestone } from './milestones';
 import { aiForeignSignings, monthlyForeign, refreshForeignMarket, returnLoans, weeklyForeign } from './foreign';
 import { analyticsBonus, completeBigProjects, monthlyBigProjects, monthlyPrograms } from './investments';
@@ -254,7 +256,8 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
     const tier = tierOf(state, club.id);
     if (club.id !== state.owner.clubId) {
       club.policy.ticketPrice = defaultTicketPrice(tier);
-      club.policy.transferBudget = defaultTransferBudget(club);
+      // Rozhazovačný majitel soupeře dává na posily víc.
+      club.policy.transferBudget = Math.round(defaultTransferBudget(club) * (ownerTypeOf(club.id) === 'rozhazovacny' ? 1.3 : 1));
       aiReinvest(state, club, tier);
     }
   }
@@ -631,6 +634,10 @@ function playMatchesOn(state: GameState, rng: Rng): void {
   const ownId = state.owner.clubId;
   const ownCompId = competitionOf(state, ownId)?.id;
   const spirit = ownTeamSpirit(state) + schemeSpirit(state) + campBonus(state) + analyticsBonus(state);
+  // Pořadí před kolem (pro zpravodaj kola soutěže majitele).
+  const ownComp = ownCompId ? state.competitions[ownCompId] : undefined;
+  const before = new Map(ownComp ? finalStandings(ownComp, state).map((r, i) => [r.clubId, i + 1] as const) : []);
+  const roundsToday = new Set(today.filter((x) => x.comp?.id === ownCompId).map((x) => x.fixture.round));
   for (const { fixture: f, name, tier, cup, comp } of today) {
     const home = state.clubs[f.homeId];
     const away = state.clubs[f.awayId];
@@ -639,20 +646,34 @@ function playMatchesOn(state: GameState, rng: Rng): void {
     const damaged = !!home.pitchDamagedUntil && home.pitchDamagedUntil >= state.date;
     const capacity = effectiveCapacity(state, home);
     const ownHolders = home.id === ownId && comp ? seasonTicketHolders(state) : 0;
+    const involvesOwner = f.homeId === ownId || f.awayId === ownId;
+    // Plán majitele (taktika, prémie, levné vstupné, choreo) platí jen pro jeho zápas.
+    const plan = involvesOwner ? planEffect(state, f) : { bonus: 0, ticketFactor: 1, homeEdge: 0 };
+    const ticketPrice = home.policy.ticketPrice;
+    if (plan.ticketFactor !== 1) home.policy.ticketPrice = Math.round(ticketPrice * plan.ticketFactor);
     const attendance = Math.min(capacity, Math.max(Math.round(ownHolders * 0.88), matchAttendance(rng, home, away, tier, form, capacity, damaged)));
     const homeCoach = coachOf(state, home.id);
     const awayCoach = coachOf(state, away.id);
-    const involvesOwner = f.homeId === ownId || f.awayId === ownId;
+    const half = involvesOwner ? halftimeAdjust(state, f) : undefined;
+    const ownHome = home.id === ownId;
     f.result = simulateMatch(
       rng,
-      { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach) + (home.id === ownId ? spirit : 0), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus, ...medicalFactors(home, damaged, tier) },
-      { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach) + (away.id === ownId ? spirit : 0), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus, ...medicalFactors(away, false, tier) },
+      { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach) + (ownHome ? spirit + plan.bonus : 0), style: (ownHome && plan.style) || homeCoach?.style, youthFocus: homeCoach?.youthFocus, ...medicalFactors(home, damaged, tier) },
+      { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach) + (away.id === ownId ? spirit + plan.bonus : 0), style: (away.id === ownId && plan.style) || awayCoach?.style, youthFocus: awayCoach?.youthFocus, ...medicalFactors(away, false, tier) },
       attendance,
-      { date: state.date, season: state.season, decisive: decisiveness(state), detail: comp ? comp.id === ownCompId : involvesOwner, homeEdge: homeAdvantage(home, attendance, capacity) * (home.id === ownId ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) },
+      {
+        date: state.date,
+        season: state.season,
+        decisive: decisiveness(state),
+        detail: comp ? comp.id === ownCompId : involvesOwner,
+        homeEdge: homeAdvantage(home, attendance, capacity) * (ownHome ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) + plan.homeEdge,
+        halftime: half ? (ownHome ? { home: half } : { away: half }) : undefined,
+      },
     );
     // Držitelé permanentek už zaplatili předem.
     const holders = home.id === ownId && comp ? seasonTicketHolders(state) : 0;
     book(state, home.id, 'vstupne', Math.max(0, attendance - holders) * home.policy.ticketPrice, `Vstupné: ${home.shortName} – ${away.shortName}`);
+    home.policy.ticketPrice = ticketPrice;
     book(state, home.id, 'stadion', matchdayExtras(home, attendance, tier), `Catering a VIP: ${home.shortName} – ${away.shortName}`);
     if (home.id === ownId && comp) homeMatchOperations(state, rng, `${home.shortName} – ${away.shortName}`);
     if (comp) {
@@ -684,14 +705,26 @@ function playMatchesOn(state: GameState, rng: Rng): void {
       fixtureId: f.id,
     });
     if (comp) recordTimeline(state, f.round);
+    afterOwnMatch(state, f, cup);
     for (const e of d?.events ?? []) {
       if (e.clubId !== ownId) continue;
       const p = state.players[e.playerId];
       if (!p) continue;
-      if (e.type === 'zraneni') addNews(state, { kind: 'varovani', title: `Zranění: ${p.firstName} ${p.lastName}`, text: `${e.note}. Mimo hru do ${p.injuredUntil?.split('-').reverse().join('. ')}.`, fixtureId: f.id, playerId: p.id });
+      if (e.type === 'zraneni') {
+        addNews(state, { kind: 'varovani', title: `Zranění: ${p.firstName} ${p.lastName}`, text: `${e.note}. Mimo hru do ${p.injuredUntil?.split('-').reverse().join('. ')}.`, fixtureId: f.id, playerId: p.id });
+        const top = squadOf(state, ownId).sort((a, b) => b.overall - a.overall).slice(0, 3);
+        if (top.includes(p) && p.injuredUntil && p.injuredUntil > addDays(state.date, 30)) noteTimeline(state, `zranění ${p.lastName}`);
+      }
       if ((e.type === 'cervena' || e.type === 'druha-zluta') && p.suspension > 0) {
         addNews(state, { kind: 'varovani', title: `Červená karta: ${p.firstName} ${p.lastName}`, text: `Stop na ${p.suspension} ${p.suspension === 1 ? 'zápas' : 'zápasy'}.`, fixtureId: f.id, playerId: p.id });
       }
+    }
+  }
+  if (ownComp) {
+    for (const round of roundsToday) {
+      if (ownComp.fixtures.some((x) => x.round === round && !x.result)) continue;
+      const report = makeRoundReport(state, ownComp, round, before);
+      if (report) publishRoundReport(state, report);
     }
   }
 }
@@ -752,6 +785,8 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   monthlyEurope(state);
   wageMorale(state);
   monthlyDevelopment(state, rng);
+  // Pozornost ze sestavy kola měsíčně slábne.
+  for (const p of Object.values(state.players)) if (p.spotlight) p.spotlight = p.spotlight > 1 ? p.spotlight - 1 : undefined;
   monthlyAmortization(state);
   monthlyBuildingDepreciation(state);
   monthlyLoans(state);
@@ -880,6 +915,7 @@ function processDay(state: GameState, rng: Rng): void {
   if (state.owner.ousted) boardDecides(state);
   if (dayOfWeek(state.date) === 1) {
     weeklyStories(state, rng);
+    weeklyRivalOwners(state, rng);
     snapshotPulse(state);
     maybeCreateEvent(state, rng);
     aiDomesticTransfers(state, rng);
@@ -964,6 +1000,7 @@ export function advanceUntil(prev: GameState, target: PlayTarget): { state: Game
   const injured = new Set(squadOf(state, own).filter((p) => p.injuredUntil && p.injuredUntil >= state.date).map((p) => p.id));
   let fixtureId: string | undefined;
   let reason: string | undefined;
+  const prematchAtStart = !!pendingPrematch(state);
   for (let i = 0; i < 400 && !state.gameOver; i++) {
     const played = stepDay(state, rng, own);
     if (played) fixtureId = played;
@@ -990,6 +1027,11 @@ export function advanceUntil(prev: GameState, target: PlayTarget): { state: Game
         reason = `Zranění opory: ${hurt.firstName} ${hurt.lastName} (do ${formatDate(hurt.injuredUntil!)})`;
         break;
       }
+    }
+    const prematch = pendingPrematch(state);
+    if (stops.decision && prematch && !prematchAtStart) {
+      reason = `Blíží se zápas, o který jde: ${prematch.stakes.map((s) => s.label).join(', ')}`;
+      break;
     }
     if (stops.milestone && target !== 'milnik' && milestoneToday(state)) {
       reason = milestoneToday(state)!.title;
@@ -1215,4 +1257,38 @@ function migrateToV6(saved: { version: number } & Record<string, unknown>): Game
     text: 'Hodnoty hráčů a platy odpovídají české lize. Rozpočet na přestupy si zkontrolujte ve Financích.',
   });
   return state;
+}
+
+// ---------- Živý přenos ----------
+
+export interface LiveHalf {
+  fixtureId: string;
+  homeId: string;
+  awayId: string;
+  events: import('./types').MatchEvent[];
+  homeGoals: number;
+  awayGoals: number;
+}
+
+/**
+ * Náhled prvního poločasu zápasu majitele, který se hraje zítra. Zápas se přehraje na kopii hry;
+ * skutečný zápas proběhne do 45. minuty stejně (stejná náhoda), rozhodnutí o poločase platí od 46. minuty.
+ */
+export function liveFirstHalf(state: GameState): LiveHalf | undefined {
+  const own = state.owner.clubId;
+  const tomorrow = addDays(state.date, 1);
+  const next = allFixtures(state).find((x) => x.fixture.date === tomorrow && !x.fixture.result && (x.fixture.homeId === own || x.fixture.awayId === own));
+  if (!next) return undefined;
+  const sim = advanceDays(state, 1).state;
+  const f = allFixtures(sim).find((x) => x.fixture.id === next.fixture.id)?.fixture;
+  if (!f?.result) return undefined;
+  const scorers = f.result.scorers.filter((s) => s.minute <= 45);
+  return {
+    fixtureId: f.id,
+    homeId: f.homeId,
+    awayId: f.awayId,
+    events: (f.result.detail?.events ?? []).filter((e) => e.minute <= 45),
+    homeGoals: scorers.filter((s) => s.clubId === f.homeId).length,
+    awayGoals: scorers.filter((s) => s.clubId === f.awayId).length,
+  };
 }

@@ -110,6 +110,8 @@ export interface Player {
   nonEu?: boolean;
   /** Ztráta výkonu při zabydlování v nové zemi (0–0,15), měsíčně klesá. */
   adapt?: number;
+  /** Kolikrát se hráč nedávno dostal do sestavy kola (zvedá zájem kupců, měsíčně slábne). */
+  spotlight?: number;
   /** Hostování z ciziny: na konci sezóny se vrací, pokud klub nevyužije opci. */
   loan?: { fromId: string; buyOption: number };
 }
@@ -647,6 +649,20 @@ export interface Story {
   outcome?: 'dobre' | 'spatne' | 'neutralni';
 }
 
+export interface MatchPlan {
+  fixtureId: string;
+  approach?: 'utok' | 'vyvazene' | 'beton';
+  rotate?: boolean;
+  /** Mimořádná prémie hráčům za výhru. */
+  bonus?: number;
+  fanAction?: 'levne' | 'choreo';
+  visit?: boolean;
+  /** Trenér doporučení přijal (rozhoduje se při zápase). */
+  coachAccepted?: boolean;
+  /** Rozhodnutí o poločase (živý přenos). */
+  halftime?: 'drzet' | 'riskovat' | 'branit';
+}
+
 export type PulseKey = 'fans' | 'media' | 'kabina' | 'vedeni';
 
 export interface PulseCause {
@@ -873,6 +889,8 @@ export interface TimelinePoint {
   date: string;
   position: number;
   points: number;
+  /** Pozice rivalů po tomto kole. */
+  rivals?: Record<string, number>;
 }
 
 export interface BudgetLine {
@@ -960,6 +978,14 @@ export interface GameState {
   campsPaid?: { season: number; summer?: CampChoice; winter?: CampChoice };
   version: typeof SAVE_VERSION;
   stories?: Story[];
+  /** Zpravodaje posledních kol soutěže majitele. */
+  roundReports?: import('./league').RoundReport[];
+  /** Zlomové okamžiky sezóny pro graf vývoje tabulky. */
+  timelineNotes?: { season: number; round: number; text: string }[];
+  /** Plán majitele na příští zápas (taktika, prémie, akce pro fanoušky). */
+  matchPlan?: MatchPlan;
+  /** Zápasy, u kterých majitel přípravu odmítl (nevyskakuje znovu). */
+  planDismissed?: string[];
   pulse?: PulseState;
   settings?: GameSettings;
   /** Zahraniční skauting a vyhlédnutí hráči. */

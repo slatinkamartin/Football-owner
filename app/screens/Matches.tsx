@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { competitionOf, formatShortDate, type Cup, type Fixture, type GameState } from '../../engine';
+import { competitionOf, cupPath, formatShortDate, workload, type Cup, type Fixture, type GameState } from '../../engine';
+import { Badge, Meter } from '../components';
+import { money } from '../format';
 import { num } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
 import { ClubLink } from '../nav';
@@ -32,8 +34,45 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
       .map((s) => `${game.players[s.playerId]?.lastName ?? '?'} ${s.minute}.`)
       .join(', ');
 
+  const w = workload(game);
+  const path = cupPath(game);
   return (
     <div className="stack">
+    <div className="grid two">
+      <section className="card">
+        <div className="row-between">
+          <h2>Zátěž a kalendář</h2>
+          <Badge tone={w.level === 'vysoka' ? 'bad' : w.level === 'stredni' ? 'warn' : 'good'}>{w.level === 'vysoka' ? 'vysoká zátěž' : w.level === 'stredni' ? 'střední zátěž' : 'klid'}</Badge>
+        </div>
+        <dl className="kv meters">
+          <dt>Zápasy za poslední týden</dt>
+          <dd>{w.recent}</dd>
+          <dt>Zápasy v příštích 14 dnech</dt>
+          <dd>{w.upcoming}</dd>
+          <dt>Kondice opor</dt>
+          <dd><Meter value={w.fitness} /> {w.fitness} %</dd>
+          <dt>Zranění</dt>
+          <dd>{w.injured}</dd>
+        </dl>
+        <p className="muted small">{w.advice} Rotaci doporučíte trenérovi v Přípravě na zápas (Přehled). Šíře kádru a medicína rozhodují, jak zátěž tým unese.</p>
+      </section>
+      {path.length > 0 && (
+        <section className="card">
+          <h2>Cesta pohárem</h2>
+          <ul className="plain cup-path">
+            {path.map((s) => (
+              <li key={s.name} className={`cup-${s.status}`}>
+                <span className="cup-round-name">{s.name}</span>
+                <span className="muted small">{formatShortDate(s.date)}</span>
+                <span className="cup-text">{s.text}</span>
+                <span className="num small">{money(s.prize)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">Prémie za postup do kola. U pohárového zápasu se vás hra zeptá na prémii hráčům a vstupné.</p>
+        </section>
+      )}
+    </div>
     <div className="grid two">
       <section className="card">
         <h2>Zápasy klubu</h2>

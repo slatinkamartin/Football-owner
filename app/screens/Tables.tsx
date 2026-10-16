@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { ratingText, averageRating, competitionOf, finalStandings, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
+import { seasonOutlook, isRival, ratingText, averageRating, competitionOf, finalStandings, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
 import { Chips, DataTable, useStoredState } from '../table';
 import { ClubLink, PlayerLink } from '../nav';
+import { RivalsLine, RoundReportCard, StandingsPath } from './LeagueExtras';
 
 export function Tables({ game }: { game: GameState }) {
   const ownId = game.owner.clubId;
   const comps = Object.values(game.competitions).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name, 'cs'));
   const [compId, setCompId] = useState(competitionOf(game, ownId)?.id ?? comps[0].id);
   const comp = game.competitions[compId];
-  const table = finalStandings(comp, game).map((r, i) => ({ ...r, rank: i + 1 }));
+  const outlook = new Map(seasonOutlook(game, comp).map((o) => [o.clubId, o]));
+  const table = finalStandings(comp, game).map((r, i) => ({ ...r, rank: i + 1, o: outlook.get(r.clubId) }));
+  const pct = (v?: number) => (v === undefined ? '–' : v >= 0.995 ? 'jistě' : v < 0.005 ? '–' : `${Math.round(v * 100)} %`);
   const n = table.length;
   const [filter, setFilter] = useStoredState('filtr:statistiky', { club: '', position: '' as Position | '' });
 
@@ -62,13 +65,16 @@ export function Tables({ game }: { game: GameState }) {
           rowClassName={(r) => `${zone(r.rank)} ${r.clubId === ownId ? 'own-row' : ''} ${groupStart.has(r.rank) ? 'group-start' : ''}`}
           columns={[
             { key: 'rank', label: '#', num: true, value: (r) => r.rank, render: (r) => `${r.rank}.` },
-            { key: 'club', label: 'Klub', value: (r) => game.clubs[r.clubId].shortName, render: (r) => <ClubLink id={r.clubId}>{game.clubs[r.clubId].shortName}</ClubLink> },
+            { key: 'club', label: 'Klub', value: (r) => game.clubs[r.clubId].shortName, render: (r) => <><ClubLink id={r.clubId}>{game.clubs[r.clubId].shortName}</ClubLink>{isRival(game, r.clubId) && <span className="rival-tag" title={isRival(game, r.clubId)!.label}> ⚔</span>}</> },
             { key: 'played', label: 'Z', num: true, value: (r) => r.played },
             { key: 'won', label: 'V', num: true, value: (r) => r.won },
             { key: 'drawn', label: 'R', num: true, value: (r) => r.drawn },
             { key: 'lost', label: 'P', num: true, value: (r) => r.lost },
             { key: 'gf', label: 'Skóre', num: true, value: (r) => r.goalsFor - r.goalsAgainst, render: (r) => `${r.goalsFor}:${r.goalsAgainst}` },
             { key: 'pts', label: 'Body', num: true, value: (r) => r.points, render: (r) => <strong>{r.points}</strong> },
+            { key: 'top', label: comp.tier === 1 ? 'Titul' : 'Postup', num: true, hideSm: true, value: (r) => (comp.tier === 1 ? r.o?.title : r.o?.promote) ?? 0, render: (r) => pct(comp.tier === 1 ? r.o?.title : r.o?.promote) },
+            ...(comp.tier === 1 ? [{ key: 'eu', label: 'Evropa', num: true, hideSm: true, value: (r: (typeof table)[number]) => r.o?.europe ?? 0, render: (r: (typeof table)[number]) => pct(r.o?.europe) }] : []),
+            { key: 'down', label: 'Sestup', num: true, hideSm: true, value: (r) => r.o?.relegate ?? 0, render: (r) => pct(r.o?.relegate) },
             {
               key: 'form',
               label: 'Forma',
@@ -77,13 +83,22 @@ export function Tables({ game }: { game: GameState }) {
             },
           ]}
         />
+        {comp.clubIds.includes(ownId) && <RivalsLine game={game} />}
         <p className="muted small">
+          Šance jsou odhad z 300 simulací zbytku sezóny podle síly sestav a trenérů.{' '}
           {comp.promote > 0 && <><span className="legend zone-up" /> postup </>}
           {lowerPlayoff && <><span className="legend zone-playoff" /> baráž </>}
           {comp.relegate > 0 && <><span className="legend zone-down" /> sestup</>}
           {comp.playoff && <><span className="legend zone-playoff" /> baráž</>}
         </p>
       </section>
+
+      {comp.clubIds.includes(ownId) && (
+        <>
+          <StandingsPath game={game} />
+          <RoundReportCard game={game} />
+        </>
+      )}
 
       <section className="card">
         <h2>Statistiky hráčů</h2>

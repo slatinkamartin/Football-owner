@@ -880,3 +880,22 @@ table.sections td .muted.small { display: block; }
 .play-until { padding: 7px 8px; }
 .stop-toast { background: var(--accent-soft); color: var(--text); }
 @media (width <= 640px) { .briefing-list li { grid-template-columns: 10px minmax(0, 1fr); } .briefing-list li button { grid-column: 2; justify-self: start; } .advance { flex-wrap: wrap; } }
+
+/* Etapa B: zápasy a liga */
+.match-prep { display: flex; flex-direction: column; gap: 8px; }
+.prep-row { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.prep-actions .check { font-size: 13px; }
+.prematch-dialog { max-width: 560px; display: flex; flex-direction: column; gap: 10px; max-height: 90vh; overflow-y: auto; }
+.prematch-dialog h2 { margin: 0; }
+.live-match { max-width: 560px; width: 100%; display: flex; flex-direction: column; gap: 8px; max-height: 92vh; overflow-y: auto; }
+.live-feed { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.live-feed li { font-size: 14px; }
+.live-feed li.goal { font-weight: 700; color: var(--accent); }
+.cup-path li { display: grid; grid-template-columns: 110px 60px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.cup-path li:last-child { border-bottom: 0; }
+.cup-path .cup-vypadli, .cup-path .cup-nehraje { color: var(--muted); }
+.cup-path .cup-dalsi .cup-text { font-weight: 600; color: var(--accent); }
+.cup-round-name { font-weight: 600; }
+.rival-tag { color: var(--neg); font-size: 12px; }
+.team-of-round li { padding: 2px 0; }
+@media (width <= 640px) { .cup-path li { grid-template-columns: 1fr auto; } .cup-path li .muted { display: none; } .cup-text { grid-column: 1 / -1; } }

@@ -1,3 +1,4 @@
+import { crisisDiscount, noteTimeline } from './league';
 import { book, ownerAccounting, playerWage, wageBudgetMonthly } from './finance';
 import { schemeWageFactor, SECTION_LABEL, sectionRoomFor, sectionsOf, sectionUsage } from './wages';
 import { scheduleInstalments } from './financing';
@@ -63,7 +64,8 @@ export function askingPrice(state: GameState, p: Player, keyPlayers?: Set<string
   const keyFactor = isKey ? 1.35 : 1;
   // Hráč, se kterým majitel potají jednal, tlačí na svůj klub, aby ho pustil levněji.
   const tapped = state.grey?.tapped?.includes(p.id) ? 0.75 : 1;
-  return roundMoney(playerValue(state, p) * contractFactor * keyFactor * tapped);
+  // Šetřílek v krizi prodává levněji.
+  return roundMoney(playerValue(state, p) * contractFactor * keyFactor * tapped * crisisDiscount(state, p.clubId));
 }
 
 /** Tržní plat hráče v daném klubu (kolik by klub jeho úrovně za takového hráče běžně platil). */
@@ -479,7 +481,9 @@ export function generateOffers(state: GameState, rng: Rng): void {
     const value = playerValue(state, p);
 
     // Zahraničí: hlavní odbytiště pro nejlepší hráče české ligy.
-    const foreignChance = p.overall >= 60 ? (0.015 + (p.overall - 60) * 0.006) * (listed ? 3 : 1) * interest : 0;
+    // Hráč ze sestavy kola přitahuje pozornost kupců.
+    const spotlight = 1 + 0.5 * Math.min(3, p.spotlight ?? 0);
+    const foreignChance = p.overall >= 60 ? (0.015 + (p.overall - 60) * 0.006) * (listed ? 3 : 1) * interest * spotlight : 0;
     const domesticChance = domestic.length ? 0.025 * (listed ? 4 : 1) * (rank < 5 ? 1.5 : 1) * interest : 0;
     let buyerId: string | undefined;
     let level: number | undefined;
@@ -566,6 +570,7 @@ export function acceptOffer(prev: GameState, offerId: string, sellOn = false): A
   executeTransfer(state, p, offer.buyerId, fee, Math.round(p.wage * 1.2), 3, { instalments: offer.instalments, sellOn: sellOn && !isForeign(offer.buyerId) ? SELL_ON_PCT : undefined });
   if (offer.advice === 'odmitnout') state.owner.trust.reditel = clamp(state.owner.trust.reditel - 4, 0, 100);
   if (key) state.owner.trust.trener = clamp(state.owner.trust.trener - 5, 0, 100);
+  if (squad.indexOf(p) < 3) noteTimeline(state, `prodej opory ${p.lastName}`);
   const message = `${playerName(p)} přestoupil do ${clubLabel(state, offer.buyerId)} za ${fee.toLocaleString('cs-CZ')} Kč${offer.instalments ? ' (ve splátkách)' : ''}${sellOn && !isForeign(offer.buyerId) ? `, s podílem ${Math.round(SELL_ON_PCT * 100)} % z dalšího prodeje` : ''}.`;
   addNews(state, { kind: 'info', title: `Prodej: ${playerName(p)}`, text: key ? `${message} Trenér nese odchod opory nelibě.` : message });
   return { state, ok: true, message };

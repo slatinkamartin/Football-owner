@@ -32,3 +32,5 @@ export * from './settings';
 export * from './pulse';
 export * from './stories';
 export * from './briefing';
+export * from './league';
+export * from './matchday';

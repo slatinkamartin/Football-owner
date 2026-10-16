@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
+import { clubLabel, dismissMatchPlan, pendingPrematch, advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance, type FinanceTab } from './screens/Finance';
@@ -11,6 +11,7 @@ import { NavContext, Sheet, type ModalRef } from './nav';
 import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
+import { LiveMatch, MatchPrep } from './screens/MatchPrep';
 import { Owner } from './screens/Owner';
 import { CalendarStrip } from './SeasonCalendar';
 import { People } from './screens/People';
@@ -44,6 +45,7 @@ export function App() {
   const [milestone, setMilestone] = useState<Milestone | null>(null);
   const [financeTab, setFinanceTab] = useState<{ tab: FinanceTab; n: number }>({ tab: 'prehled', n: 0 });
   const [stopReason, setStopReason] = useState<string | null>(null);
+  const [live, setLive] = useState(false);
   const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
   const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
@@ -202,6 +204,7 @@ export function App() {
               setTab(t);
             }}
             onOpenMatch={setOpenMatch}
+            onLive={() => setLive(true)}
           />
         )}
         {tab === 'tabulky' && <Tables game={game} />}
@@ -236,6 +239,33 @@ export function App() {
           <Sheet label={top.type === 'player' ? 'Karta hráče' : 'Karta klubu'} onClose={close} onBack={back}>
             {top.type === 'player' ? <PlayerCard game={game} playerId={top.id} /> : <ClubCard game={game} clubId={top.id} />}
           </Sheet>
+        );
+      })()}
+
+      {live && !game.gameOver && (
+        <LiveMatch
+          game={game}
+          onChange={update}
+          onClose={() => setLive(false)}
+          onSummary={(id) => {
+            setLive(false);
+            setModals([{ type: 'match', id }]);
+          }}
+        />
+      )}
+
+      {!live && !milestone && !game.gameOver && modals.length === 0 && (() => {
+        const p = pendingPrematch(game);
+        if (!p) return null;
+        return (
+          <div className="overlay">
+            <div className="card dialog prematch-dialog" role="dialog" aria-modal="true" aria-label="Zápas se sázkou">
+              <span className="muted small">{formatDate(p.fixture.date, true)} · {p.name}</span>
+              <h2>{p.home ? 'Doma' : 'Venku'} s {clubLabel(game, p.opponentId)}: zápas, o který jde</h2>
+              <MatchPrep game={game} onChange={managed} onLive={() => setLive(true)} compact />
+              <button onClick={() => update(dismissMatchPlan(game, p.fixture.id))}>Hotovo, pokračovat</button>
+            </div>
+          </div>
         );
       })()}
 

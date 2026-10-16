@@ -21,6 +21,7 @@ import {
   type MilestoneTab,
 } from '../../engine';
 import { Briefing, PulsePanel, Stories } from './Briefing';
+import { MatchPrepCard } from './MatchPrep';
 import { Badge } from '../components';
 import { findFixture } from './MatchDetail';
 import { Decisions } from './Decisions';
@@ -35,11 +36,13 @@ export function Overview({
   onChange,
   onNavigate,
   onOpenMatch,
+  onLive,
 }: {
   game: GameState;
   onChange: (g: GameState) => void;
   onNavigate: (tab: Target, sub?: BriefingTask['sub']) => void;
   onOpenMatch: (id: string) => void;
+  onLive: () => void;
 }) {
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
@@ -58,6 +61,7 @@ export function Overview({
       <Briefing game={game} onNavigate={onNavigate} />
       <Decisions game={game} onChange={onChange} />
       <Stories game={game} />
+      <MatchPrepCard game={game} onChange={onChange} onLive={onLive} />
       <section className="card">
         <h2>Další zápas</h2>
         {next ? (
