@@ -42,6 +42,9 @@ export function vipRate(tier: number): number {
 export function matchdayExtras(club: Club, attendance: number, tier: number): number {
   // Cenová úroveň cateringu a VIP (jen klub majitele ji mění).
   const price = club.policy?.cateringPrice === 'nizka' ? 0.8 : club.policy?.cateringPrice === 'vysoka' ? 1.15 : 1;
-  return (attendance * CATERING_SPEND[club.facilities.catering] + club.facilities.vip * vipRate(tier)) * price;
+  // Rodinný sektor a fanzóna zvedají útratu (jen kluby, které je mají).
+  const rodina = club.policy?.sectors?.rodina;
+  const venue = (rodina === 'velky' ? 1.08 : rodina === 'zadny' ? 0.97 : 1) * (club.facilities.extras?.includes('fanzona') ? 1.1 : 1);
+  return (attendance * CATERING_SPEND[club.facilities.catering] * venue + club.facilities.vip * vipRate(tier)) * price;
 }
 

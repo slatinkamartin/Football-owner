@@ -5,6 +5,8 @@ import { advanceDays, migrateSave, newGame, updatePolicy } from './game';
 import { campBonus, communityEffect, fanshopDetail, maintenanceMonthly } from './operations';
 import { budgetRemaining } from './transfers';
 import type { DataPack } from './types';
+import { answerEventOffer, eventOfferTick } from './venue';
+import { createRng } from './rng';
 
 const start = newGame(pack as DataPack, { clubId: 'bohemians', ownerName: 'T', difficulty: 'stredni', seed: 5 });
 const line = (s: typeof start, k: string) => forecastSeason(s).lines.find((l) => l.key === k)!.amount;
@@ -17,10 +19,13 @@ describe('řádky rozpočtu a jejich dopad', () => {
     expect(fanshopDetail(updatePolicy(start, { merchPrice: 'vysoka' })).gross).toBeGreaterThan(base.gross);
   });
 
-  it('akce na stadionu přinesou peníze a jsou ve výhledu', () => {
-    const s = updatePolicy(start, { stadiumEvents: 6 });
-    expect(line(s, 'akce')).toBeGreaterThan(0);
-    const later = advanceDays(s, 200).state;
+  it('akce na stadionu: přijatá nabídka je ve výhledu a přinese peníze', () => {
+    const s = structuredClone(start);
+    for (let i = 0; i < 10 && !(s.eventOffers ?? []).length; i++) eventOfferTick(s, createRng(i));
+    const offer = s.eventOffers![0];
+    const accepted = answerEventOffer(s, offer.id, true).state;
+    expect(line(accepted, 'akce')).toBeGreaterThan(0);
+    const later = advanceDays(accepted, 45).state;
     expect(later.clubs.bohemians.finance.season.akce).toBeGreaterThan(0);
   });
 

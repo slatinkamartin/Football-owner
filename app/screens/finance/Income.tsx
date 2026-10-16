@@ -7,8 +7,6 @@ import {
   contracts,
   defaultSeasonTicketPrice,
   defaultTicketPrice,
-  eventDamageChance,
-  eventIncome,
   EUROPE_LABEL,
   expectedPosition,
   fanshopDetail,
@@ -74,7 +72,6 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
   const homeGames = (comp?.fixtures ?? []).filter((f) => f.homeId === club.id && f.result);
   const avgAttendance = homeGames.length ? homeGames.reduce((a, f) => a + f.result!.attendance, 0) / homeGames.length : 0;
   const position = comp ? expectedPosition(game, club.id) : 8;
-  const events = club.policy.stadiumEvents ?? 0;
 
   return (
     <div className="stack">
@@ -185,32 +182,8 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
         <Impact game={game} patch={{ newKit: !club.policy.newKit }} extra={[`${club.policy.newKit ? 'zrušení' : 'nová'} kolekce ${club.policy.newKit ? 'ubere' : 'přidá'} 30 % tržeb`, !club.policy.newKit && 'fanoušci +3 při uvedení na začátku sezóny']} />
       </LineCard>
 
-      <LineCard id="akce" title="Akce na stadionu" lines={line('akce')} effects={['stav trávníku', 'zranění doma', 'návštěva']}>
-        <SliderField
-          label="Koncerty, kempy a pronájmy za sezónu"
-          value={events}
-          min={0}
-          max={12}
-          step={1}
-          format={(v) => `${v}×`}
-          onChange={(v) => set({ stadiumEvents: v })}
-          preview={(v) => (
-            <>
-              <p className="preview small">
-                {v ? <>Asi <strong>{money(v * eventIncome(club, tier))}</strong> za sezónu ({money(eventIncome(club, tier))} za akci).</> : 'Stadion slouží jen fotbalu.'}
-              </p>
-              <Impact
-                game={game}
-                patch={{ stadiumEvents: v }}
-                extra={[
-                  v > 0 && `trávník se poškodí asi ${(v * eventDamageChance(club)).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })}× za sezónu (šance ${Math.round(eventDamageChance(club) * 100)} % na akci podle údržby)`,
-                  v > 0 && 'poškozený trávník: domácí výhoda −40 %, o 30 % víc zranění doma, o 10 % méně diváků',
-                ]}
-              />
-            </>
-          )}
-        />
-      </LineCard>
+      <LineCard id="akce" title="Akce na stadionu" lines={line('akce')} effects={['stav trávníku', 'zranění doma', 'návštěva']}
+        note="Akce se přijímají jako konkrétní nabídky (koncert, firemní den, reprezentace, kluziště) v záložce Stadion. Ve výhledu jsou jen přijaté akce." />
 
       <LineCard id="komercni" title="Sponzoři a reklama" lines={line('komercni')} bench={bench.komercni} effects={['název stadionu', 'bonusy za úspěch']}
         note="Každé místo má svou cenu podle velikosti a pověsti klubu. Pevná smlouva chrání před propadem, krátká dovolí po úspěšné sezóně vyjednat víc. Obchodní ředitel přinese víc nabídek, marketing (Výdaje) zvedá cenu."

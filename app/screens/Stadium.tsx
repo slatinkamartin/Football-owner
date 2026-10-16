@@ -15,6 +15,7 @@ import {
 import { Badge, Meter, Notice, Stars } from '../components';
 import { VoteInfo } from '../VoteInfo';
 import { Investments } from './Investments';
+import { ConditionCard, EventOffersCard, SectorsCard } from './VenueExtras';
 import { money, num } from '../format';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
@@ -103,6 +104,12 @@ export function Stadium({ game, onChange }: Props) {
             <dd>{club.sponsors?.find((c) => c.slot === 'stadion')?.name ?? 'neprodán'}</dd>
           </dl>
         </section>
+      </div>
+
+      <div className="grid">
+        <SectorsCard game={game} onResult={apply} />
+        <ConditionCard game={game} />
+        <EventOffersCard game={game} onResult={apply} />
       </div>
 
       {game.projects.length > 0 && (

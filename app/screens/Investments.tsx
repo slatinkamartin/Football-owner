@@ -15,6 +15,7 @@ import {
   REGION_ORDER,
   REGIONS,
   startBigProject,
+  SUPPLIER_LABEL,
   startProgram,
   stopProgram,
   type ActionResult,
@@ -34,6 +35,7 @@ const years = (v: number) => `${v.toLocaleString('cs-CZ', { maximumFractionDigit
 export function Investments({ game, onResult }: Props) {
   const [pending, setPending] = useState<BigProjectKind | null>(null);
   const [partner, setPartner] = useState<ScoutRegion>('afrika');
+  const [supplier, setSupplier] = useState<'levny' | 'spolehlivy'>('spolehlivy');
   const running = game.bigProjects ?? [];
   const income = commercialIncomeMonthly(game);
   const daysBetween = (a: string, b: string) => new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime();
@@ -92,7 +94,11 @@ export function Investments({ game, onResult }: Props) {
               ) : pending === o.kind ? (
                 <span className="buttons">
                   <VoteInfo vote={previewVote(game, 'stavba', o.cost)} />
-                  <button className="primary" onClick={() => { setPending(null); onResult(startBigProject(game, o.kind)); }}>Zahájit stavbu</button>
+                  <select value={supplier} onChange={(e) => setSupplier(e.target.value as 'levny' | 'spolehlivy')} aria-label="Dodavatel">
+                    <option value="spolehlivy">{SUPPLIER_LABEL.spolehlivy}</option>
+                    <option value="levny">{SUPPLIER_LABEL.levny}</option>
+                  </select>
+                  <button className="primary" onClick={() => { setPending(null); onResult(startBigProject(game, o.kind, supplier)); }}>Zahájit stavbu</button>
                   <button onClick={() => setPending(null)}>Zpět</button>
                 </span>
               ) : (

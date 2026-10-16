@@ -35,8 +35,9 @@ import { sponsorForecast, sponsorMonthly } from './sponsors';
 
 const sponsorMonthlyTotal = (state: GameState) => { const m = sponsorMonthly(state); return m.contracts + m.small; };
 import type { BudgetLine, BudgetPlan, BudgetPolicy, Club, FinanceCategory, GameState, StaffRole } from './types';
-import { adminMonthly, campCost, communityReference, policyMoodDrift, ticketMoodPenalty, communitySpend, eventIncome, fanshopDetail, maintenanceMonthly, projectMood, securityPerMatch, TICKET_ANGER } from './operations';
+import { adminMonthly, campCost, communityReference, policyMoodDrift, ticketMoodPenalty, communitySpend, fanshopDetail, maintenanceMonthly, projectMood, securityPerMatch, TICKET_ANGER } from './operations';
 import { budgetRemaining } from './transfers';
+import { extrasEffect, extrasMonthly, scheduledEventIncome, sectorEffect } from './venue';
 import { addNews, clamp, competitionOf, tierOf } from './world';
 
 /**
@@ -81,7 +82,7 @@ function expectedAttendance(state: GameState, fanMood = ownClub(state).fanMood):
   const club = ownClub(state);
   const tier = tierOf(state, club.id);
   const price = Math.pow(defaultTicketPrice(tier) / Math.max(club.policy.ticketPrice, 1), 0.8);
-  const mood = (0.85 + 0.3 * (fanMood / 100)) * newStadiumFactor(club);
+  const mood = (0.85 + 0.3 * (fanMood / 100)) * newStadiumFactor(club) * sectorEffect(club).attendance * extrasEffect(club).attendance;
   return Math.min(effectiveCapacity(state, club), baseAttendance(club.reputation, tier) * price * mood);
 }
 
@@ -200,7 +201,7 @@ export function forecastSeason(state: GameState): BudgetPlan {
   if (!sold) add('vstupne', soon, holders * seasonTicketPrice(state));
   for (const d of leftHome) {
     const att = Math.max(expectedAttendance(state, moodAt(d)), holders * 0.9);
-    add('vstupne', d, Math.max(0, att - holders) * club.policy.ticketPrice);
+    add('vstupne', d, Math.max(0, att - holders) * club.policy.ticketPrice * sectorEffect(club).ticketFactor);
     add('stadion', d, matchdayExtras(club, att, tier));
   }
 
@@ -246,14 +247,11 @@ export function forecastSeason(state: GameState): BudgetPlan {
   monthly('skautsit', -networksMonthly(state));
   monthly('programy', -programsMonthly(state));
   for (const p of bigPaymentSchedule(state)) add('investice', p.date, -p.amount);
-  let acc = state.stadiumEventAcc ?? 0;
-  for (const d of months) {
-    acc += (club.policy.stadiumEvents ?? 0) / 12;
-    while (acc >= 1) {
-      acc -= 1;
-      add('akce', d, eventIncome(club, tier));
-    }
-  }
+  // Přijaté akce na stadionu, muzeum a obrazovka.
+  for (const e of scheduledEventIncome(state)) add('akce', e.date, e.amount);
+  const extras = extrasMonthly(state);
+  monthly('stadion', extras.museum);
+  monthly('komercni', extras.screen);
   add('soustredeni', `${state.season}-07-10`, -campCost(tier, club.policy.summerCamp));
   add('soustredeni', `${state.season + 1}-01-10`, -campCost(tier, club.policy.winterCamp));
   for (const d of leftHome) add('bezpecnost', d, -securityPerMatch(tier, club.policy.security));

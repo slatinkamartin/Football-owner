@@ -169,6 +169,8 @@ export interface BigProject {
   /** Doba odepisování v letech. */
   years: number;
   overrun?: boolean;
+  /** Dodavatel: levný (riziko prodražení) nebo spolehlivý (dražší). */
+  supplier?: 'levny' | 'spolehlivy';
 }
 
 export interface ClubProgram {
@@ -510,6 +512,8 @@ export interface ClubPolicy {
   community?: number;
   /** Minimální rezerva peněz, pod kterou ředitel nesmí jít. */
   cashReserve?: number;
+  /** Sektory stadionu: velikost kotle a rodinného sektoru. */
+  sectors?: { kotel: 'maly' | 'stredni' | 'velky'; rodina: 'zadny' | 'maly' | 'velky' };
   /** Pravomoci ředitelů. */
   delegation?: { director: 'nizka' | 'stredni' | 'vysoka'; commercial: boolean; finance: boolean };
   /** Kde smí sportovní ředitel sám nakupovat: jen doma, nebo i v regionech se skautskou sítí. */
@@ -564,9 +568,13 @@ export interface Facilities {
   complex?: boolean;
   /** Komerční areál u stadionu (hotel, obchody): hodnota stavby, ze které plyne nájem. */
   commercial?: number;
+  /** Stav stadionu a zázemí 0–100 (údržba ho drží, bez ní chátrá). */
+  condition?: number;
+  /** Zážitek ze dne zápasu: fanzóna, rodinná zóna, muzeum, obrazovka. */
+  extras?: ('fanzona' | 'rodina' | 'muzeum' | 'obrazovka')[];
 }
 
-export type ProjectKind = 'kapacita' | 'vip' | 'catering' | 'vyhrivani' | 'trenink' | 'akademie' | 'medicina';
+export type ProjectKind = 'kapacita' | 'vip' | 'catering' | 'vyhrivani' | 'trenink' | 'akademie' | 'medicina' | 'fanzona' | 'rodina' | 'muzeum' | 'obrazovka';
 
 export interface Project {
   id: string;
@@ -1030,6 +1038,8 @@ export interface GameState {
   ultras?: { relation: number; boycottUntil?: string };
   /** Síň slávy: úspěchy éry majitele. */
   trophies?: import('./surroundings').Trophy[];
+  /** Nabídky akcí na stadionu (koncerty, firemní dny, reprezentace) a přijaté akce. */
+  eventOffers?: { id: string; kind: 'koncert' | 'firemni' | 'reprezentace' | 'kluziste'; label: string; income: number; date: string; damage: number; expires: string; accepted?: boolean }[];
   /** Vedlejší cíle sezóny (sponzor, město, akcionáři). */
   sideGoals?: { season: number; goals: import('./finplus').SideGoal[] };
   /** Finanční vysvědčení poslední sezóny. */

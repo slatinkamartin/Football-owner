@@ -37,6 +37,9 @@ export function projectOptions(state: GameState): ProjectOption[] {
   const club = state.clubs[state.owner.clubId];
   const f = club.facilities;
   const running = (kind: ProjectKind) => state.projects.some((p) => p.kind === kind);
+  const tier = tierOf(state, club.id);
+  const k = tier === 1 ? 1 : tier === 2 ? 0.4 : 0.15;
+  const roundCost = (v: number) => Math.round(v / 100_000) * 100_000;
   const options: ProjectOption[] = [
     { kind: 'kapacita', label: 'Nová tribuna (+1 000 míst)', description: 'Víc diváků a vyšší příjmy ze vstupného. Během stavby je 15 % kapacity uzavřeno.', cost: 40_000_000, weeks: 30, value: 1000, years: 30 },
     { kind: 'kapacita', label: 'Velká přestavba (+3 000 míst)', description: 'Výrazně větší stadion pro klub, který na něj má fanoušky.', cost: 110_000_000, weeks: 48, value: 3000, years: 30 },
@@ -46,6 +49,11 @@ export function projectOptions(state: GameState): ProjectOption[] {
     { kind: 'trenink', label: `Tréninkové centrum (${f.training} → ${f.training + 1} z 5 hvězd)`, description: 'Hráči se rychleji zlepšují, hlavně mladí.', cost: TRAINING_COST[Math.min(5, f.training + 1)], weeks: 40, value: f.training + 1, years: 30 },
     { kind: 'akademie', label: `Akademie (${f.academy} → ${f.academy + 1} z 5 hvězd)`, description: 'Víc a lepších dorostenců každé léto.', cost: ACADEMY_COST[Math.min(5, f.academy + 1)], weeks: 30, value: f.academy + 1, years: 30 },
     { kind: 'medicina', label: `Regenerace a medicína (${f.medical} → ${f.medical + 1} z 5 hvězd)`, description: 'Méně zranění a rychlejší návrat do hry.', cost: MEDICAL_COST[Math.min(5, f.medical + 1)], weeks: 12, value: f.medical + 1, years: 10 },
+    // Zážitek ze dne zápasu.
+    { kind: 'fanzona', label: 'Fanzóna před stadionem', description: 'Stánky, hudba a program před zápasem: útrata diváků +10 %.', cost: roundCost(3_000_000 * k), weeks: 8, value: 1, years: 10 },
+    { kind: 'rodina', label: 'Rodinná zóna a dětský koutek', description: 'Víc rodin s dětmi: návštěva +3 %, budoucí fanoušci.', cost: roundCost(2_000_000 * k), weeks: 6, value: 1, years: 10 },
+    { kind: 'muzeum', label: 'Klubové muzeum a prohlídky stadionu', description: 'Příjem i mimo zápasy, roste s trofejemi v síni slávy.', cost: roundCost(5_000_000 * k), weeks: 12, value: 1, years: 20 },
+    { kind: 'obrazovka', label: 'Velkoplošná obrazovka', description: 'Reklama a replay: stálý příjem od sponzorů.', cost: roundCost(8_000_000 * k), weeks: 6, value: 1, years: 10 },
   ];
   return options.map((o) => {
     let blocked: string | undefined;
@@ -55,6 +63,7 @@ export function projectOptions(state: GameState): ProjectOption[] {
     else if (o.kind === 'trenink' && f.training >= 5) blocked = 'Nejvyšší úroveň.';
     else if (o.kind === 'akademie' && f.academy >= 5) blocked = 'Nejvyšší úroveň.';
     else if (o.kind === 'medicina' && f.medical >= 5) blocked = 'Nejvyšší úroveň.';
+    else if ((o.kind === 'fanzona' || o.kind === 'rodina' || o.kind === 'muzeum' || o.kind === 'obrazovka') && f.extras?.includes(o.kind)) blocked = 'Klub ho už má.';
     else if (o.cost > club.finance.balance) blocked = 'Klub na to nemá peníze.';
     return { ...o, blocked };
   });
@@ -100,6 +109,7 @@ export function completeProjects(state: GameState): void {
     if (p.kind === 'trenink') f.training = Math.min(5, p.value);
     if (p.kind === 'akademie') f.academy = Math.min(5, p.value);
     if (p.kind === 'medicina') f.medical = Math.min(5, p.value);
+    if (p.kind === 'fanzona' || p.kind === 'rodina' || p.kind === 'muzeum' || p.kind === 'obrazovka') f.extras = [...new Set([...(f.extras ?? []), p.kind])];
     addNews(state, { kind: 'sezona', title: `Dokončeno: ${p.label}` });
   }
   state.projects = state.projects.filter((p) => p.end > state.date);

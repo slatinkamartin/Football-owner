@@ -61,6 +61,24 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.21: stadion (etapa G)
+
+- **Sektory stadionu**:
+  - kotel (malý / střední / velký): domácí prostředí, vztah s kotlem, cena lístku, výtržnosti;
+  - rodinný sektor (žádný / malý / velký): návštěva, útrata, klidnější atmosféra.
+- **Nabídky akcí místo posuvníku**: koncert, firemní den, zápas reprezentace (vztah se svazem), zimní kluziště.
+  - U každé je příjem, termín a riziko pro trávník (vyšší těsně před domácím zápasem).
+  - Ve výhledu jsou jen přijaté akce.
+- **Stav stadionu a kategorie**:
+  - údržba drží stav; úsporná ho nechá chátrat, pod 45 přicházejí poruchy, pod 25 zázemí ztratí hvězdu;
+  - pro Evropu je potřeba kategorie 3, jinak klub hraje jinde a přijde o 15 % příjmů ligové fáze.
+- **Velké stavby**:
+  - volba dodavatele: levný −10 % a častější prodražení, nebo spolehlivý +5 % a prodražení vzácné;
+  - povolení od města trvá podle vztahu;
+  - poklepání základního kamene zlepší vztah se sponzorem;
+  - slavnostní otevření stadionu přinese vstupné.
+- **Zážitek ze dne zápasu** (menší stavby): fanzóna (útrata +10 %), rodinná zóna (návštěva +3 %), klubové muzeum (příjem roste s trofejemi), velkoplošná obrazovka (reklama).
+
 ### Novinky verze 0.20: majitel a okolí (etapa F)
 
 - **Vaše podnikání** (Majitel):

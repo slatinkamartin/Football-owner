@@ -68,6 +68,8 @@ import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emer
 import { decisiveness, settingsOf } from './settings';
 import { recordPulse, pulseValues, snapshotPulse } from './pulse';
 import { weeklyStories } from './stories';
+import { dailyEvents, eventOfferTick, extrasEffect, sectorEffect } from './venue';
+import { monthlyVenue } from './venue';
 import { businessIncome, monthlyBusiness, monthlyCity, monthlyUltras, seasonBusiness, seasonTrophies, ultrasEffect } from './surroundings';
 import { createSideGoals, seasonFfp, seasonRating, settleSideGoals } from './finplus';
 import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
@@ -669,7 +671,10 @@ function playMatchesOn(state: GameState, rng: Rng): void {
     if (plan.ticketFactor !== 1) home.policy.ticketPrice = Math.round(ticketPrice * plan.ticketFactor);
     // Kotel: bojkot nebo nadšení mění návštěvu i domácí prostředí.
     const ultras = home.id === ownId ? ultrasEffect(state) : { homeEdge: 0, attendance: 1, incidents: 1 };
-    const attendance = Math.min(capacity, Math.max(Math.round(ownHolders * 0.88), Math.round(matchAttendance(rng, home, away, tier, form, capacity, damaged) * ultras.attendance)));
+    // Sektory (kotel, rodinný sektor) a vylepšení dne zápasu klubu majitele.
+    const sector = home.id === ownId ? sectorEffect(home) : undefined;
+    const venueAtt = home.id === ownId ? sector!.attendance * extrasEffect(home).attendance : 1;
+    const attendance = Math.min(capacity, Math.max(Math.round(ownHolders * 0.88), Math.round(matchAttendance(rng, home, away, tier, form, capacity, damaged) * ultras.attendance * venueAtt)));
     const homeCoach = coachOf(state, home.id);
     const awayCoach = coachOf(state, away.id);
     const half = involvesOwner ? halftimeAdjust(state, f) : undefined;
@@ -684,13 +689,13 @@ function playMatchesOn(state: GameState, rng: Rng): void {
         season: state.season,
         decisive: decisiveness(state),
         detail: comp ? comp.id === ownCompId : involvesOwner,
-        homeEdge: homeAdvantage(home, attendance, capacity) * (ownHome ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) + plan.homeEdge + ultras.homeEdge,
+        homeEdge: homeAdvantage(home, attendance, capacity) * (ownHome ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) + plan.homeEdge + ultras.homeEdge + (sector?.homeEdge ?? 0),
         halftime: half ? (ownHome ? { home: half } : { away: half }) : undefined,
       },
     );
     // Držitelé permanentek už zaplatili předem.
     const holders = home.id === ownId && comp ? seasonTicketHolders(state) : 0;
-    book(state, home.id, 'vstupne', Math.max(0, attendance - holders) * home.policy.ticketPrice, `Vstupné: ${home.shortName} – ${away.shortName}`);
+    book(state, home.id, 'vstupne', Math.max(0, attendance - holders) * home.policy.ticketPrice * (sector?.ticketFactor ?? 1), `Vstupné: ${home.shortName} – ${away.shortName}`);
     home.policy.ticketPrice = ticketPrice;
     book(state, home.id, 'stadion', matchdayExtras(home, attendance, tier), `Catering a VIP: ${home.shortName} – ${away.shortName}`);
     if (home.id === ownId && comp) homeMatchOperations(state, rng, `${home.shortName} – ${away.shortName}`);
@@ -801,6 +806,7 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   monthlyBusiness(state, rng);
   monthlyCity(state, rng, communityEffect(state.clubs[state.owner.clubId], tierOf(state, state.owner.clubId)));
   monthlyUltras(state);
+  monthlyVenue(state, rng);
   monthlyShareholders(state, rng);
   monthlyGrey(state, rng);
   monthlyEurope(state);
@@ -938,6 +944,8 @@ function processDay(state: GameState, rng: Rng): void {
   }
   completeProjects(state);
   completeBigProjects(state);
+  dailyEvents(state, rng);
+  if (state.date.endsWith('-01') || state.date.endsWith('-15')) eventOfferTick(state, rng);
   checkBan(state);
   dailyFinancing(state, rng);
   dailyOperations(state);

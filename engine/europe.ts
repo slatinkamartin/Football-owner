@@ -1,3 +1,4 @@
+import { europeVenueFactor } from './venue';
 import { book } from './finance';
 import { squadOf } from './players';
 import type { Rng } from './rng';
@@ -104,7 +105,9 @@ export function resolveEurope(state: GameState, rng: Rng): void {
     book(state, e.clubId, 'platy', -QUALIFYING[e.entry] * EUROPE_BONUS_SHARE, 'Prémie hráčům za evropské poháry');
     e.revenue = QUALIFYING[e.entry];
     if (result !== 'predkola') {
-      e.revenue += Math.round((LEAGUE_PHASE[result] * (1 + rng.next() * 0.5)) / 1_000_000) * 1_000_000;
+      // Bez stadionu kategorie 3 hraje klub domácí zápasy jinde a přijde o část příjmů.
+      const venue = e.clubId === state.owner.clubId ? europeVenueFactor(club) : 1;
+      e.revenue += Math.round((LEAGUE_PHASE[result] * (1 + rng.next() * 0.5) * venue) / 1_000_000) * 1_000_000;
       club.reputation = clamp(club.reputation + (result === 'LM' ? 2 : result === 'EL' ? 1.5 : 1), 1, 99);
       club.fanMood = clamp(club.fanMood + 8, 0, 100);
     } else {

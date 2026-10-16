@@ -255,7 +255,9 @@ export function bigProjectOptions(state: GameState): BigOption[] {
   });
 }
 
-export function startBigProject(prev: GameState, kind: BigProjectKind): ActionResult {
+export const SUPPLIER_LABEL = { levny: 'levný dodavatel (−10 % ceny, častější prodražení a zpoždění)', spolehlivy: 'spolehlivý dodavatel (+5 % ceny, prodražení vzácné)' } as const;
+
+export function startBigProject(prev: GameState, kind: BigProjectKind, supplier: 'levny' | 'spolehlivy' = 'spolehlivy'): ActionResult {
   const option = bigProjectOptions(prev).find((o) => o.kind === kind);
   if (!option) return { state: prev, ok: false, message: 'Tuto stavbu teď nelze zahájit.' };
   if (option.blocked) return { state: prev, ok: false, message: option.blocked };
@@ -264,24 +266,30 @@ export function startBigProject(prev: GameState, kind: BigProjectKind): ActionRe
   const vote = previewVote(prev, 'stavba', option.cost);
   if (vote.needed && !vote.passes) return { state: prev, ok: false, message: `Akcionáři stavbu neschválili. ${voteMessage(vote)}` };
   const state = structuredClone(prev);
+  const priceFactor = supplier === 'levny' ? 0.9 : 1.05;
+  // Povolení od města: čím horší vztah, tím déle trvá (stavba se o to protáhne).
+  const permitWeeks = Math.round(4 + (100 - (state.city?.relation ?? 50)) / 10);
   const project: BigProject = {
     id: `bp${++state.nextId}`,
     kind,
+    supplier,
     label: option.label,
-    cost: option.cost,
+    cost: Math.round((option.cost * priceFactor) / 1_000_000) * 1_000_000,
     grant: option.grant,
     paid: 0,
     start: state.date,
-    end: addDays(state.date, option.weeks * 7),
+    end: addDays(state.date, (option.weeks + permitWeeks) * 7),
     capacity: option.capacity,
     years: option.years,
   };
   state.bigProjects = [...(state.bigProjects ?? []), project];
   const club = own(state);
   club.finance.assets = [...(club.finance.assets ?? []), { projectId: project.id, label: `${option.label} (rozestavěno)`, value: 0, monthly: 0 }];
+  // Slavnostní poklepání základního kamene: fanoušci i sponzoři si všimnou.
   if (kind === 'stadion' || kind === 'velkystadion') club.fanMood = clamp(club.fanMood + 5, 0, 100);
+  state.sponsorRelations = { ...(state.sponsorRelations ?? {}), generalni: clamp((state.sponsorRelations?.generalni ?? 50) + 5, 0, 100) };
   satisfy(state, kind === 'komercni' ? 3 : 5, kind === 'komercni' ? ['investor', 'spekulant'] : ['mesto', 'patriot']);
-  const message = `Zahájena stavba: ${option.label}. Cena ${mil(option.cost)}, město přispěje ${mil(option.grant)}, splátky asi ${mil(option.monthly)} měsíčně do ${project.end.split('-').reverse().join('. ')}. Na splátky můžete čerpat investiční úvěr (Finance › Financování).`;
+  const message = `Poklepán základní kámen: ${option.label} (${supplier === 'levny' ? 'levný' : 'spolehlivý'} dodavatel, povolení asi ${permitWeeks} týdnů). Cena ${mil(project.cost)}, město přispěje ${mil(option.grant)}, splátky asi ${mil(option.monthly)} měsíčně do ${project.end.split('-').reverse().join('. ')}. Na splátky můžete čerpat investiční úvěr (Finance › Financování).`;
   addNews(state, { kind: 'sezona', title: `Zahájena stavba: ${option.label}`, text: message });
   return { state, ok: true, message };
 }
@@ -337,7 +345,7 @@ function payInto(state: GameState, p: BigProject, amount: number): void {
 export function monthlyBigProjects(state: GameState, rng: Rng): void {
   for (const p of state.bigProjects ?? []) {
     payInto(state, p, bigMonthly(state, p));
-    if (!p.overrun && rng.chance(0.025)) {
+    if (!p.overrun && rng.chance(p.supplier === 'levny' ? 0.05 : p.supplier === 'spolehlivy' ? 0.01 : 0.025)) {
       p.overrun = true;
       const extra = roundMoney(p.cost * (0.05 + 0.15 * rng.next()), 1_000_000);
       const delay = rng.int(6, 16);
@@ -382,7 +390,13 @@ export function completeBigProjects(state: GameState): void {
       f.complex = true;
     }
     if (p.kind === 'komercni') f.commercial = p.cost;
-    if (p.kind === 'stadion' || p.kind === 'velkystadion') addTrophy(state, 'stadion', `Otevření nového stadionu (${(p.capacity ?? 0).toLocaleString('cs-CZ')} míst)`);
+    if (p.kind === 'stadion' || p.kind === 'velkystadion') {
+      addTrophy(state, 'stadion', `Otevření nového stadionu (${(p.capacity ?? 0).toLocaleString('cs-CZ')} míst)`);
+      // Slavnostní otevření: vyprodaný den otevřených dveří.
+      const party = Math.round(((p.capacity ?? club.stadium.capacity) * club.policy.ticketPrice * 0.5) / 10_000) * 10_000;
+      book(state, club.id, 'vstupne', party, 'Slavnostní otevření stadionu');
+      club.facilities.condition = 100;
+    }
     const asset = club.finance.assets?.find((a) => a.projectId === p.id);
     if (asset) {
       asset.projectId = undefined;

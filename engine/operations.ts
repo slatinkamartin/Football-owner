@@ -159,7 +159,7 @@ export function communityEffect(club: Club, tier: number): number {
 // ---------- Zpracování v čase ----------
 
 /** Měsíčně (klub majitele): fanshop, údržba, komunita, akce na stadionu a jejich dopady. */
-export function monthlyOperations(state: GameState, rng: Rng): void {
+export function monthlyOperations(state: GameState, _rng: Rng): void {
   const club = own(state);
   const tier = tierOf(state, club.id);
   const ff = financeFactor(state);
@@ -169,20 +169,7 @@ export function monthlyOperations(state: GameState, rng: Rng): void {
   const community = communitySpend(club, tier);
   if (community > 0) book(state, club.id, 'komunita', -community / 12, 'Komunita, ženský a dětský fotbal');
 
-  // Akce na stadionu: rozložené do sezóny, každá může poškodit trávník.
-  state.stadiumEventAcc = (state.stadiumEventAcc ?? 0) + (club.policy.stadiumEvents ?? 0) / 12;
-  while (state.stadiumEventAcc >= 1) {
-    state.stadiumEventAcc -= 1;
-    const income = eventIncome(club, tier);
-    book(state, club.id, 'akce', income, 'Akce na stadionu (koncert, kemp, pronájem)');
-    if (rng.chance(eventDamageChance(club)) && !(club.pitchDamagedUntil && club.pitchDamagedUntil >= state.date)) {
-      const days = club.policy.maintenance === 'vysoka' ? 10 : club.policy.maintenance === 'nizka' ? 28 : 18;
-      const until = new Date(`${state.date}T00:00:00Z`);
-      until.setUTCDate(until.getUTCDate() + days);
-      club.pitchDamagedUntil = until.toISOString().slice(0, 10);
-      addNews(state, { kind: 'varovani', title: 'Akce na stadionu poškodila trávník', text: `Oprava potrvá asi ${days} dní. Doma hrozí víc zranění a přijde méně diváků.` });
-    }
-  }
+  // Akce na stadionu jsou konkrétní nabídky (engine/venue.ts).
 
   // Nálada fanoušků: ceny cateringu a fanshopu, stav stadionu.
   club.fanMood = clamp(club.fanMood + policyMoodDrift(club), 0, 100);
@@ -219,7 +206,9 @@ export function homeMatchOperations(state: GameState, rng: Rng, label: string): 
   // Naštvaný kotel zlobí víc, spokojený méně.
   const ultras = state.ultras?.relation ?? 55;
   const mood = state.ultras?.boycottUntil && state.ultras.boycottUntil >= state.date ? 1 : ultras < 30 ? 1.5 : ultras >= 70 ? 0.8 : 1;
-  if (rng.chance(incidentChance(club.policy.security) * mood)) {
+  const sectors = club.policy.sectors;
+  const sectorRisk = (sectors?.kotel === 'velky' ? 1.3 : sectors?.kotel === 'maly' ? 0.8 : 1) * (sectors?.rodina === 'velky' ? 0.9 : 1);
+  if (rng.chance(incidentChance(club.policy.security) * mood * sectorRisk)) {
     const fine = incidentFine(tier);
     book(state, club.id, 'ostatni', -fine, `Pokuta za výtržnosti fanoušků: ${label}`);
     club.fanMood = clamp(club.fanMood - 2, 0, 100);
