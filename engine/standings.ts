@@ -41,6 +41,11 @@ export function computeTable(comp: Competition, state?: GameState): TableRow[] {
       h.form.push('R'); a.form.push('R');
     }
   }
+  // Disciplinární odečet bodů.
+  for (const [id, pts] of Object.entries(comp.penalties ?? {})) {
+    const row = rows.get(id);
+    if (row) row.points -= pts;
+  }
   const name = (id: string) => state?.clubs[id]?.shortName ?? id;
   return [...rows.values()]
     .map((r) => ({ ...r, form: r.form.slice(-5) }))

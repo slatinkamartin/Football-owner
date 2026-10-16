@@ -15,3 +15,5 @@ export * from './events';
 export * from './facilities';
 export * from './phases';
 export * from './stadium';
+export * from './ownership';
+export * from './grey';

@@ -56,7 +56,9 @@ export function askingPrice(state: GameState, p: Player, keyPlayers?: Set<string
     ? keyPlayers.has(p.id)
     : squadOf(state, p.clubId).sort((a, b) => b.overall - a.overall).indexOf(p) < 3;
   const keyFactor = isKey ? 1.35 : 1;
-  return roundMoney(playerValue(state, p) * contractFactor * keyFactor);
+  // Hráč, se kterým majitel potají jednal, tlačí na svůj klub, aby ho pustil levněji.
+  const tapped = state.grey?.tapped?.includes(p.id) ? 0.75 : 1;
+  return roundMoney(playerValue(state, p) * contractFactor * keyFactor * tapped);
 }
 
 /** Tržní plat hráče v daném klubu (kolik by klub jeho úrovně za takového hráče běžně platil). */

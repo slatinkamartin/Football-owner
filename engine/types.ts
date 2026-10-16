@@ -131,7 +131,7 @@ export interface TrendPoint {
 
 // ---------- Lidé ----------
 
-export type StaffRole = 'trener' | 'reditel';
+export type StaffRole = 'trener' | 'reditel' | 'financni' | 'obchodni' | 'akademie' | 'media';
 export type CoachStyle = 'utocny' | 'vyvazeny' | 'defenzivni';
 
 export interface Staff {
@@ -161,6 +161,11 @@ export type SeasonGoal = 'titul' | 'postup' | 'horni' | 'stred' | 'zachrana';
 export interface ClubStaff {
   coachId: string;
   directorId: string;
+  /** Další ředitelé (jen klub majitele, nepovinní). */
+  financeId?: string;
+  commercialId?: string;
+  academyId?: string;
+  mediaId?: string;
 }
 
 // ---------- Přestupy ----------
@@ -465,6 +470,8 @@ export interface Fixture {
 export interface Competition extends CompetitionDef {
   clubIds: string[];
   fixtures: Fixture[];
+  /** Odečtené body (disciplinární tresty). */
+  penalties?: Record<string, number>;
   /** Skupiny nadstavby (vznikají po základní části). */
   groups?: { name: string; clubIds: string[] }[];
   /** Termíny vyhrazené pro nadstavbu. */
@@ -491,7 +498,7 @@ export interface Cup {
 export interface Owner {
   name: string;
   clubId: string;
-  /** Podíl v klubu (0 až 1). */
+  /** Podíl v klubu (0 až 1). Zbytek patří spolumajitelům. */
   share: number;
   /** Osobní peníze majitele v Kč. */
   wallet: number;
@@ -500,6 +507,64 @@ export interface Owner {
   /** Důvěra trenéra a ředitele v majitele, 0–100. */
   trust: { trener: number; reditel: number };
   lastAdvice?: string;
+  /** Pověst majitele u médií a u fotbalového svazu, 0–100. */
+  media: number;
+  league: number;
+  /** Odvolán valnou hromadou z vedení klubu: je jen pasivním akcionářem. */
+  ousted?: { since: string; lastAttempt?: string; /** Zákaz činnosti od svazu do tohoto data. */ banUntil?: string };
+  /** Hodnota klubu na začátku sezóny (pro spokojenost akcionářů). */
+  valuationStart?: number;
+  /** Poslední mediální kampaň. */
+  lastCampaign?: string;
+}
+
+// ---------- Spolumajitelé ----------
+
+export type ShareholderKind = 'investor' | 'patriot' | 'spekulant' | 'mesto';
+
+export interface Shareholder {
+  id: string;
+  name: string;
+  kind: ShareholderKind;
+  /** Podíl v klubu (0 až 1). */
+  share: number;
+  /** Spokojenost s vedením klubu 0–100. */
+  satisfaction: number;
+}
+
+export interface AgmRecord {
+  date: string;
+  dividend: number;
+  confidence: number;
+  ousted: boolean;
+}
+
+// ---------- Šedá zóna ----------
+
+export interface GreyAction {
+  date: string;
+  label: string;
+  /** Závažnost (podle ní se trestá při odhalení). */
+  severity: number;
+  /** Co klub získal a při odhalení musí vrátit (s penále). */
+  gain?: number;
+  /** Odečet bodů při odhalení. */
+  points?: number;
+  /** Poškození spolumajitelů (obchod se spřízněnou firmou). */
+  minority?: boolean;
+  discovered?: boolean;
+}
+
+export interface GreyZone {
+  /** Skryté riziko odhalení 0–100. Roste s každou akcí, pomalu klesá. */
+  exposure: number;
+  actions: GreyAction[];
+  /** Část platů jako obrazová práva přes firmy hráčů do tohoto data. */
+  taxSchemeUntil?: string;
+  /** Hráči soupeřů oslovení před oknem (klub je prodá levněji). */
+  tapped?: string[];
+  /** Sponzoři po skandálu platí méně do tohoto data. */
+  scandalUntil?: string;
 }
 
 export interface NewsItem {
@@ -527,7 +592,7 @@ export interface TimelinePoint {
   points: number;
 }
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 export interface GameState {
   version: typeof SAVE_VERSION;
@@ -547,6 +612,9 @@ export interface GameState {
   timeline: TimelinePoint[];
   projects: Project[];
   events: GameEvent[];
+  shareholders: Shareholder[];
+  agm: AgmRecord[];
+  grey: GreyZone;
   /** Kdy naposledy nastala která situace. */
   eventLog?: Record<string, string>;
   loans: Loan[];
@@ -555,5 +623,5 @@ export interface GameState {
   news: NewsItem[];
   history: SeasonRecord[];
   nextId: number;
-  gameOver?: { date: string; reason: string };
+  gameOver?: { date: string; reason: string; kind?: 'krach' | 'prodej' | 'trest' };
 }

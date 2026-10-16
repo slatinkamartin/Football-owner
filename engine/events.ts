@@ -2,7 +2,9 @@ import { addDays } from './calendar';
 import { annualCosts, bonusPerPoint, book, commercialMonthly, defaultTicketPrice } from './finance';
 import { generatePlayer, playerAge, squadOf, squadQualityForReputation } from './players';
 import type { Rng } from './rng';
-import { coachOf, type ActionResult } from './staff';
+import { fine, fineFactor, greyAction, league, media } from './grey';
+import { campaignCost, clubValuation, confidenceVote, distributableProfit, payDividend, satisfy, shareholderConfidence } from './ownership';
+import { coachOf, goalTarget, ownPosition, type ActionResult } from './staff';
 import { computeTable } from './standings';
 import type { Club, GameEvent, GameState, Player, Position } from './types';
 import { addNews, clamp, competitionOf, tierOf } from './world';
@@ -14,7 +16,9 @@ import { addNews, clamp, competitionOf, tierOf } from './world';
 
 const MAX_OPEN = 3;
 /** Kolik dní musí uplynout, než se stejná situace může zopakovat. */
-const COOLDOWN: Record<string, number> = { sazkovka: 330, partner: 300, soustredeni: 300, dotace: 300, asistent: 300, pyro: 75, noc: 50, serie: 40, regenerace: 150, travnik: 120, talent: 90, specialista: 45, odchod: 60, protest: 60 };
+const COOLDOWN: Record<string, number> = { sazkovka: 330, partner: 300, soustredeni: 300, dotace: 300, asistent: 300, pyro: 75, noc: 50, serie: 40, regenerace: 150, travnik: 120, talent: 90, specialista: 45, odchod: 60, protest: 60, 'obrazova-prava': 400, tapping: 150, 'spriznena-firma': 300, 'kontroverzni-sponzor': 365, navstevnost: 200, 'mladez-odkup': 200, lobbing: 300, naming: 1100, 'trener-nabidka': 300, charita: 120, vyjezd: 90, 'investor-nabidka': 365, 'svaz-bezpecnost': 365, 'novinar-investigace': 60, tiskovka: 45, rozhovor: 90, 'kauza-hrac': 90, 'svaz-spor': 60, valna: 300, navrat: 60 };
+/** Situace, které přicházejí i odvolanému majiteli. */
+const OUSTED_TEMPLATES = new Set(['navrat']);
 const EXPIRES_DAYS = 14;
 const fmt = (v: number) => `${Math.round(v).toLocaleString('cs-CZ')} Kč`;
 const mil = (v: number) => `${(v / 1_000_000).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč`;
@@ -60,6 +64,20 @@ const month = (state: GameState) => Number(state.date.slice(5, 7));
 const squad = (state: GameState) => squadOf(state, state.owner.clubId);
 const keyPlayers = (state: GameState) => [...squad(state)].sort((a, b) => b.overall - a.overall).slice(0, 14);
 const pName = (p: Player) => `${p.firstName} ${p.lastName}`;
+const ownForm = (s: GameState) => {
+  const comp = competitionOf(s, s.owner.clubId);
+  return comp ? computeTable(comp, s).find((r) => r.clubId === s.owner.clubId)?.form ?? [] : [];
+};
+/** Dobrý hráč jiného klubu ze stejné soutěže, kterého by šlo neoficiálně oslovit. */
+function tappingTarget(s: GameState): Player | undefined {
+  const comp = competitionOf(s, s.owner.clubId);
+  if (!comp) return undefined;
+  const ours = keyPlayers(s);
+  const bar = ours.length ? ours[Math.min(5, ours.length - 1)].overall : 0;
+  return Object.values(s.players)
+    .filter((p) => p.clubId !== s.owner.clubId && comp.clubIds.includes(p.clubId) && p.overall >= bar && !s.grey.tapped?.includes(p.id))
+    .sort((a, b) => a.overall - b.overall || a.id.localeCompare(b.id))[0];
+}
 
 export const TEMPLATES: Record<string, Template> = {
   soustredeni: {
@@ -471,6 +489,619 @@ export const TEMPLATES: Record<string, Template> = {
       return o === 'vykon' ? 'Smlouva s bonusy podepsána.' : 'Pevná smlouva podepsána.';
     },
   },
+
+  // ---------- Šedá zóna: na hraně etiky ----------
+
+  'obrazova-prava': {
+    weight: (s) => (!s.grey.taxSchemeUntil ? 0.35 : 0),
+    create: (s) => {
+      const wages = squad(s).reduce((a, p) => a + p.wage, 0);
+      return {
+        title: 'Daňový poradce: platy hvězd jako obrazová práva',
+        text: 'Část platů nejlepších hráčů by šla přes jejich firmy jako licence k obrazovým právům. Je to legální konstrukce, ale finanční úřad i novináři ji v Česku nemají rádi.',
+        amount: Math.round(wages * 0.1),
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'ano', label: 'Na rok to zavést', hint: `Úspora asi ${fmt(wages * 0.1)} měsíčně; při odhalení doměrek s penále a mediální kauza` },
+          { id: 'odmitnout', label: 'Zůstat u běžných smluv', hint: 'Nic se nestane' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o !== 'ano') return 'Smlouvy zůstávají standardní.';
+      s.grey.taxSchemeUntil = addDays(s.date, 365);
+      greyAction(s, { label: 'Platy přes obrazová práva', severity: 10, gain: (e.amount ?? 0) * 12 }, 8);
+      return 'Od příštího měsíce jde část platů přes firmy hráčů.';
+    },
+  },
+
+  tapping: {
+    weight: (s) => ([5, 6, 11, 12].includes(month(s)) && tappingTarget(s) ? 0.5 : 0),
+    create: (s) => {
+      const p = tappingTarget(s);
+      if (!p) return null;
+      return {
+        title: `Agent naznačuje: ${pName(p)} by k vám šel`,
+        text: `Hráč ${s.clubs[p.clubId].shortName} (hodnocení ${p.overall}) by se s vámi rád sešel ještě před oknem. Neoficiální schůzka je proti pravidlům, ale dělá se to.`,
+        playerId: p.id,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'schuzka', label: 'Sejít se potají', hint: 'V příštím okně ho jeho klub pustí asi o čtvrtinu levněji; při odhalení pokuta a vztahy se svazem' },
+          { id: 'odmitnout', label: 'Počkat na oficiální cestu', hint: 'Nic se nestane' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      const p = s.players[e.playerId!];
+      if (o !== 'schuzka' || !p) return 'Agent dostal odpověď, že se ozvete v okně.';
+      s.grey.tapped = [...(s.grey.tapped ?? []), p.id];
+      greyAction(s, { label: `Neoficiální jednání s hráčem ${pName(p)}`, severity: 8 }, 10);
+      return `${pName(p)} o přestup stojí. Najdete ho v Přestupech.`;
+    },
+  },
+
+  'spriznena-firma': {
+    weight: () => 0.3,
+    create: (s) => {
+      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.02, 100_000);
+      const partners = s.shareholders.length > 0;
+      return {
+        title: 'Zakázka pro vaši vlastní firmu',
+        text: `Údržbu stadionu a areálu by mohla na dva roky dělat vaše stavební firma za ${mil(amount)}, o něco dráž než konkurence.${partners ? ' Spolumajitelé o tom nemusí vědět.' : ''}`,
+        amount,
+        defaultOption: 'tendr',
+        options: [
+          { id: 'ano', label: 'Zadat zakázku své firmě', hint: `Klub zaplatí ${mil(amount)}, vám zůstane asi ${mil(amount * 0.4)}${partners ? '; při odhalení se spolumajitelé rozzuří' : ''}` },
+          { id: 'tendr', label: 'Vypsat řádný tendr', hint: 'Nic se nestane' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o !== 'ano') return 'Zakázku dostala firma z tendru.';
+      book(s, s.owner.clubId, 'provoz', -e.amount!, 'Údržba stadionu a areálu');
+      s.owner.wallet += Math.round(e.amount! * 0.4);
+      greyAction(s, { label: 'Zakázka pro firmu majitele', severity: 10, minority: s.shareholders.length > 0 }, 10);
+      return 'Smlouva podepsána.';
+    },
+  },
+
+  'kontroverzni-sponzor': {
+    weight: (s) => ([7, 8, 1, 2].includes(month(s)) ? 0.35 : 0),
+    create: (s) => {
+      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.05, 100_000);
+      return {
+        title: 'Štědrá kryptoměnová platforma chce na dresy',
+        text: `Nabízí ${mil(amount)} na sezónu. Nikdo pořádně neví, kdo za ní stojí, a fanoušci už na sítích protestují.`,
+        amount,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'ano', label: 'Vzít peníze', hint: `+${mil(amount)}, fanoušci −4; když platforma padne, peníze se budou vracet` },
+          { id: 'odmitnout', label: 'Odmítnout', hint: 'Fanoušci +1' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o !== 'ano') {
+        fans(s, 1);
+        return 'Klub nabídku odmítl.';
+      }
+      book(s, s.owner.clubId, 'komercni', e.amount!, 'Sponzor: kryptoměnová platforma');
+      fans(s, -4);
+      greyAction(s, { label: 'Sponzor s pochybným původem peněz', severity: 8, gain: e.amount }, 10);
+      return 'Logo platformy je na rukávu dresů.';
+    },
+  },
+
+  navstevnost: {
+    weight: (s) => ([9, 10, 3, 4].includes(month(s)) ? 0.3 : 0),
+    create: (s) => {
+      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.015, 50_000);
+      return {
+        title: 'Obchodní oddělení chce „zaokrouhlit“ návštěvnost',
+        text: `Sponzoři platí bonus podle počtu diváků. Kdyby se do čísel počítali i držitelé permanentek, kteří nepřišli, klub dostane o ${mil(amount)} víc.`,
+        amount,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'ano', label: 'Vykazovat vyšší čísla', hint: `+${mil(amount)}; při odhalení vratka s penále` },
+          { id: 'odmitnout', label: 'Vykazovat skutečnost', hint: 'Nic se nestane' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o !== 'ano') return 'Čísla zůstávají přesná.';
+      book(s, s.owner.clubId, 'komercni', e.amount!, 'Bonus sponzorů za návštěvnost');
+      greyAction(s, { label: 'Nadsazená návštěvnost pro sponzory', severity: 6, gain: e.amount }, 8);
+      return 'Sponzoři zaplatili vyšší bonus.';
+    },
+  },
+
+  'mladez-odkup': {
+    weight: (s) => ([3, 4, 5, 6].includes(month(s)) ? 0.35 : 0),
+    create: (s, rng) => {
+      const club = ownClub(s);
+      const position = rng.pick(['DF', 'MF', 'FW'] as Position[]);
+      const p = generatePlayer(rng, s, { clubId: '', position, season: s.season, quality: squadQualityForReputation(club.reputation) - 3, age: 16 });
+      p.potential = Math.min(95, p.potential + 12);
+      p.wage = round(12_000 * (club.reputation / 60), 1_000);
+      s.players[p.id] = p;
+      const fee = round(1_000_000 * Math.max(0.5, scale(s)), 100_000);
+      return {
+        title: `Talent z malého klubu: ${pName(p)}`,
+        text: `Šestnáctiletý talent (potenciál kolem ${p.potential}) z vesnického oddílu. Jeho klub chce výchovné ${mil(fee)}. Agent tvrdí, že když hráč nejdřív „přestoupí“ jako amatér přes spřátelený klub, výchovné se platit nemusí.`,
+        playerId: p.id,
+        amount: fee,
+        defaultOption: 'nechat',
+        options: [
+          { id: 'zaplatit', label: 'Zaplatit výchovné', hint: `−${mil(fee)}, hráč přijde do kádru` },
+          { id: 'obejit', label: 'Obejít výchovné přes jiný klub', hint: 'Hráč přijde zadarmo; při odhalení pokuta a odečet 3 bodů' },
+          { id: 'nechat', label: 'Nechat ho být', hint: 'Půjde jinam' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      const p = s.players[e.playerId!];
+      if (!p) return 'Hráč už není k dispozici.';
+      if (o === 'nechat') {
+        delete s.players[p.id];
+        return `${pName(p)} odešel jinam.`;
+      }
+      if (o === 'zaplatit') pay(s, e.amount!, `Výchovné: ${pName(p)}`);
+      else greyAction(s, { label: 'Obcházení výchovného za talent', severity: 12, points: 3, gain: e.amount }, 12);
+      p.clubId = s.owner.clubId;
+      p.contractUntil = s.season + 3;
+      p.morale = 80;
+      return `${pName(p)} je hráčem klubu.`;
+    },
+  },
+
+  lobbing: {
+    weight: (s) => ([9, 10, 4, 5].includes(month(s)) ? 0.3 : 0),
+    create: (s) => {
+      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.008, 50_000);
+      return {
+        title: 'Starosta shání peníze na kampaň',
+        text: `Dar ${mil(amount)} z peněz klubu je legální. Starosta naznačil, že pak se „najde“ trojnásobek v rozpočtu města na sportoviště.`,
+        amount,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'ano', label: 'Přispět na kampaň', hint: `−${mil(amount)}, od města asi +${mil(amount * 3)}, město spokojenější; střet zájmů může vyjít najevo` },
+          { id: 'odmitnout', label: 'Do politiky se nemíchat', hint: 'Nic se nestane' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o !== 'ano') return 'Klub zůstává politicky neutrální.';
+      pay(s, e.amount!, 'Dar na volební kampaň');
+      book(s, s.owner.clubId, 'ostatni', e.amount! * 3, 'Příspěvek města na sportoviště');
+      satisfy(s, 10, ['mesto']);
+      greyAction(s, { label: 'Dar starostovi a dotace pro klub', severity: 8, gain: e.amount! * 3 }, 10);
+      return 'Rada města schválila příspěvek na sportoviště.';
+    },
+  },
+
+  // ---------- Další rozhodnutí majitele ----------
+
+  naming: {
+    weight: (s) => (!ownClub(s).stadium.name.includes('Arena') ? 0.25 : 0),
+    create: (s) => {
+      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.06, 100_000);
+      const brand = ['Fortuna', 'Epet', 'Tipsport', 'Moneta', 'Malina', 'Raiffeisen', 'Kaufland'][s.nextId % 7];
+      return {
+        title: `${brand} chce koupit jméno stadionu`,
+        text: `Za ${mil(amount)} by se stadion na tři roky jmenoval ${brand} Arena. Tradicionalisté v kotli budou zuřit.`,
+        amount,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'prodat', label: `Přejmenovat na ${brand} Arena`, hint: `+${mil(amount)}, fanoušci −8` },
+          { id: 'odmitnout', label: 'Zachovat tradiční jméno', hint: 'Fanoušci +2' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      const club = ownClub(s);
+      if (o !== 'prodat') {
+        fans(s, 2);
+        return 'Stadion si nechává své jméno.';
+      }
+      const brand = e.options[0].label.replace('Přejmenovat na ', '');
+      club.stadium.name = brand;
+      book(s, club.id, 'komercni', e.amount!, 'Prodej názvu stadionu');
+      fans(s, -8);
+      return `Stadion se teď jmenuje ${brand}.`;
+    },
+  },
+
+  'trener-nabidka': {
+    weight: (s) => {
+      const c = coachOf(s, s.owner.clubId);
+      return c && c.ability >= 58 && s.owner.trust.trener >= 40 ? 0.3 : 0;
+    },
+    create: (s) => {
+      const c = coachOf(s, s.owner.clubId)!;
+      return {
+        title: `O trenéra ${c.firstName} ${c.lastName} má zájem jiný klub`,
+        text: 'Přišla nabídka z ciziny. Trenér by zůstal, kdyby dostal lepší smlouvu.',
+        amount: c.wage,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'pridat', label: 'Přidat mu 25 %', hint: `Plat ${fmt(c.wage * 1.25)} měsíčně, důvěra trenéra +6` },
+          { id: 'pustit', label: 'Pustit ho za odstupné', hint: `Klub dostane ${mil(c.wage * 8)}, ale musíte najít nového trenéra` },
+          { id: 'odmitnout', label: 'Trvat na smlouvě', hint: 'Zůstane, důvěra trenéra −10' },
+        ],
+      };
+    },
+    resolve: (s, _e, o) => {
+      const c = coachOf(s, s.owner.clubId);
+      if (!c) return 'Trenér už v klubu není.';
+      if (o === 'pridat') {
+        c.wage = Math.round((c.wage * 1.25) / 1000) * 1000;
+        trust(s, 'trener', 6);
+        return 'Trenér podepsal lepší smlouvu a zůstává.';
+      }
+      if (o === 'pustit') {
+        book(s, s.owner.clubId, 'ostatni', c.wage * 8, `Odstupné za trenéra ${c.firstName} ${c.lastName}`);
+        delete s.staff[c.id];
+        ownClub(s).staff.coachId = '';
+        return 'Trenér odešel. Tým zatím vede asistent, najděte nového ve Vedení.';
+      }
+      trust(s, 'trener', -10);
+      return 'Trenér zůstává, ale nadšený není.';
+    },
+  },
+
+  charita: {
+    weight: () => 0.35,
+    create: (s) => {
+      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.005, 50_000);
+      return {
+        title: 'Benefiční zápas pro dětskou nemocnici',
+        text: `Hráči by v týdnu odehráli exhibici a klub by přidal ${mil(amount)}. Trenér se bojí o kondici hráčů.`,
+        amount,
+        defaultOption: 'ne',
+        options: [
+          { id: 'ano', label: 'Uspořádat zápas a přispět', hint: `−${mil(amount)}, fanoušci +5, média +5, město spokojenější, kondice hráčů −10` },
+          { id: 'penize', label: 'Jen poslat peníze', hint: `−${mil(amount)}, média +2` },
+          { id: 'ne', label: 'Odmítnout', hint: 'Média −2' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o === 'ano') {
+        pay(s, e.amount!, 'Benefiční zápas');
+        fans(s, 5);
+        media(s, 5);
+        satisfy(s, 4, ['mesto', 'patriot']);
+        for (const p of squad(s)) p.fitness = Math.max(60, p.fitness - 10);
+        return 'Zápas vyprodal stadion a nemocnice dostala šek.';
+      }
+      if (o === 'penize') {
+        pay(s, e.amount!, 'Dar dětské nemocnici');
+        media(s, 2);
+        return 'Klub poslal dar.';
+      }
+      media(s, -2);
+      return 'Klub se akce nezúčastní.';
+    },
+  },
+
+  vyjezd: {
+    weight: (s) => ([8, 9, 10, 3, 4, 5].includes(month(s)) ? 0.4 : 0),
+    create: (s) => {
+      const amount = round(200_000 * Math.max(0.4, scale(s)), 10_000);
+      return {
+        title: 'Fanklub chce dotovat autobusy na derby',
+        text: `Na venkovní derby by jelo pět autobusů fanoušků, kdyby klub přispěl ${mil(amount)}.`,
+        amount,
+        defaultOption: 'ne',
+        options: [
+          { id: 'ano', label: 'Zaplatit autobusy', hint: `−${mil(amount)}, fanoušci +4, morálka týmu +2` },
+          { id: 'ne', label: 'Ať si to zaplatí sami', hint: 'Fanoušci −2' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o === 'ano') {
+        pay(s, e.amount!, 'Dotace výjezdu fanoušků');
+        fans(s, 4);
+        teamMorale(s, 2);
+        return 'Kotel na derby byl slyšet až do kabin.';
+      }
+      fans(s, -2);
+      return 'Na derby jela jen hrstka fanoušků.';
+    },
+  },
+
+  'investor-nabidka': {
+    weight: (s) => (s.owner.share >= 0.4 && !s.owner.ousted ? 0.2 : 0),
+    create: (s) => {
+      const part = 0.2;
+      const price = Math.round((clubValuation(s) * part * 1.15) / 100_000) * 100_000;
+      return {
+        title: 'Zahraniční investor chce koupit 20 % klubu',
+        text: `Nabízí ${mil(price)}, o 15 % víc, než je tržní cena. Stal by se spolumajitelem a chtěl by dividendy.`,
+        amount: price,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'prodat', label: 'Prodat 20 %', hint: `+${mil(price)} do vašich osobních peněz, váš podíl klesne na ${Math.round((s.owner.share - part) * 100)} %` },
+          { id: 'odmitnout', label: 'Odmítnout', hint: 'Nic se nestane' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o !== 'prodat' || s.owner.share < 0.4) return 'Investor odešel.';
+      s.owner.wallet += e.amount!;
+      s.owner.share = Math.round((s.owner.share - 0.2) * 1000) / 1000;
+      s.shareholders.push({ id: `a${++s.nextId}`, name: 'Emirates Sport Holding', kind: 'investor', share: 0.2, satisfaction: 60 });
+      return `Prodáno. Váš podíl je ${Math.round(s.owner.share * 100)} %.`;
+    },
+  },
+
+  'svaz-bezpecnost': {
+    weight: (s) => (tierOf(s, s.owner.clubId) <= 2 ? 0.3 : 0),
+    create: (s) => {
+      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.012, 50_000);
+      return {
+        title: 'Svaz žádá modernizaci kamerového systému',
+        text: `Po incidentech na stadionech chce svaz lepší kamery a turnikety. Stálo by to ${mil(amount)}. Termín je zatím doporučený, ne povinný.`,
+        amount,
+        defaultOption: 'odlozit',
+        options: [
+          { id: 'ano', label: 'Investovat hned', hint: `−${mil(amount)}, pověst u svazu +8` },
+          { id: 'odlozit', label: 'Odložit', hint: 'Pověst u svazu −6' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o === 'ano') {
+        book(s, s.owner.clubId, 'investice', -e.amount!, 'Kamerový systém a turnikety');
+        league(s, 8);
+        return 'Svaz modernizaci ocenil.';
+      }
+      league(s, -6);
+      return 'Svaz si poznamenal, že klub nespěchá.';
+    },
+  },
+
+  // ---------- Média a pověst ----------
+
+  'novinar-investigace': {
+    weight: (s) => (s.grey.exposure > 30 && s.grey.actions.some((a) => !a.discovered) ? 1.5 + s.grey.exposure / 25 : 0),
+    create: (s) => {
+      const amount = round(1_000_000 * scale(s));
+      return {
+        title: 'Investigativní novinář se vyptává',
+        text: 'Ptá se na podivné platby a poradenské smlouvy klubu. Zatím nic nepublikoval.',
+        amount,
+        defaultOption: 'ignorovat',
+        options: [
+          { id: 'pr', label: 'Najmout PR agenturu', hint: `−${mil(amount)}, riziko odhalení výrazně klesne` },
+          { id: 'pravnici', label: 'Pohrozit žalobou', hint: `−${mil(amount * 0.5)}, riziko trochu klesne, média −8` },
+          { id: 'ignorovat', label: 'Ignorovat ho', hint: 'Riziko odhalení vzroste' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o === 'pr') {
+        pay(s, e.amount!, 'PR agentura');
+        s.grey.exposure = clamp(s.grey.exposure - 15, 0, 100);
+        return 'Agentura dodala novináři jiné téma.';
+      }
+      if (o === 'pravnici') {
+        pay(s, e.amount! * 0.5, 'Právní služby');
+        s.grey.exposure = clamp(s.grey.exposure - 8, 0, 100);
+        media(s, -8);
+        return 'Novinář couvl, ale redakce si to pamatuje.';
+      }
+      s.grey.exposure = clamp(s.grey.exposure + 8, 0, 100);
+      return 'Novinář pátrá dál.';
+    },
+  },
+
+  tiskovka: {
+    weight: (s) => (ownForm(s).slice(-3).join('') === 'PPP' ? 3 : 0),
+    create: () => ({
+      title: 'Novináři chtějí slyšet, co bude dál',
+      text: 'Tři prohry v řadě. Na tiskové konferenci padne otázka, jestli trenér přežije.',
+      defaultOption: 'mlceti',
+      options: [
+        { id: 'podpora', label: 'Veřejně podpořit trenéra', hint: 'Důvěra trenéra +6, média −2, fanoušci −2' },
+        { id: 'ultimatum', label: 'Dát trenérovi ultimátum', hint: 'Důvěra trenéra −8, média +5, fanoušci +3' },
+        { id: 'mlceti', label: 'Nekomentovat', hint: 'Média −5' },
+      ],
+    }),
+    resolve: (s, _e, o) => {
+      if (o === 'podpora') {
+        trust(s, 'trener', 6);
+        media(s, -2);
+        fans(s, -2);
+        return 'Trenér ví, že za ním stojíte.';
+      }
+      if (o === 'ultimatum') {
+        trust(s, 'trener', -8);
+        media(s, 5);
+        fans(s, 3);
+        return 'Titulky píšou o tvrdém majiteli. Trenér je pod tlakem.';
+      }
+      media(s, -5);
+      return 'Novináři si odpověď domysleli sami.';
+    },
+  },
+
+  rozhovor: {
+    weight: () => 0.45,
+    create: () => ({
+      title: 'Sportovní deník chce velký rozhovor',
+      text: 'Dvoustrana o vašich plánech s klubem. Jak budete mluvit?',
+      defaultOption: 'odmitnout',
+      options: [
+        { id: 'ambice', label: 'Mluvit o velkých ambicích', hint: 'Média +6, fanoušci +4, patrioti spokojenější, důvěra trenéra −3 (tlak)' },
+        { id: 'skromne', label: 'Mluvit skromně a věcně', hint: 'Média +3' },
+        { id: 'odmitnout', label: 'Odmítnout', hint: 'Média −4' },
+      ],
+    }),
+    resolve: (s, _e, o) => {
+      if (o === 'ambice') {
+        media(s, 6);
+        fans(s, 4);
+        satisfy(s, 4, ['patriot', 'mesto']);
+        trust(s, 'trener', -3);
+        return 'Rozhovor vzbudil pozornost. Teď se čekají výsledky.';
+      }
+      if (o === 'skromne') {
+        media(s, 3);
+        return 'Věcný rozhovor působil dobře.';
+      }
+      media(s, -4);
+      return 'Deník napsal, že majitel komunikaci s veřejností nezvládá.';
+    },
+  },
+
+  'kauza-hrac': {
+    weight: (s) => (squad(s).length > 12 ? 0.4 : 0),
+    create: (s, rng) => {
+      const p = rng.pick(keyPlayers(s));
+      if (!p) return null;
+      return {
+        title: `Bulvár rozebírá soukromí hráče ${pName(p)}`,
+        text: 'Fotky a spekulace o jeho soukromém životě jsou na titulních stranách.',
+        playerId: p.id,
+        defaultOption: 'mlcet',
+        options: [
+          { id: 'chranit', label: 'Postavit se za hráče', hint: 'Jeho morálka +10, morálka týmu +2, média −5' },
+          { id: 'distancovat', label: 'Distancovat se', hint: 'Média +4, jeho morálka −15' },
+          { id: 'mlcet', label: 'Nekomentovat', hint: 'Média −2' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      const p = s.players[e.playerId!];
+      if (o === 'chranit') {
+        if (p) p.morale = clamp(p.morale + 10, 0, 100);
+        teamMorale(s, 2);
+        media(s, -5);
+        return 'Kabina ocenila, že klub drží při svých.';
+      }
+      if (o === 'distancovat') {
+        if (p) p.morale = clamp(p.morale - 15, 0, 100);
+        media(s, 4);
+        return 'Klub se od hráče veřejně distancoval.';
+      }
+      media(s, -2);
+      return 'Kauza po pár dnech utichla.';
+    },
+  },
+
+  'svaz-spor': {
+    weight: (s) => (ownForm(s).slice(-1)[0] === 'P' ? 0.5 : 0),
+    create: (s) => ({
+      title: 'Sporný verdikt rozhodčího',
+      text: 'V posledním zápase vám nebyl uznán gól a fanoušci zuří. Novináři čekají na vaši reakci.',
+      amount: Math.round(150_000 * Math.max(0.3, scale(s))),
+      defaultOption: 'nic',
+      options: [
+        { id: 'kritika', label: 'Ostře kritizovat svaz', hint: `Fanoušci +6, média +2, pověst u svazu −15, pokuta asi ${fmt(150_000 * Math.max(0.3, scale(s)) * fineFactor(s))}` },
+        { id: 'stiznost', label: 'Podat oficiální stížnost', hint: 'Fanoušci +2, pověst u svazu −3' },
+        { id: 'nic', label: 'Nechat to být', hint: 'Fanoušci −2, pověst u svazu +2' },
+      ],
+    }),
+    resolve: (s, _e, o) => {
+      if (o === 'kritika') {
+        fans(s, 6);
+        media(s, 2);
+        league(s, -15);
+        const amount = fine(s, 150_000, 'Pokuta za kritiku rozhodčích');
+        return `Fanoušci tleskají, disciplinárka vyměřila pokutu ${fmt(amount)}.`;
+      }
+      if (o === 'stiznost') {
+        fans(s, 2);
+        league(s, -3);
+        return 'Komise rozhodčích stížnost projedná.';
+      }
+      fans(s, -2);
+      league(s, 2);
+      return 'Klub se ke sporné situaci nevyjadřoval.';
+    },
+  },
+
+  // ---------- Spolumajitelé ----------
+
+  valna: {
+    weight: () => 0,
+    create: (s) => {
+      const profit = distributableProfit(s);
+      const club = ownClub(s);
+      const reserve = round(Math.max(0, club.finance.balance) * 0.03);
+      const partners = s.shareholders.length > 0;
+      const options =
+        profit > 0
+          ? [
+              { id: 'nic', label: 'Bez dividendy', hint: 'Zisk zůstane v klubu. Patrioti +3, investor a spekulant nespokojení' },
+              { id: 'ctvrt', label: `Dividenda 25 % zisku (${mil(profit * 0.25)})`, hint: `Vám ${mil(profit * 0.25 * s.owner.share)}${partners ? ', investor a spekulant spokojenější' : ''}` },
+              { id: 'pul', label: `Dividenda 50 % zisku (${mil(profit * 0.5)})`, hint: `Vám ${mil(profit * 0.5 * s.owner.share)}${partners ? ', investor velmi spokojený, patrioti ne' : ''}` },
+            ]
+          : [
+              { id: 'nic', label: 'Bez dividendy', hint: 'Klub zisk nemá. Investor a spekulant nespokojení' },
+              ...(reserve > 0 ? [{ id: 'rezervy', label: `Symbolická dividenda z rezerv (${mil(reserve)})`, hint: `Vám ${mil(reserve * s.owner.share)}, investor trochu spokojenější` }] : []),
+            ];
+      return {
+        title: partners ? 'Řádná valná hromada' : 'Rozdělení zisku za sezónu',
+        text: partners
+          ? `Akcionáři schvalují výsledky sezóny a rozhodují o dividendě. Zisk k rozdělení ${mil(profit)}. Pak hlasují o důvěře vedení (spokojenost ${Math.round(shareholderConfidence(s))}).`
+          : `Jako jediný vlastník můžete část zisku (${mil(profit)}) vybrat do osobních peněz.`,
+        amount: profit > 0 ? profit : reserve,
+        defaultOption: 'nic',
+        options,
+      };
+    },
+    resolve: (s, e, o) => {
+      const share = o === 'ctvrt' ? 0.25 : o === 'pul' ? 0.5 : o === 'rezervy' ? 1 : 0;
+      const total = Math.round((e.amount ?? 0) * share);
+      payDividend(s, total);
+      if (o === 'nic') {
+        satisfy(s, -8, ['investor']);
+        satisfy(s, -4, ['spekulant']);
+        satisfy(s, 3, ['patriot']);
+      } else {
+        satisfy(s, o === 'pul' ? 14 : o === 'ctvrt' ? 8 : 4, ['investor']);
+        satisfy(s, o === 'pul' ? 8 : 5, ['spekulant']);
+        if (o === 'pul') satisfy(s, -3, ['patriot', 'mesto']);
+      }
+      confidenceVote(s, total);
+      return total > 0 ? `Vyplaceno ${mil(total)} na dividendách, vám ${mil(total * s.owner.share)}.` : 'Dividenda se nevyplácí.';
+    },
+  },
+
+  navrat: {
+    weight: (s) => {
+      const o = s.owner.ousted;
+      if (!o || o.banUntil || addDays(o.since, 120) > s.date) return 0;
+      const pos = ownPosition(s);
+      const failing = pos && pos.played >= 5 && pos.position > goalTarget(s.owner.seasonGoal, pos.comp);
+      return failing || ownClub(s).finance.balance < 0 || shareholderConfidence(s) >= 55 ? 50 : 0;
+    },
+    create: (s) => {
+      const amount = round(campaignCost(s) * 5, 100_000);
+      return {
+        title: 'Akcionáři vás žádají o návrat',
+        text: 'Představenstvu se nedaří a spolumajitelé chtějí, abyste se vrátil do vedení. Podmínkou je čerstvý kapitál do klubu.',
+        amount,
+        defaultOption: 'odmitnout',
+        options: [
+          { id: 'vratit', label: 'Vrátit se', hint: `Vložíte ${mil(amount)} z osobních peněz (máte ${mil(s.owner.wallet)})` },
+          { id: 'odmitnout', label: 'Zůstat stranou', hint: 'Zůstáváte pasivním akcionářem' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      if (o !== 'vratit') return 'Zůstáváte stranou.';
+      if (s.owner.wallet < e.amount!) return 'Na vklad nemáte dost peněz. Zůstáváte stranou.';
+      s.owner.wallet -= e.amount!;
+      book(s, s.owner.clubId, 'vklad', e.amount!, 'Vklad majitele při návratu do vedení');
+      s.owner.ousted = undefined;
+      satisfy(s, 15);
+      return 'Vracíte se do vedení klubu.';
+    },
+  },
 };
 
 /** Jednou týdně: možná nová situace (nejvýš tři otevřené najednou). */
@@ -483,7 +1114,7 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
     return !!last && addDays(last, COOLDOWN[id] ?? 90) > state.date;
   };
   const weighted = Object.entries(TEMPLATES)
-    .filter(([id]) => !open.has(id) && !recent(id))
+    .filter(([id]) => !open.has(id) && !recent(id) && (!state.owner.ousted || OUSTED_TEMPLATES.has(id)))
     .map(([id, t]) => ({ id, w: t.weight(state) }))
     .filter((x) => x.w > 0);
   const total = weighted.reduce((a, x) => a + x.w, 0);
@@ -502,10 +1133,16 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
     }
   }
   if (!pick) return;
-  const body = TEMPLATES[pick].create(state, rng);
+  createEvent(state, rng, pick);
+}
+
+/** Vytvoří konkrétní situaci (i mimo náhodný výběr, např. valnou hromadu). */
+export function createEvent(state: GameState, rng: Rng, template: string, expires?: string): void {
+  const body = TEMPLATES[template].create(state, rng);
   if (!body) return;
-  state.events.push({ ...body, id: `e${++state.nextId}`, template: pick, date: state.date, expires: addDays(state.date, EXPIRES_DAYS) });
-  state.eventLog[pick] = state.date;
+  state.events.push({ ...body, id: `e${++state.nextId}`, template, date: state.date, expires: expires ?? addDays(state.date, EXPIRES_DAYS) });
+  state.eventLog ??= {};
+  state.eventLog[template] = state.date;
 }
 
 export function resolveEvent(prev: GameState, eventId: string, optionId: string, auto = false): ActionResult {

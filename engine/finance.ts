@@ -286,13 +286,23 @@ export function loanOffers(state: GameState): number[] {
   return [0.1, 0.25, 0.5].map((k) => Math.round((yearly * k) / 1_000_000) * 1_000_000).filter((v) => v > 0);
 }
 
+/** Postoj spolumajitelů k úvěrům (stejná logika jako hlasování v ownership.ts, bez cyklického importu). */
+const LOAN_BIAS = { investor: -8, patriot: -4, spekulant: 6, mesto: -10 } as const;
+
+export function loanVotePasses(state: GameState): boolean {
+  if (!state.shareholders.length) return true;
+  const yes = state.owner.share + state.shareholders.filter((x) => x.satisfaction + LOAN_BIAS[x.kind] >= 50).reduce((a, x) => a + x.share, 0);
+  return yes > 0.5;
+}
+
 export function annuity(principal: number, rate: number, months: number): number {
   const r = rate / 12;
   return Math.round((principal * r) / (1 - Math.pow(1 + r, -months)));
 }
 
 export function takeLoan(prev: GameState, amount: number): GameState {
-  if (!loanOffers(prev).includes(amount)) return prev;
+  if (!loanOffers(prev).includes(amount) || prev.owner.ousted) return prev;
+  if (!loanVotePasses(prev)) return prev;
   const state = structuredClone(prev);
   const payment = annuity(amount, LOAN_RATE, LOAN_MONTHS);
   state.loans.push({ id: `u${++state.nextId}`, principal: amount, remaining: amount, rate: LOAN_RATE, payment, monthsLeft: LOAN_MONTHS });

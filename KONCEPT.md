@@ -178,20 +178,22 @@ Majitel najímá **hlavního trenéra a ředitele sekcí**. Ředitelé si sami n
 
 ---
 
-## 8a. Šedá zóna
+## 8a. Šedá zóna (na hraně etiky)
 
-Hra obsahuje nabídky a příležitosti mimo pravidla. Jsou dobrovolné, lákavé a riskantní.
+Hra nabízí rozhodnutí, která nejsou trestnými činy, ale jsou na hraně etiky nebo pravidel svazu. Jsou dobrovolná, lákavá a riskantní.
 
-**Příklady:**
-- ovlivňování zápasů a rozhodčích,
-- úplatky úředníkům (rychlejší stavební povolení, změna územního plánu, dotace),
-- „černé“ platy a provize mimo účetnictví, daňové triky,
-- skryté vazby na sázkové kanceláře,
-- kupování politické podpory ve městě.
+**Ve hře (verze 0.7):**
+- část platů hvězd jako obrazová práva přes jejich firmy (agresivní daňová optimalizace),
+- zakázka pro vlastní firmu majitele (střet zájmů vůči spolumajitelům),
+- neoficiální jednání s hráčem soupeře před oknem,
+- sponzor s pochybným původem peněz,
+- nadsazená návštěvnost pro sponzory,
+- obcházení výchovného za talent z malého klubu,
+- dar na kampaň starosty a dotace pro klub.
 
-**Riziko odhalení:** každý takový krok zvyšuje skrytou míru rizika. Hrozí únik informací (nespokojený zaměstnanec, novinář, vyšetřování policie nebo svazu). Riziko roste s počtem zapojených lidí a klesá s jejich loajalitou.
+**Riziko odhalení:** každý krok zvyšuje skryté riziko, které časem klesá. Slabý finanční ředitel a nespokojený sportovní ředitel zvyšují šanci úniku. Investigativní novinář se ozve, když je riziko vysoké.
 
-**Důsledky:** mediální skandál a pád pověsti, odchod sponzorů, pokuty, odečet bodů, nucený sestup, ztráta licence, zákaz činnosti majitele ve fotbale (vede k nucenému prodeji podílu) a v nejhorším případě trestní stíhání, které znamená konec hry.
+**Důsledky:** mediální kauza a pád pověsti, sponzoři půl roku krátí plnění, pokuta svazu, doměrky a vratky s penále, odečet bodů, nespokojení akcionáři. Při celkové závažnosti 40 svaz majiteli na rok zakáže činnost (klub řídí představenstvo). Trestné činy (úplatky, ovlivňování zápasů) ve hře záměrně nejsou.
 
 ---
 
@@ -308,4 +310,6 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 
 **Verze 0.6 (hotovo):** stadion a zázemí, situace k rozhodnutí, nálada fanoušků, generální partner, úvěr, přestupy mezi kluby v lize, kalendář sezóny.
 
-**Další krok:** spolumajitelé (akcionáři, hlasování, valná hromada, dividendy), šedá zóna, média.
+**Verze 0.7 (hotovo):** spolumajitelé (podíl při startu, hlasování, valná hromada s dividendou a hlasováním o důvěře, odvolání a návrat, nákup a prodej akcií, navýšení kapitálu, odhadní hodnota klubu), pověst majitele u médií a svazu, šedá zóna na hraně etiky, další situace k rozhodnutí, finanční a obchodní ředitel, šéf akademie a tiskový mluvčí, rozestavení v náhledu zápasu, kalendář v horní liště.
+
+**Další krok:** skuteční hráči v datovém balíčku, evropské poháry, scénáře.

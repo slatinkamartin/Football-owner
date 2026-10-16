@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { advanceToNextMatch, advanceWeek, competitionOf, currentPhase, formatDate, seasonLabel, startNegotiation, type GameState } from '../engine';
+import { advanceToNextMatch, advanceWeek, competitionOf, currentPhase, formatDate, ownerBlocked, seasonLabel, startNegotiation, type GameState } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance } from './screens/Finance';
@@ -11,13 +11,15 @@ import { NavContext, Sheet, type ModalRef } from './nav';
 import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
+import { Owner } from './screens/Owner';
+import { CalendarStrip } from './SeasonCalendar';
 import { People } from './screens/People';
 import { Squad } from './screens/Squad';
 import { Stadium } from './screens/Stadium';
 import { Transfers } from './screens/Transfers';
 import { Tables } from './screens/Tables';
 
-type Tab = 'prehled' | 'tabulky' | 'zapasy' | 'kadr' | 'prestupy' | 'vedeni' | 'stadion' | 'finance' | 'hra';
+type Tab = 'prehled' | 'tabulky' | 'zapasy' | 'kadr' | 'prestupy' | 'vedeni' | 'majitel' | 'stadion' | 'finance' | 'hra';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'prehled', label: 'Přehled' },
@@ -26,6 +28,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'kadr', label: 'Kádr' },
   { id: 'prestupy', label: 'Přestupy' },
   { id: 'vedeni', label: 'Vedení' },
+  { id: 'majitel', label: 'Majitel' },
   { id: 'stadion', label: 'Stadion' },
   { id: 'finance', label: 'Finance' },
   { id: 'hra', label: 'Hra' },
@@ -81,6 +84,15 @@ export function App() {
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
   const phase = currentPhase(game);
+  const blocked = ownerBlocked(game);
+  // Odvolaný majitel klub neřídí: změny v ostatních záložkách se neuloží.
+  const managed = (next: GameState) => {
+    if (blocked && next !== game) {
+      setNotice(blocked);
+      return;
+    }
+    update(next);
+  };
 
   return (
     <NavContext.Provider value={nav}>
@@ -129,28 +141,36 @@ export function App() {
           </div>
         </header>
 
+        <CalendarStrip game={game} />
         <nav className="tabs">
           {TABS.map((t) => (
             <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
               {t.label}
+              {t.id === 'majitel' && blocked && <span className="tab-dot" aria-label="odvolán" />}
             </button>
           ))}
         </nav>
       </div>
 
       <main>
+        {blocked && tab !== 'majitel' && (
+          <p className="warning banner">
+            {blocked} <button className="linkbtn" onClick={() => setTab('majitel')}>Cesty zpět ›</button>
+          </p>
+        )}
         {tab === 'prehled' && <Overview game={game} onChange={update} onNavigate={(t) => setTab(t)} onOpenMatch={setOpenMatch} />}
         {tab === 'tabulky' && <Tables game={game} />}
         {tab === 'zapasy' && <Matches game={game} onOpenMatch={setOpenMatch} />}
-        {tab === 'kadr' && <Squad game={game} onChange={update} />}
-        {tab === 'prestupy' && <Transfers game={game} onChange={update} />}
-        {tab === 'vedeni' && <People game={game} onChange={update} />}
-        {tab === 'stadion' && <Stadium game={game} onChange={update} />}
-        {tab === 'finance' && <Finance game={game} onChange={update} />}
+        {tab === 'kadr' && <Squad game={game} onChange={managed} />}
+        {tab === 'prestupy' && <Transfers game={game} onChange={managed} />}
+        {tab === 'vedeni' && <People game={game} onChange={managed} />}
+        {tab === 'majitel' && <Owner game={game} onChange={update} />}
+        {tab === 'stadion' && <Stadium game={game} onChange={managed} />}
+        {tab === 'finance' && <Finance game={game} onChange={managed} />}
         {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
       </main>
 
-      {notice && tab === 'prestupy' && (
+      {notice && (tab === 'prestupy' || blocked) && (
         <div className="toast" role="status">
           {notice} <button className="linkbtn" onClick={() => setNotice(null)}>Zavřít</button>
         </div>
@@ -171,7 +191,7 @@ export function App() {
       {game.gameOver && (
         <div className="overlay">
           <div className="card dialog">
-            <h2>Konec hry</h2>
+            <h2>{game.gameOver.kind === 'prodej' ? 'Klub prodán' : 'Konec hry'}</h2>
             <p>{game.gameOver.reason}</p>
             <p className="muted">{formatDate(game.gameOver.date)}</p>
             <button className="primary" onClick={startOver}>Nová hra</button>

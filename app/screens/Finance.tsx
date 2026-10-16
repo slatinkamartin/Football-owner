@@ -9,6 +9,7 @@ import {
   INCOME_CATEGORIES,
   annuity,
   loanOffers,
+  previewVote,
   LOAN_MONTHS,
   LOAN_RATE,
   takeLoan,
@@ -22,6 +23,7 @@ import {
   type FinanceTotals,
   type GameState,
 } from '../../engine';
+import { VoteInfo } from '../VoteInfo';
 import { money } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
 import { LineChart } from '../chart';
@@ -223,9 +225,10 @@ function Loans({ game, onTake }: { game: GameState; onTake: (amount: number) => 
           <p className="muted small">
             Banka půjčí na {LOAN_MONTHS / 12} roky s úrokem {Math.round(LOAN_RATE * 100)} % ročně. Splácí se každý měsíc, úroky jsou náklad ve výsledovce. Najednou lze mít jeden úvěr.
           </p>
+          <VoteInfo vote={previewVote(game, 'uver', offers[0])} />
           <div className="buttons">
             {offers.map((amount) => (
-              <button key={amount} onClick={() => onTake(amount)}>
+              <button key={amount} disabled={!previewVote(game, 'uver', amount).passes || !!game.owner.ousted} onClick={() => onTake(amount)}>
                 Půjčit {money(amount)} <span className="muted small">(splátka {money(annuity(amount, LOAN_RATE, LOAN_MONTHS))})</span>
               </button>
             ))}

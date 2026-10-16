@@ -14,7 +14,11 @@ import {
   GOALS,
   hireStaff,
   isInterested,
+  EXTRA_ROLES,
   ROLE_LABEL,
+  ROLE_PURPOSE,
+  roleEffect,
+  STAFF_KEY,
   scoutingError,
   setSeasonGoal,
   severance,
@@ -40,6 +44,11 @@ export function People({ game, onChange }: Props) {
   };
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
+  const [role, setRole] = useState<StaffRole>('trener');
+  const pick = (r: StaffRole) => {
+    setRole(r);
+    document.getElementById('kandidati')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <div className="stack">
@@ -72,7 +81,17 @@ export function People({ game, onChange }: Props) {
         <StaffCard game={game} role="reditel" person={directorOf(game, club.id)} onResult={apply} />
       </div>
 
-      <Candidates game={game} onResult={apply} />
+      <section className="card">
+        <h2>Další ředitelé</h2>
+        <p className="muted small">Nepovinné pozice. Stojí plat, ale každá přinese vlastní výhodu. Najímáte je ze seznamu kandidátů níže.</p>
+        <div className="grid four">
+          {EXTRA_ROLES.map((r) => (
+            <ExtraStaff key={r} game={game} role={r} onResult={apply} onPick={() => pick(r)} />
+          ))}
+        </div>
+      </section>
+
+      <Candidates game={game} role={role} setRole={setRole} onResult={apply} />
     </div>
   );
 }
@@ -99,6 +118,39 @@ function AdviceCard({ game, onResult }: { game: GameState; onResult: (r: ActionR
   );
 }
 
+function ExtraStaff({ game, role, onResult, onPick }: { game: GameState; role: StaffRole; onResult: (r: ActionResult) => void; onPick: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const id = game.clubs[game.owner.clubId].staff[STAFF_KEY[role]];
+  const person = id ? game.staff[id] : undefined;
+  return (
+    <div className={`subcard ${person ? '' : 'empty'}`}>
+      <div className="row-between">
+        <strong>{ROLE_LABEL[role]}</strong>
+        {person ? <span className="rating">{person.ability}</span> : <Badge tone="warn">neobsazeno</Badge>}
+      </div>
+      {person ? (
+        <>
+          <p className="small">{person.firstName} {person.lastName} <span className="muted">· {money(person.wage)} měsíčně · do {person.contractUntil}</span></p>
+          <p className="small muted">{roleEffect(role, person.ability)}</p>
+          {confirming ? (
+            <div className="buttons">
+              <button className="danger" onClick={() => { setConfirming(false); onResult(fireStaff(game, role)); }}>Odvolat ({money(severance(game, person))})</button>
+              <button onClick={() => setConfirming(false)}>Zrušit</button>
+            </div>
+          ) : (
+            <button className="linkbtn" onClick={() => setConfirming(true)}>Odvolat</button>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="small muted">{ROLE_PURPOSE[role]}</p>
+          <button onClick={onPick}>Vybrat kandidáta</button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function StaffCard({
   game,
   role,
@@ -106,7 +158,7 @@ function StaffCard({
   onResult,
 }: {
   game: GameState;
-  role: StaffRole;
+  role: 'trener' | 'reditel';
   person?: Staff;
   onResult: (r: ActionResult) => void;
 }) {
@@ -185,21 +237,21 @@ function StaffCard({
   );
 }
 
-function Candidates({ game, onResult }: { game: GameState; onResult: (r: ActionResult) => void }) {
-  const [role, setRole] = useState<StaffRole>('trener');
+function Candidates({ game, role, setRole, onResult }: { game: GameState; role: StaffRole; setRole: (r: StaffRole) => void; onResult: (r: ActionResult) => void }) {
   const [pending, setPending] = useState<string | null>(null);
   const club = game.clubs[game.owner.clubId];
-  const current = role === 'trener' ? coachOf(game, club.id) : directorOf(game, club.id);
+  const currentId = club.staff[STAFF_KEY[role]];
+  const current = currentId ? game.staff[currentId] : undefined;
   const list = candidates(game, role);
 
   return (
-    <section className="card">
+    <section className="card" id="kandidati">
       <div className="row-between">
         <h2>Volní kandidáti</h2>
-        <div className="segmented">
-          {(['trener', 'reditel'] as StaffRole[]).map((r) => (
+        <div className="segmented wrap">
+          {(Object.keys(STAFF_KEY) as StaffRole[]).map((r) => (
             <button key={r} className={role === r ? 'active' : ''} onClick={() => { setRole(r); setPending(null); }}>
-              {r === 'trener' ? 'Trenéři' : 'Sportovní ředitelé'}
+              {ROLE_LABEL[r]}
             </button>
           ))}
         </div>
@@ -216,7 +268,9 @@ function Candidates({ game, onResult }: { game: GameState; onResult: (r: ActionR
           { key: 'ability', label: 'Schopnosti', num: true, value: (s) => s.ability, render: (s) => <span className="rating">{s.ability}</span> },
           ...(role === 'trener'
             ? [{ key: 'style', label: 'Styl', hideSm: true, value: (s: Staff) => STYLE_LABEL[s.style] + (s.youthFocus ? ', mladí' : '') }]
-            : []),
+            : role === 'reditel'
+              ? []
+              : [{ key: 'effect', label: 'Přínos', hideSm: true, value: (s: Staff) => s.ability, render: (s: Staff) => <span className="small muted">{roleEffect(role, s.ability)}</span> }]),
           { key: 'ego', label: 'Ego', num: true, hideSm: true, value: (s) => s.ego },
           { key: 'loyalty', label: 'Loajalita', num: true, hideSm: true, value: (s) => s.loyalty },
           { key: 'wage', label: 'Plat', num: true, value: (s) => s.wage, render: (s) => money(s.wage) },
@@ -240,7 +294,7 @@ function Candidates({ game, onResult }: { game: GameState; onResult: (r: ActionR
       />
       {pending && current && (
         <p className="muted small">
-          Současný {role === 'trener' ? 'trenér' : 'ředitel'} {current.firstName} {current.lastName} odejde, odstupné {money(severance(game, current))}.
+          {ROLE_LABEL[role]} {current.firstName} {current.lastName} odejde, odstupné {money(severance(game, current))}.
         </p>
       )}
     </section>

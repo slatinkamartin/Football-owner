@@ -4,10 +4,83 @@ import { newId, playersByClub, squadQualityForReputation, teamStrength } from '.
 import { createRng, type Rng } from './rng';
 import { finalStandings } from './competitions';
 import { computeTable } from './standings';
-import type { Club, CoachStyle, Competition, GameState, SeasonGoal, Staff, StaffRole } from './types';
+import type { Club, ClubStaff, CoachStyle, Competition, GameState, SeasonGoal, Staff, StaffRole } from './types';
 import { addNews, clamp, competitionOf, FREE } from './world';
 
-export const ROLE_LABEL: Record<StaffRole, string> = { trener: 'Hlavní trenér', reditel: 'Sportovní ředitel' };
+export const ROLE_LABEL: Record<StaffRole, string> = {
+  trener: 'Hlavní trenér',
+  reditel: 'Sportovní ředitel',
+  financni: 'Finanční ředitel',
+  obchodni: 'Obchodní ředitel',
+  akademie: 'Šéf akademie',
+  media: 'Tiskový mluvčí',
+};
+
+/** Kde je který člen vedení uložený u klubu. */
+export const STAFF_KEY: Record<StaffRole, keyof ClubStaff> = {
+  trener: 'coachId',
+  reditel: 'directorId',
+  financni: 'financeId',
+  obchodni: 'commercialId',
+  akademie: 'academyId',
+  media: 'mediaId',
+};
+
+/** K čemu pozice je (pro rozhraní). */
+export const ROLE_PURPOSE: Record<StaffRole, string> = {
+  trener: 'Vede tým, vybírá sestavu a taktiku.',
+  reditel: 'Skauting, návrhy přestupů a vyjednávání.',
+  financni: 'Šetří provozní náklady (až 10 %) a lépe hlídá rizikové obchody.',
+  obchodni: 'Zvyšuje příjmy od sponzorů a z merchandisingu (až 15 %).',
+  akademie: 'Lepší dorostenci z akademie každé léto.',
+  media: 'Tlumí mediální propady a drží vaši pověst u médií výš.',
+};
+
+/** Nepovinní ředitelé, které si majitel může najmout navíc. */
+export const EXTRA_ROLES: StaffRole[] = ['financni', 'obchodni', 'akademie', 'media'];
+
+/** Schopnost člena vedení na dané pozici, nebo undefined, když pozice není obsazená. */
+export function staffAbility(state: GameState, role: StaffRole, clubId = state.owner.clubId): number | undefined {
+  const id = state.clubs[clubId]?.staff[STAFF_KEY[role]];
+  return id ? state.staff[id]?.ability : undefined;
+}
+
+/** Násobek provozních nákladů (finanční ředitel šetří až 10 %). */
+export function financeFactor(state: GameState, clubId = state.owner.clubId): number {
+  const a = clubId === state.owner.clubId ? staffAbility(state, 'financni') : undefined;
+  return a === undefined ? 1 : 1 - Math.max(0, a - 40) * 0.002;
+}
+
+/** Násobek komerčních příjmů (obchodní ředitel přidá až 15 %). */
+export function commercialFactor(state: GameState, clubId = state.owner.clubId): number {
+  const a = clubId === state.owner.clubId ? staffAbility(state, 'obchodni') : undefined;
+  return a === undefined ? 1 : 1 + Math.max(0, a - 40) * 0.003;
+}
+
+/** Bonus ke kvalitě dorostenců (šéf akademie). */
+export function academyBonus(state: GameState, clubId: string): number {
+  const a = clubId === state.owner.clubId ? staffAbility(state, 'akademie') : undefined;
+  return a === undefined ? 0 : (a - 40) / 10;
+}
+
+/** Co pozice v klubu přinese (pro rozhraní). */
+export function roleEffect(role: StaffRole, ability: number): string {
+  const k = Math.max(0, ability - 40);
+  switch (role) {
+    case 'financni':
+      return `Provozní náklady −${(k * 0.2).toFixed(0)} %, lépe ohlídá rizikové obchody`;
+    case 'obchodni':
+      return `Komerční příjmy +${(k * 0.3).toFixed(0)} %`;
+    case 'akademie':
+      return `Dorostenci lepší o ${((ability - 40) / 10).toFixed(1)} bodu hodnocení i potenciálu`;
+    case 'media':
+      return 'Mediální propady o čtvrtinu menší, pověst u médií se drží výš';
+    case 'trener':
+      return 'Vede tým, vybírá sestavu a taktiku';
+    case 'reditel':
+      return 'Skauting, návrhy přestupů a vyjednávání';
+  }
+}
 
 export const STYLE_LABEL: Record<CoachStyle, string> = {
   utocny: 'útočný',
@@ -27,7 +100,8 @@ export function staffAge(s: Staff, season: number): number {
 
 export function staffWage(ability: number, role: StaffRole): number {
   const base = 25_000 * Math.pow(1.065, ability - 30);
-  return Math.round((role === 'trener' ? base : base * 0.8) / 1000) * 1000;
+  const k = role === 'trener' ? 1 : role === 'reditel' ? 0.8 : 0.5;
+  return Math.round((base * k) / 1000) * 1000;
 }
 
 /** Úroveň trenéra, jakou si klub s danou pověstí obvykle najímá. */
@@ -230,8 +304,8 @@ export function candidates(state: GameState, role: StaffRole): Staff[] {
 
 function releaseCurrent(state: GameState, role: StaffRole, payout: boolean): Staff | undefined {
   const club = state.clubs[state.owner.clubId];
-  const key = role === 'trener' ? 'coachId' : 'directorId';
-  const current = club.staff[key] ? state.staff[club.staff[key]] : undefined;
+  const key = STAFF_KEY[role];
+  const current = club.staff[key] ? state.staff[club.staff[key]!] : undefined;
   if (!current) return undefined;
   if (payout) {
     const cost = severance(state, current);
@@ -244,7 +318,7 @@ function releaseCurrent(state: GameState, role: StaffRole, payout: boolean): Sta
 
 export function fireStaff(prev: GameState, role: StaffRole): ActionResult {
   const club = prev.clubs[prev.owner.clubId];
-  const id = role === 'trener' ? club.staff.coachId : club.staff.directorId;
+  const id = club.staff[STAFF_KEY[role]];
   if (!id) return { state: prev, ok: false, message: 'Tuto pozici nikdo nezastává.' };
   const state = structuredClone(prev);
   const cost = severance(state, state.staff[id]);
@@ -267,18 +341,17 @@ export function hireStaff(prev: GameState, staffId: string, years: number): Acti
   const s = state.staff[staffId];
   s.clubId = club.id;
   s.contractUntil = state.season + Math.max(1, Math.min(4, years));
-  if (role === 'trener') state.clubs[club.id].staff.coachId = s.id;
-  else state.clubs[club.id].staff.directorId = s.id;
+  state.clubs[club.id].staff[STAFF_KEY[role]] = s.id;
   book(state, club.id, 'vedeni', -s.wage, `Podpisový bonus: ${s.firstName} ${s.lastName}`);
-  state.owner.trust[role] = 60;
-  const message = `Novým ${role === 'trener' ? 'hlavním trenérem' : 'sportovním ředitelem'} je ${s.firstName} ${s.lastName}${previous ? `, nahradil ${previous.firstName} ${previous.lastName}` : ''}.`;
+  if (role === 'trener' || role === 'reditel') state.owner.trust[role] = 60;
+  const message = `${ROLE_LABEL[role]}: nastupuje ${s.firstName} ${s.lastName}${previous ? `, nahradil ${previous.firstName} ${previous.lastName}` : ''}.`;
   addNews(state, { kind: 'info', title: message });
   return { state, ok: true, message };
 }
 
 // ---------- Průběžné vyhodnocení ----------
 
-function ownPosition(state: GameState): { comp: Competition; position: number; played: number } | undefined {
+export function ownPosition(state: GameState): { comp: Competition; position: number; played: number } | undefined {
   const comp = competitionOf(state, state.owner.clubId);
   if (!comp) return undefined;
   const table = finalStandings(comp, state);
@@ -292,7 +365,8 @@ export function monthlyStaff(state: GameState, rng: Rng): void {
     for (const clubId of comp.clubIds) {
       const coach = coachOf(state, clubId);
       const director = directorOf(state, clubId);
-      const wages = (coach?.wage ?? 0) + (director?.wage ?? 0);
+      const extra = clubId === state.owner.clubId ? EXTRA_ROLES.map((r) => state.staff[state.clubs[clubId].staff[STAFF_KEY[r]] ?? '']?.wage ?? 0) : [];
+      const wages = (coach?.wage ?? 0) + (director?.wage ?? 0) + extra.reduce((a, b) => a + b, 0);
       if (wages > 0) book(state, clubId, 'vedeni', -wages, 'Platy trenéra a vedení');
     }
   }
@@ -346,11 +420,11 @@ export function seasonEndStaff(state: GameState, rng: Rng, position: number, com
   }
 
   const club = state.clubs[state.owner.clubId];
-  for (const role of ['trener', 'reditel'] as StaffRole[]) {
-    const key = role === 'trener' ? 'coachId' : 'directorId';
-    const s = club.staff[key] ? state.staff[club.staff[key]] : undefined;
+  for (const role of Object.keys(STAFF_KEY) as StaffRole[]) {
+    const key = STAFF_KEY[role];
+    const s = club.staff[key] ? state.staff[club.staff[key]!] : undefined;
     if (!s) continue;
-    const trust = state.owner.trust[role];
+    const trust = role === 'trener' || role === 'reditel' ? state.owner.trust[role] : 60;
     const resigns = trust < 15 && rng.chance(0.5 + s.ambition / 40);
     const expires = s.contractUntil <= state.season + 1;
     if (resigns || (expires && trust < 40)) {
@@ -381,8 +455,8 @@ export function refreshStaffPool(state: GameState, rng: Rng): void {
   for (const s of Object.values(state.staff)) {
     if (s.clubId === FREE && staffAge(s, state.season) > 68) delete state.staff[s.id];
   }
-  const want: Record<StaffRole, number> = { trener: 14, reditel: 10 };
-  for (const role of ['trener', 'reditel'] as StaffRole[]) {
+  const want: Record<StaffRole, number> = { trener: 14, reditel: 10, financni: 6, obchodni: 6, akademie: 6, media: 6 };
+  for (const role of Object.keys(want) as StaffRole[]) {
     let free = candidates(state, role).length;
     while (free < want[role]) {
       const s = generateStaff(rng, state, role, rng.int(30, 85), FREE);

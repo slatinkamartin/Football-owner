@@ -68,7 +68,7 @@ describe('uložené hry', () => {
     old.version = 2;
     const migrated = migrateSave(old)!;
     expect(migrated.version).toBe(start.version);
-    expect(migrated.news[0].title).toBe('Nová ekonomika');
+    expect(migrated.news.map((n) => n.title)).toContain('Nová ekonomika');
     expect(migrateSave({ ...old, version: 1 })).toBeNull();
   });
 });

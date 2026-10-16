@@ -24,6 +24,7 @@ import {
   renewalDemand,
   startNegotiation,
 } from './transfers';
+import { academyBonus, candidates as staffCandidates, commercialFactor, financeFactor, hireStaff as hire } from './staff';
 import type { DataPack, GameState } from './types';
 import { FREE } from './world';
 
@@ -168,5 +169,23 @@ describe('přestupy', () => {
     s = weeks(s, 10);
     expect(squadOf(s, 'slavia').length).toBeGreaterThanOrEqual(18);
     expect(squadOf(s, 'slavia').filter((p) => p.position === 'GK').length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('další ředitelé', () => {
+  it('obchodní a finanční ředitel zvednou příjmy a sníží náklady', () => {
+    let s = newGame(pack as DataPack, { clubId: 'bohemians', ownerName: 'T', difficulty: 'snadna', seed: 3 });
+    expect(commercialFactor(s)).toBe(1);
+    for (const role of ['obchodni', 'financni', 'akademie', 'media'] as const) {
+      const c = staffCandidates(s, role).find((x) => x.ability > 45 && x.ability - (20 + s.clubs.bohemians.reputation * 0.6) <= 15);
+      expect(c).toBeTruthy();
+      const r = hire(s, c!.id, 2);
+      expect(r.ok).toBe(true);
+      s = r.state;
+    }
+    expect(commercialFactor(s)).toBeGreaterThan(1);
+    expect(financeFactor(s)).toBeLessThan(1);
+    expect(academyBonus(s, 'bohemians')).toBeGreaterThan(0);
+    expect(s.clubs.bohemians.staff.mediaId).toBeTruthy();
   });
 });

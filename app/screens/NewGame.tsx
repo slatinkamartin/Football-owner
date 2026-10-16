@@ -5,14 +5,21 @@ import { money, num } from '../format';
 
 const czPack = pack as DataPack;
 
+const SHARES = [
+  { share: 1, label: '100 % klubu', text: 'Rozhoduješ o všem sám a nikomu se nezodpovídáš.' },
+  { share: 0.6, label: 'Většina (60 %)', text: 'Vedení ti nikdo nevezme, ale velké stavby a navýšení kapitálu musí schválit i spolumajitelé.' },
+  { share: 0.35, label: 'Menšinový podíl (35 %)', text: 'Spolumajitelé hlasují o úvěrech i stavbách a nespokojení tě můžou na valné hromadě odvolat.' },
+];
+
 export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) => void; outdatedSave?: boolean }) {
   const [ownerName, setOwnerName] = useState('');
   const [difficulty, setDifficulty] = useState<Difficulty>('stredni');
   const [clubId, setClubId] = useState<string | null>(null);
+  const [ownerShare, setOwnerShare] = useState(1);
 
   const start = () => {
     if (!clubId) return;
-    onStart(newGame(czPack, { clubId, ownerName: ownerName.trim() || 'Majitel', difficulty }));
+    onStart(newGame(czPack, { clubId, ownerName: ownerName.trim() || 'Majitel', difficulty, ownerShare }));
   };
 
   return (
@@ -46,11 +53,21 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
             ))}
           </div>
         </div>
+        <div className="field">
+          <span>Jaký podíl v klubu kupuješ</span>
+          <div className="choices">
+            {SHARES.map((o) => (
+              <button key={o.share} className={`choice ${ownerShare === o.share ? 'selected' : ''}`} onClick={() => setOwnerShare(o.share)}>
+                <strong>{o.label}</strong>
+                <span>{o.text}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="card">
         <h2>Vyber klub</h2>
-        <p className="muted">V této verzi kupuješ 100 % klubu. Spolumajitelé přijdou v další fázi.</p>
         {czPack.competitions.map((comp) => (
           <div key={comp.id} className="club-group">
             <h3>{comp.fullName ?? comp.name}</h3>

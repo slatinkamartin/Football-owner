@@ -12,16 +12,16 @@ import {
   squadOf,
   transferWindow,
   type GameState,
+  shareholderConfidence,
 } from '../../engine';
 import { Badge } from '../components';
 import { findFixture } from './MatchDetail';
 import { Decisions } from './Decisions';
-import { SeasonCalendar } from '../SeasonCalendar';
 import { LineChart } from '../chart';
 import { PlayerLink } from '../nav';
 import { money } from '../format';
 
-type Target = 'prestupy' | 'vedeni' | 'kadr';
+type Target = 'prestupy' | 'vedeni' | 'kadr' | 'majitel';
 
 export function Overview({
   game,
@@ -105,7 +105,10 @@ export function Overview({
       </section>
 
       <section className="card">
-        <h2>Peníze</h2>
+        <div className="row-between">
+          <h2>Majitel</h2>
+          <button className="linkbtn" onClick={() => onNavigate('majitel')}>Podrobnosti ›</button>
+        </div>
         <dl className="kv">
           <dt>Zůstatek klubu</dt>
           <dd className={club.finance.balance < 0 ? 'neg' : ''}>{money(club.finance.balance)}</dd>
@@ -113,12 +116,19 @@ export function Overview({
           <dd>{money(game.owner.wallet)}</dd>
           <dt>Váš podíl</dt>
           <dd>{Math.round(game.owner.share * 100)} %</dd>
+          <dt>Pověst u médií</dt>
+          <dd>{Math.round(game.owner.media)}</dd>
+          {game.shareholders.length > 0 && (
+            <>
+              <dt>Spokojenost akcionářů</dt>
+              <dd className={shareholderConfidence(game) < 35 ? 'neg' : ''}>{Math.round(shareholderConfidence(game))}</dd>
+            </>
+          )}
         </dl>
       </section>
 
       <ToDo game={game} onNavigate={onNavigate} />
 
-      <SeasonCalendar game={game} />
 
       {game.timeline.length >= 2 && comp && (
         <section className="card wide">

@@ -3,10 +3,12 @@ import {
   allFixtures,
   formatDate,
   POSITION_SHORT,
+  type Club,
   type Fixture,
   type GameState,
   type MatchEvent,
   type MatchPlayerLine,
+  type Position,
   type TeamMatchStats,
 } from '../../engine';
 import { num } from '../format';
@@ -80,6 +82,7 @@ export function MatchDetail({ game, fixtureId, onClose, onBack }: { game: GameSt
 
         {d && (
           <>
+            <Pitch home={d.home} away={d.away} homeClub={home} awayClub={away} events={d.events} potm={d.potm} />
             <Stats home={d.home} away={d.away} />
             <h3>Průběh</h3>
             <Timeline events={d.events} homeId={f.homeId} nameOf={nameOf} />
@@ -90,6 +93,67 @@ export function MatchDetail({ game, fixtureId, onClose, onBack }: { game: GameSt
           </>
         )}
     </Sheet>
+  );
+}
+
+const ROWS: Position[] = ['GK', 'DF', 'MF', 'FW'];
+/** Výška řad na polovině hřiště (od vlastní branky). */
+const ROW_Y: Record<Position, number> = { GK: 8, DF: 26, MF: 45, FW: 63 };
+
+/** Rozestavení obou týmů na hřišti: domácí dole, hosté nahoře. */
+function Pitch({ home, away, homeClub, awayClub, events, potm }: {
+  home: TeamMatchStats; away: TeamMatchStats; homeClub: Club; awayClub: Club; events: MatchEvent[]; potm?: string;
+}) {
+  const H = 152;
+  const goals = new Map<string, number>();
+  for (const e of events) if (e.type === 'gol' && e.playerId) goals.set(e.playerId, (goals.get(e.playerId) ?? 0) + 1);
+  const subbed = new Set(events.filter((e) => e.type === 'stridani').map((e) => e.playerId));
+  const sentOff = new Set(events.filter((e) => e.type === 'cervena' || e.type === 'druha-zluta').map((e) => e.playerId));
+  const team = (t: TeamMatchStats, club: Club, bottom: boolean) =>
+    ROWS.flatMap((pos) => {
+      const row = t.lineup.filter((l) => l.position === pos);
+      return row.map((l, i) => {
+        const x = ((i + 1) / (row.length + 1)) * 100;
+        const y = bottom ? H - ROW_Y[pos] : ROW_Y[pos];
+        const surname = l.name.split(' ').slice(-1)[0];
+        const g = goals.get(l.id) ?? 0;
+        return (
+          <g key={l.id} transform={`translate(${x} ${y})`}>
+            <title>{`${l.name}${l.rating !== undefined ? `, známka ${l.rating.toFixed(1)}` : ''}`}</title>
+            <circle r="3.6" fill={club.colors[0]} stroke={club.colors[1] ?? '#fff'} strokeWidth="0.9" />
+            {l.id === potm && <circle r="5" fill="none" stroke="#f5c518" strokeWidth="0.8" />}
+            <text y="7.4" className="pt-name">{surname}</text>
+            {l.rating !== undefined && <text y="11" className={`pt-rating ${ratingTone(l.rating)}`}>{l.rating.toFixed(1)}</text>}
+            {g > 0 && <text x="4.6" y="-2.6" className="pt-mark">{g > 1 ? `${g}×⚽` : '⚽'}</text>}
+            {subbed.has(l.id) && <text x="-4.6" y="-2.6" className="pt-mark pt-sub">↓</text>}
+            {sentOff.has(l.id) && <rect x="3.6" y="-1" width="1.8" height="2.6" fill="#d33" />}
+          </g>
+        );
+      });
+    });
+  return (
+    <section className="pitch-wrap" aria-label="Rozestavení">
+      <div className="pitch-head">
+        <span><span className="crest" style={{ background: awayClub.colors[0], borderColor: awayClub.colors[1] }} /> {awayClub.shortName} <span className="muted">{away.formation}</span></span>
+      </div>
+      <svg className="pitch" viewBox={`0 0 100 ${H}`} role="img" aria-label={`Rozestavení: ${homeClub.shortName} ${home.formation}, ${awayClub.shortName} ${away.formation}`}>
+        <rect x="0" y="0" width="100" height={H} className="pt-grass" />
+        <g className="pt-lines">
+          <rect x="3" y="2" width="94" height={H - 4} />
+          <line x1="3" y1={H / 2} x2="97" y2={H / 2} />
+          <circle cx="50" cy={H / 2} r="9" />
+          <rect x="25" y="2" width="50" height="15" />
+          <rect x="25" y={H - 17} width="50" height="15" />
+          <rect x="39" y="2" width="22" height="5" />
+          <rect x="39" y={H - 7} width="22" height="5" />
+        </g>
+        {team(away, awayClub, false)}
+        {team(home, homeClub, true)}
+      </svg>
+      <div className="pitch-head">
+        <span><span className="crest" style={{ background: homeClub.colors[0], borderColor: homeClub.colors[1] }} /> {homeClub.shortName} <span className="muted">{home.formation}</span></span>
+      </div>
+    </section>
   );
 }
 

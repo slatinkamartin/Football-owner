@@ -1,5 +1,6 @@
 import { addDays } from './calendar';
 import { book, ownerAccounting } from './finance';
+import { ownerBlocked, previewVote, voteMessage } from './ownership';
 import type { ActionResult } from './staff';
 import { CATERING_SPEND, vipRate } from './stadium';
 import type { Club, GameState, ProjectKind } from './types';
@@ -61,6 +62,10 @@ export function startProject(prev: GameState, label: string): ActionResult {
   const option = projectOptions(prev).find((o) => o.label === label);
   if (!option) return { state: prev, ok: false, message: 'Tuto stavbu teď nelze zahájit.' };
   if (option.blocked) return { state: prev, ok: false, message: option.blocked };
+  const blocked = ownerBlocked(prev);
+  if (blocked) return { state: prev, ok: false, message: blocked };
+  const vote = previewVote(prev, 'stavba', option.cost);
+  if (vote.needed && !vote.passes) return { state: prev, ok: false, message: `Akcionáři stavbu neschválili. ${voteMessage(vote)}` };
   const state = structuredClone(prev);
   const club = state.clubs[state.owner.clubId];
   book(state, club.id, 'investice', -option.cost, `Investice: ${option.label}`);

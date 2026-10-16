@@ -4,6 +4,7 @@ import {
   effectiveCapacity,
   facilityUpkeepDelta,
   formatDate,
+  previewVote,
   projectOptions,
   startProject,
   tierOf,
@@ -12,6 +13,7 @@ import {
   type GameState,
 } from '../../engine';
 import { Badge, Meter, Notice } from '../components';
+import { VoteInfo } from '../VoteInfo';
 import { money, num } from '../format';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
@@ -129,7 +131,7 @@ export function Stadium({ game, onChange }: Props) {
       <section className="card">
         <h2>Nové stavby a vybavení</h2>
         <p className="muted small">
-          Stavba se zaplatí hned z peněz klubu a stane se majetkem v rozvaze, který se postupně odepisuje. Najednou může běžet jedna stavba od každého druhu.
+          Stavba se zaplatí hned z peněz klubu a stane se majetkem v rozvaze, který se postupně odepisuje. Najednou může běžet jedna stavba od každého druhu.{game.shareholders.length > 0 && ' Stavby nad 20 mil. Kč schvalují spolumajitelé.'}
           Klub má teď {money(club.finance.balance)}.
         </p>
         <div className="table-wrap">
@@ -155,6 +157,7 @@ export function Stadium({ game, onChange }: Props) {
                       <span className="muted small">{o.blocked}</span>
                     ) : pending === o.label ? (
                       <span className="buttons end">
+                        <VoteInfo vote={previewVote(game, 'stavba', o.cost)} />
                         <button className="primary" onClick={() => apply(startProject(game, o.label))}>Potvrdit</button>
                         <button onClick={() => setPending(null)}>Zpět</button>
                       </span>

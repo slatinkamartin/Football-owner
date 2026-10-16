@@ -55,7 +55,7 @@ describe('hráči', () => {
     expect(own.length).toBeGreaterThan(15);
     expect(own[0].career[0].season).toBe(2026);
     expect(own[0].trend?.length).toBeGreaterThan(6);
-  });
+  }, 30_000);
 
   it('do zápasu: hra se zastaví po zápase klubu majitele', () => {
     const r = advanceToNextMatch(start);

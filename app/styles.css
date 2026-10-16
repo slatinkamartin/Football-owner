@@ -146,6 +146,7 @@ td.wrap { white-space: normal; }
   border-bottom: 1px solid var(--line);
 }
 .tabs button {
+  white-space: nowrap;
   border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
@@ -510,15 +511,18 @@ tr.zone-playoff td:first-child { box-shadow: inset 3px 0 0 #e0a030; }
 .phase-klid { background: var(--line); color: var(--text); }
 .events-link { font-size: 12px; padding: 0; color: inherit; font-weight: 700; }
 
-/* Kalendář sezóny */
-.season-cal .sc-grid { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.sc-row, .sc-months { display: grid; grid-template-columns: 74px 1fr; align-items: center; gap: 8px; }
-.sc-lane-label { font-size: 12px; color: var(--muted); }
-.sc-track { position: relative; height: 22px; background: var(--bg); border-radius: 6px; }
-.sc-months .sc-track { background: none; height: 16px; }
-.sc-months .sc-track span { position: absolute; font-size: 11px; color: var(--muted); transform: translateX(2px); }
-.sc-seg { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; overflow: hidden; display: flex; align-items: center; }
-.sc-text { font-size: 11px; font-weight: 600; padding: 0 6px; white-space: nowrap; color: #fff; }
+/* Kalendář sezóny v liště */
+.cal-strip { padding: 0 0 6px; }
+.cs-bar { display: block; width: 100%; border: none; background: none; padding: 0; border-radius: 6px; }
+.cs-bar:hover:not(:disabled) .cs-track { border-color: var(--accent); }
+.cs-track { position: relative; display: block; height: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 6px; overflow: visible; }
+.cs-window { position: absolute; top: 1px; height: 4px; background: #2e9e5b; border-radius: 2px; }
+.cs-seg { position: absolute; top: 7px; bottom: 2px; border-radius: 2px; }
+.cs-marker { position: absolute; top: 1px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #8a5cc4; }
+.cs-cup { background: #8a5cc4; border-radius: 50%; }
+.cs-today { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--neg); border-radius: 1px; }
+.cs-months { position: relative; display: block; height: 14px; margin-top: 2px; }
+.cs-months span { position: absolute; font-size: 10px; line-height: 14px; color: var(--muted); transform: translateX(2px); }
 .sc-okno { background: #2e9e5b; }
 .sc-podzim, .sc-jaro { background: #3b6fc4; }
 .sc-pauza { background: #b8c2bc; }
@@ -529,7 +533,7 @@ tr.zone-playoff td:first-child { box-shadow: inset 3px 0 0 #e0a030; }
 .sc-active { box-shadow: 0 0 0 2px var(--text); }
 .sc-marker { position: absolute; top: 5px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #8a5cc4; border: 2px solid var(--card); }
 .sc-today { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--neg); }
-.sc-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
+.sc-list { list-style: none; margin: 6px 0 0; padding: 8px 10px !important; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; }
 .sc-list li.past { color: var(--muted); }
 .sc-list li.now { font-weight: 700; }
 .sc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
@@ -549,8 +553,42 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: flex; flex-directio
 .projects .meter { width: 100%; }
 
 @media (max-width: 640px) {
-  .sc-months .sc-track span:nth-child(even) { display: none; }
-  .sc-text { display: none; }
-  .sc-row, .sc-months { grid-template-columns: 56px 1fr; }
+  .cs-months span:nth-child(even) { display: none; }
   .phase-chip { border-radius: 10px; }
 }
+
+/* ---------- Rozestavení ---------- */
+.pitch-wrap { max-width: 440px; margin: 12px auto 16px; }
+.pitch-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; padding: 4px 2px; }
+.pitch-head .crest { width: 12px; height: 12px; vertical-align: -1px; }
+.pitch { width: 100%; display: block; border-radius: 10px; }
+.pt-grass { fill: #2f8f4e; }
+.pt-lines { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 0.5; }
+.pt-name { font-size: 3.3px; fill: #fff; text-anchor: middle; font-weight: 600; paint-order: stroke; stroke: rgba(0, 0, 0, 0.35); stroke-width: 0.6px; }
+.pt-rating { font-size: 2.8px; fill: rgba(255, 255, 255, 0.85); text-anchor: middle; }
+.pt-rating.r-good { fill: #c8ffd0; font-weight: 700; }
+.pt-rating.r-bad { fill: #ffd0d0; }
+.pt-mark { font-size: 3px; fill: #fff; text-anchor: middle; }
+.pt-sub { fill: #ffd0d0; font-weight: 700; }
+
+/* ---------- Majitel ---------- */
+.tab-dot { display: inline-block; width: 7px; height: 7px; margin-left: 5px; border-radius: 50%; background: var(--neg); vertical-align: 2px; }
+.banner { margin: 0 0 16px; }
+.share-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--line); margin-bottom: 12px; }
+.share-bar span { display: block; height: 100%; }
+.share-bar span + span { border-left: 2px solid var(--card); }
+.meter-cell { display: inline-flex; align-items: center; justify-content: flex-end; white-space: nowrap; }
+.meter-cell .meter { width: 60px; }
+.action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 12px; }
+.card.highlight { border: 2px solid #e0a030; }
+.vote { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border-radius: 8px; font-size: 13px; margin: 10px 0; text-align: left; white-space: normal; }
+.vote-ok { background: var(--up); color: var(--pos); }
+.vote-no { background: var(--down); color: var(--neg); }
+.vote-list { display: flex; flex-wrap: wrap; gap: 2px 12px; color: var(--text); font-size: 12px; }
+.vote-list .no { color: var(--neg); }
+.grid.four { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.subcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.subcard p { margin: 0; }
+.subcard.empty { background: var(--bg); }
+.subcard > button { align-self: flex-start; }
+.segmented.wrap button { font-size: 13px; padding: 5px 10px; }

@@ -23,12 +23,12 @@ npm run build      # produkční sestavení do složky dist/
 | `app/` | Uživatelské rozhraní (React) |
 | `data/cz-zaklad/` | Datový balíček: soutěže a kluby české pyramidy (1. až 3. liga) |
 
-## Co umí verze 0.6
+## Co umí verze 0.7
 
-- Výběr klubu z 1. až 3. ligy a startovních podmínek (osobní kapitál majitele).
+- Výběr klubu z 1. až 3. ligy, startovních podmínek (osobní kapitál majitele) a podílu v klubu (100 %, 60 % nebo 35 %).
 - Týdenní tahy, celé sezóny se 4 soutěžemi (1. liga, 2. liga, ČFL, MSFL), postupy a sestupy včetně pravidel pro B-týmy.
 - **Zápasový engine:** simulace po minutách, střely s xG, góly a asistence, fauly, žluté a červené karty, zranění, až 5 střídání, známky hráčů a hráč zápasu. Trenér skládá sestavu podle formace (4-3-3, 4-4-2, 5-3-2), kvality a kondice a hráče rotuje.
-- **Náhled zápasu:** sestavy, střídání, karty, xG, střely, držení míče, rohy, fauly, průběh zápasu a známky.
+- **Náhled zápasu:** rozestavení obou týmů na hřišti se známkami a góly, sestavy, střídání, karty, xG, střely, držení míče, rohy, fauly, průběh zápasu a známky.
 - **Kondice, zranění a tresty:** stopka za červenou kartu a za každou 4. žlutou, zranění na dny až měsíce.
 - Tabulky, statistiky hráčů (zápasy, minuty, góly, asistence, karty, průměrná známka), návštěvnost.
 - Finance klubu: vstupné, TV peníze, komerční příjmy, platy, provoz, přestupy. Bankrot = konec hry.
@@ -48,10 +48,15 @@ npm run build      # produkční sestavení do složky dist/
 - **Účetnictví:** výsledovka s odpisy hráčských registrací a ziskem z prodejů, rozvaha, daň z příjmů 21 % s převodem ztrát.
 - **Pohodlí:** tlačítko „Do zápasu“ se souhrnem zápasu, grafy pozice v tabulce a zůstatku klubu.
 - **Stadion a zázemí:** nové tribuny, VIP skyboxy, catering a fanshop, vyhřívaný trávník (licence 1. ligy), tréninkové centrum, akademie, regenerace. Stavby trvají týdny, zapisují se do rozvahy a odepisují se.
-- **Situace k rozhodnutí:** 14 druhů (soustředění, prohřešky hráčů, prémie, sponzoři, protesty fanoušků, pokuty, talenty z akademie, zranění, dotace, nespokojení hráči, trávník, asistent trenéra, výběr generálního partnera) s dopadem na peníze, morálku a důvěru.
+- **Situace k rozhodnutí:** přes 30 druhů, mimo jiné název stadionu, zájem o trenéra, benefiční zápas, výjezdy fanoušků, nabídka investora, požadavky svazu, tiskové konference, rozhovory a kauzy hráčů; původních 14 (soustředění, prohřešky hráčů, prémie, sponzoři, protesty fanoušků, pokuty, talenty z akademie, zranění, dotace, nespokojení hráči, trávník, asistent trenéra, výběr generálního partnera) s dopadem na peníze, morálku a důvěru.
 - **Fanoušci a partneři:** nálada fanoušků ovlivňuje návštěvnost a komerční příjmy, smlouva s generálním partnerem (pevná, nebo s bonusy za výhry), příjmy z cateringu a VIP, úvěr od banky.
 - **Přestupy v lize:** ostatní kluby si během oken kupují hráče mezi sebou a podepisují volné hráče.
-- **Kalendář sezóny:** přestupní okna, podzim, zimní pauza, jaro, nadstavba, baráž a pohár na časové ose, aktuální fáze v horní liště.
+- **Kalendář sezóny:** stále viditelný proužek nad záložkami (přestupní okna, části ligy, nadstavba, baráž, pohár, dnešek), kliknutím se rozbalí termíny.
+- **Spolumajitelé:** finanční investor, místní patriot, spekulant a město s vlastními zájmy a spokojeností. Hlasují o úvěrech, velkých stavbách a navýšení kapitálu. Odhadní hodnota klubu, nákup a prodej akcií, navýšení kapitálu, prodej celého klubu jako konec hry.
+- **Valná hromada:** každý červen dividenda (vám jde podle podílu) a hlasování o důvěře. Nespokojená většina majitele odvolá; pak klub řídí představenstvo a cesta zpět vede přes nákup většiny, mimořádnou valnou hromadu, mediální kampaň nebo pozvání od akcionářů.
+- **Pověst majitele:** u médií (ovlivňuje sponzory a akcionáře) a u fotbalového svazu (ovlivňuje výši pokut).
+- **Na hraně etiky:** obrazová práva místo platů, zakázky pro vlastní firmu, neoficiální jednání s hráči, pochybní sponzoři, nadsazená návštěvnost, obcházení výchovného, dar starostovi. Přinesou peníze nebo výhodu, ale zvyšují skryté riziko kauzy: pokuty, vratky, odečet bodů, nespokojení akcionáři, při opakování roční zákaz činnosti.
+- **Další ředitelé:** finanční (nižší provozní náklady), obchodní (vyšší komerční příjmy), šéf akademie (lepší dorostenci) a tiskový mluvčí (pověst u médií).
 - **Smlouvy:** prodlužování, uvolnění hráče, odchody po skončení smlouvy (důležitým hráčům prodlužuje ředitel sám).
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
@@ -61,4 +66,3 @@ npm run build      # produkční sestavení do složky dist/
 - Hráči jsou generovaní. Skuteční hráči 1. a 2. ligy přijdou jako samostatný datový balíček.
 - Složení 2. a 3. ligy v datech je pracovní a je potřeba ho ověřit podle FAČR.
 - Ostatní kluby mezi sebou přestupy řeší souhrnně v letním okně.
-- Spoluvlastníci, stadion, fanoušci a média přijdou v dalších fázích.
