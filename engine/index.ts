@@ -28,3 +28,7 @@ export * from './operations';
 export * from './scales';
 export * from './foreign';
 export * from './investments';
+export * from './settings';
+export * from './pulse';
+export * from './stories';
+export * from './briefing';

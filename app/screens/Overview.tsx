@@ -17,7 +17,10 @@ import {
   budgetDue,
   dressingRoom,
   EUROPE_LABEL,
+  type BriefingTask,
+  type MilestoneTab,
 } from '../../engine';
+import { Briefing, PulsePanel, Stories } from './Briefing';
 import { Badge } from '../components';
 import { findFixture } from './MatchDetail';
 import { Decisions } from './Decisions';
@@ -25,7 +28,7 @@ import { LineChart } from '../chart';
 import { PlayerLink } from '../nav';
 import { money } from '../format';
 
-type Target = 'prestupy' | 'vedeni' | 'kadr' | 'majitel' | 'finance';
+type Target = MilestoneTab | 'majitel';
 
 export function Overview({
   game,
@@ -35,7 +38,7 @@ export function Overview({
 }: {
   game: GameState;
   onChange: (g: GameState) => void;
-  onNavigate: (tab: Target) => void;
+  onNavigate: (tab: Target, sub?: BriefingTask['sub']) => void;
   onOpenMatch: (id: string) => void;
 }) {
   const club = game.clubs[game.owner.clubId];
@@ -52,7 +55,9 @@ export function Overview({
 
   return (
     <div className="grid">
+      <Briefing game={game} onNavigate={onNavigate} />
       <Decisions game={game} onChange={onChange} />
+      <Stories game={game} />
       <section className="card">
         <h2>Další zápas</h2>
         {next ? (
@@ -149,6 +154,8 @@ export function Overview({
       </section>
 
       <ToDo game={game} onNavigate={onNavigate} />
+
+      <PulsePanel game={game} />
 
 
       {game.timeline.length >= 2 && comp && (

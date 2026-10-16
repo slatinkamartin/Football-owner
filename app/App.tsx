@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { advanceDays, advanceToNextMatch, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
+import { advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance, type FinanceTab } from './screens/Finance';
@@ -43,6 +43,7 @@ export function App() {
   const [notice, setNotice] = useState<string | null>(null);
   const [milestone, setMilestone] = useState<Milestone | null>(null);
   const [financeTab, setFinanceTab] = useState<{ tab: FinanceTab; n: number }>({ tab: 'prehled', n: 0 });
+  const [stopReason, setStopReason] = useState<string | null>(null);
   const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
   const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
@@ -90,6 +91,7 @@ export function App() {
   const nmDays = nm ? daysUntil(game, nm.date) : 99;
   const step = nm && nmDays <= 7 ? { label: `Do ${nm.short} ›`, days: nmDays, milestone: nm } : { label: 'Týden ›', days: 7, milestone: undefined };
   const advance = (next: GameState) => {
+    setStopReason(null);
     update(next);
     const m = milestoneToday(next);
     if (m && next.date !== game.date && !next.gameOver) setMilestone(m);
@@ -101,7 +103,7 @@ export function App() {
       setNotice(blocked);
       return;
     }
-    update(next);
+    update(pulseAfterAction(game, next));
   };
 
   return (
@@ -153,6 +155,23 @@ export function App() {
               >
                 Do zápasu ›
               </button>
+              <select
+                className="play-until"
+                aria-label="Hrát do…"
+                value=""
+                disabled={!!game.gameOver}
+                onChange={(e) => {
+                  const target = e.target.value as PlayTarget;
+                  if (!target) return;
+                  const r = advanceUntil(game, target);
+                  advance(r.state);
+                  setStopReason(r.reason ?? null);
+                  if (target === 'zapas' && r.fixtureId && !r.reason && !r.state.gameOver) setModals([{ type: 'match', id: r.fixtureId }]);
+                }}
+              >
+                <option value="">Hrát do…</option>
+                {(Object.keys(PLAY_TARGET_LABEL) as PlayTarget[]).map((t) => <option key={t} value={t}>{PLAY_TARGET_LABEL[t]}</option>)}
+              </select>
             </div>
           </div>
         </header>
@@ -174,7 +193,17 @@ export function App() {
             {blocked} <button className="linkbtn" onClick={() => setTab('majitel')}>Cesty zpět ›</button>
           </p>
         )}
-        {tab === 'prehled' && <Overview game={game} onChange={update} onNavigate={(t) => setTab(t)} onOpenMatch={setOpenMatch} />}
+        {tab === 'prehled' && (
+          <Overview
+            game={game}
+            onChange={(next) => update(pulseAfterAction(game, next))}
+            onNavigate={(t, sub) => {
+              if (t === 'finance') setFinanceTab({ tab: sub ?? 'prehled', n: financeTab.n + 1 });
+              setTab(t);
+            }}
+            onOpenMatch={setOpenMatch}
+          />
+        )}
         {tab === 'tabulky' && <Tables game={game} />}
         {tab === 'zapasy' && <Matches game={game} onOpenMatch={setOpenMatch} />}
         {tab === 'kadr' && <Squad game={game} onChange={managed} />}
@@ -185,6 +214,12 @@ export function App() {
         {tab === 'finance' && <Finance key={financeTab.n} game={game} onChange={managed} initialTab={financeTab.tab} />}
         {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
       </main>
+
+      {stopReason && !milestone && (
+        <div className="toast stop-toast" role="status">
+          <strong>Zastaveno:</strong> {stopReason} <button className="linkbtn" onClick={() => setStopReason(null)}>Zavřít</button>
+        </div>
+      )}
 
       {notice && (tab === 'prestupy' || blocked) && (
         <div className="toast" role="status">

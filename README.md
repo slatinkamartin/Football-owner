@@ -61,6 +61,18 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.15: příběhy, nálady, porada a tempo (etapa A)
+
+- **Týdenní porada** nahoře na Přehledu: až pět úkolů na tento týden podle stavu klubu (rozhodnutí s termínem, nabídky, rozpočet, chybějící peníze, licence, vedení, konec okna, nespokojené opory, končící smlouvy, nevyužité peníze). Každý úkol vede tam, kde se řeší.
+- **Příběhy sezóny**: vícetýdenní dějové linky s několika rozhodnutími.
+  - *Krize výsledků*: po třech prohrách podpora, ultimátum, nebo mlčení; po dalších třech zápasech vyhodnocení, případně odvolání trenéra.
+  - *Hvězda chce odejít*: slib odchodu a pak nabídka v okně, lepší smlouva, nebo odmítnutí.
+  - *Tlak médií*: tisková konference s vyhodnocením za 4 týdny, rozhovor, nebo mlčení.
+  - *Spor v kabině*: trest, kapitán, nebo trenér; za 2 týdny vyhodnocení.
+- **Nálady kolem klubu**: fanoušci, média, kabina, vedení a akcionáři, s trendem za 4 týdny a třemi posledními důvody změn.
+- **Hrát do…**: do příštího zápasu, milníku, konce měsíce nebo sezóny. Hra se zastaví dřív při nové situaci, výhodné nabídce, zranění opory nebo milníku a řekne proč.
+- **Nastavení hry** (Hra): kolik se toho děje (klid / běžně / drama), přísnost svazu (pokuty), náhoda v zápasech a kdy se má hrát do… zastavit.
+
 ### Novinky verze 0.14: zahraniční trh a velké investice
 
 - **Zahraniční skauting** (Přestupy › Zahraniční trh): skautské sítě v šesti regionech (Slovensko a Polsko, Balkán, Skandinávie, Afrika, Jižní Amerika, hostování z velkých lig) za roční poplatek. Skauti v každém regionu vyhlédnou pět hráčů, trh se obnoví 1. 7. a 1. 12.

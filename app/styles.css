@@ -861,3 +861,22 @@ table.sections td .muted.small { display: block; }
 .invest .kv { margin-top: 4px; }
 .confirm-box { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; max-width: 320px; margin-left: auto; text-align: right; white-space: normal; }
 .foreign-table td.wrap { min-width: 160px; }
+
+/* Etapa A: porada, nálady, příběhy, hrát do */
+.briefing { border-left: 4px solid var(--accent); }
+.briefing-list li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.briefing-list li:last-child { border-bottom: 0; }
+.briefing-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.briefing-list li.u1 .briefing-dot { background: var(--neg); }
+.briefing-list li.u2 .briefing-dot { background: #e0a030; }
+.briefing-text { min-width: 0; }
+.pulse-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.pulse { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.pulse-value { display: flex; align-items: center; gap: 4px; }
+.pulse-value .meter { flex: 1; }
+.pulse-trend { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.pulse-causes li { line-height: 1.35; }
+.story-log { margin: 0; padding-left: 18px; color: var(--muted); }
+.play-until { padding: 7px 8px; }
+.stop-toast { background: var(--accent-soft); color: var(--text); }
+@media (width <= 640px) { .briefing-list li { grid-template-columns: 10px minmax(0, 1fr); } .briefing-list li button { grid-column: 2; justify-self: start; } .advance { flex-wrap: wrap; } }

@@ -65,6 +65,10 @@ import {
 } from './staff';
 import { computeTable, formScore } from './standings';
 import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
+import { decisiveness, settingsOf } from './settings';
+import { recordPulse, pulseValues, snapshotPulse } from './pulse';
+import { weeklyStories } from './stories';
+import { milestoneToday, nextMilestone } from './milestones';
 import { aiForeignSignings, monthlyForeign, refreshForeignMarket, returnLoans, weeklyForeign } from './foreign';
 import { analyticsBonus, completeBigProjects, monthlyBigProjects, monthlyPrograms } from './investments';
 import { adminMonthly, pitchFactor, campBonus, dailyOperations, homeMatchOperations, maintenanceInjury, monthlyOperations } from './operations';
@@ -644,7 +648,7 @@ function playMatchesOn(state: GameState, rng: Rng): void {
       { id: home.id, players: squads.get(home.id) ?? [], bonus: coachBonus(homeCoach) + (home.id === ownId ? spirit : 0), style: homeCoach?.style, youthFocus: homeCoach?.youthFocus, ...medicalFactors(home, damaged, tier) },
       { id: away.id, players: squads.get(away.id) ?? [], bonus: coachBonus(awayCoach) + (away.id === ownId ? spirit : 0), style: awayCoach?.style, youthFocus: awayCoach?.youthFocus, ...medicalFactors(away, false, tier) },
       attendance,
-      { date: state.date, season: state.season, detail: comp ? comp.id === ownCompId : involvesOwner, homeEdge: homeAdvantage(home, attendance, capacity) * (home.id === ownId ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) },
+      { date: state.date, season: state.season, decisive: decisiveness(state), detail: comp ? comp.id === ownCompId : involvesOwner, homeEdge: homeAdvantage(home, attendance, capacity) * (home.id === ownId ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) },
     );
     // Držitelé permanentek už zaplatili předem.
     const holders = home.id === ownId && comp ? seasonTicketHolders(state) : 0;
@@ -875,6 +879,8 @@ function processDay(state: GameState, rng: Rng): void {
   expireEvents(state);
   if (state.owner.ousted) boardDecides(state);
   if (dayOfWeek(state.date) === 1) {
+    weeklyStories(state, rng);
+    snapshotPulse(state);
     maybeCreateEvent(state, rng);
     aiDomesticTransfers(state, rng);
     aiForeignSignings(state, rng);
@@ -917,18 +923,81 @@ export function advanceDays(prev: GameState, days: number, stopAtOwnMatch = fals
   const own = state.owner.clubId;
   let fixtureId: string | undefined;
   for (let i = 0; i < days && !state.gameOver; i++) {
-    state.date = addDays(state.date, 1);
-    processDay(state, rng);
-    const played = allFixtures(state).find(
-      (x) => x.fixture.date === state.date && x.fixture.result && (x.fixture.homeId === own || x.fixture.awayId === own),
-    );
+    const played = stepDay(state, rng, own);
     if (played) {
-      fixtureId = played.fixture.id;
+      fixtureId = played;
       if (stopAtOwnMatch) break;
     }
   }
   state.rngState = rng.state();
   return { state, fixtureId };
+}
+
+/** Jeden den hry včetně zápisu změn v panelu tlaku. Vrací zápas klubu majitele, pokud se ten den hrál. */
+function stepDay(state: GameState, rng: Rng, own: string): string | undefined {
+  const before = pulseValues(state);
+  const top = state.news[0];
+  state.date = addDays(state.date, 1);
+  processDay(state, rng);
+  const cut = top ? state.news.findIndex((n) => n === top) : state.news.length;
+  recordPulse(state, before, state.news.slice(0, cut < 0 ? 3 : cut));
+  return allFixtures(state).find((x) => x.fixture.date === state.date && x.fixture.result && (x.fixture.homeId === own || x.fixture.awayId === own))?.fixture.id;
+}
+
+export type PlayTarget = 'zapas' | 'milnik' | 'mesic' | 'sezona';
+
+export const PLAY_TARGET_LABEL: Record<PlayTarget, string> = { zapas: 'do příštího zápasu', milnik: 'do příštího milníku', mesic: 'do konce měsíce', sezona: 'do konce sezóny' };
+
+/**
+ * Hrát do cíle (zápas, milník, konec měsíce nebo sezóny). Zastaví se dřív, když nastane něco,
+ * co si majitel v nastavení označil: nová situace k rozhodnutí, nabídka na hráče, zranění opory, milník.
+ */
+export function advanceUntil(prev: GameState, target: PlayTarget): { state: GameState; fixtureId?: string; reason?: string } {
+  if (prev.gameOver) return { state: prev };
+  const state = structuredClone(prev);
+  const rng = createRng(state.rngState);
+  const own = state.owner.clubId;
+  const stops = settingsOf(state).stops;
+  const goal = target === 'milnik' ? nextMilestone(state)?.date : undefined;
+  const events = new Set(state.events.map((e) => e.id));
+  const offers = new Set(state.market.offers.map((o) => o.id));
+  const injured = new Set(squadOf(state, own).filter((p) => p.injuredUntil && p.injuredUntil >= state.date).map((p) => p.id));
+  let fixtureId: string | undefined;
+  let reason: string | undefined;
+  for (let i = 0; i < 400 && !state.gameOver; i++) {
+    const played = stepDay(state, rng, own);
+    if (played) fixtureId = played;
+    const md = state.date.slice(5);
+    if (target === 'zapas' && played) break;
+    if (target === 'milnik' && (!goal || state.date >= goal)) break;
+    if (target === 'mesic' && state.date.endsWith('-01')) break;
+    if (target === 'sezona' && md === '06-30') break;
+    const fresh = state.events.find((e) => !events.has(e.id));
+    if (stops.decision && fresh) {
+      reason = `Nová situace k rozhodnutí: ${fresh.title}`;
+      break;
+    }
+    // Zastaví jen výhodná nabídka (ředitel doporučuje přijmout), ostatní počkají v Přestupech.
+    const offer = state.market.offers.find((o) => !offers.has(o.id) && o.advice === 'prijmout' && o.fee >= stops.offerMin && state.players[o.playerId]?.clubId === own);
+    if (stops.offer && offer) {
+      reason = `Nová nabídka: ${(offer.fee / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč za ${state.players[offer.playerId].firstName} ${state.players[offer.playerId].lastName}`;
+      break;
+    }
+    if (stops.injury) {
+      const core = squadOf(state, own).sort((a, b) => b.overall - a.overall).slice(0, 11);
+      const hurt = core.find((p) => p.injuredUntil && p.injuredUntil > addDays(state.date, 14) && !injured.has(p.id));
+      if (hurt) {
+        reason = `Zranění opory: ${hurt.firstName} ${hurt.lastName} (do ${formatDate(hurt.injuredUntil!)})`;
+        break;
+      }
+    }
+    if (stops.milestone && target !== 'milnik' && milestoneToday(state)) {
+      reason = milestoneToday(state)!.title;
+      break;
+    }
+  }
+  state.rngState = rng.state();
+  return { state, fixtureId, reason };
 }
 
 /** Hrát do příštího zápasu klubu majitele (nejvýš 60 dní). */

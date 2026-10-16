@@ -618,6 +618,68 @@ export interface GameEvent {
   defaultOption: string;
   playerId?: string;
   amount?: number;
+  /** Krok příběhu sezóny. */
+  storyId?: string;
+}
+
+// ---------- Příběhy, tlak, nastavení ----------
+
+export type StoryKind = 'krize' | 'hvezda' | 'media' | 'kabina';
+
+export interface Story {
+  id: string;
+  kind: StoryKind;
+  title: string;
+  started: string;
+  /** Krok příběhu (0 = začátek). */
+  step: number;
+  /** Na co se čeká, než přijde další krok. */
+  waiting?: string;
+  /** Odpočet: kolik zbývá zápasů nebo do kdy. */
+  matchesLeft?: number;
+  until?: string;
+  playerId?: string;
+  /** Pomocná čísla (body na startu, pozice…). */
+  data: Record<string, number | string>;
+  /** Co se v příběhu stalo (pro přehled). */
+  log: string[];
+  done?: boolean;
+  outcome?: 'dobre' | 'spatne' | 'neutralni';
+}
+
+export type PulseKey = 'fans' | 'media' | 'kabina' | 'vedeni';
+
+export interface PulseCause {
+  date: string;
+  key: PulseKey;
+  delta: number;
+  reason: string;
+}
+
+export interface PulseState {
+  /** Týdenní hodnoty (pro trend). */
+  history: { date: string; fans: number; media: number; kabina: number; vedeni: number }[];
+  causes: PulseCause[];
+}
+
+export type Drama = 'klid' | 'bezne' | 'drama';
+export type Strictness = 'mirna' | 'bezna' | 'prisna';
+export type Randomness = 'nizka' | 'bezna' | 'vysoka';
+
+export interface GameSettings {
+  drama: Drama;
+  strictness: Strictness;
+  randomness: Randomness;
+  /** Kdy se má zastavit dlouhé hraní („hrát do…“). */
+  stops: {
+    decision: boolean;
+    /** Výhodná nabídka na hráče (ředitel doporučuje přijmout). */
+    offer: boolean;
+    /** Nabídka na hráče aspoň za tolik Kč. */
+    offerMin: number;
+    injury: boolean;
+    milestone: boolean;
+  };
 }
 
 export interface MatchResult {
@@ -897,6 +959,9 @@ export interface GameState {
   /** Zaplacená soustředění v sezóně (bonus jen za to, co se opravdu zaplatilo). */
   campsPaid?: { season: number; summer?: CampChoice; winter?: CampChoice };
   version: typeof SAVE_VERSION;
+  stories?: Story[];
+  pulse?: PulseState;
+  settings?: GameSettings;
   /** Zahraniční skauting a vyhlédnutí hráči. */
   foreign?: ForeignMarket;
   /** Velké víceleté investice a programy klubu. */

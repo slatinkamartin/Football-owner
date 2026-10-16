@@ -9,6 +9,8 @@ import { coachOf, goalTarget, ownPosition, type ActionResult } from './staff';
 import { computeTable } from './standings';
 import type { Club, GameEvent, GameState, Player, Position } from './types';
 import { addNews, clamp, competitionOf, FOREIGN_PREFIX, tierOf } from './world';
+import { dramaFactor, maxOpenEvents } from './settings';
+import { resolveStoryEvent } from './stories';
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -1166,7 +1168,7 @@ export const TEMPLATES: Record<string, Template> = {
 
 /** Jednou týdně: možná nová situace (nejvýš tři otevřené najednou). */
 export function maybeCreateEvent(state: GameState, rng: Rng): void {
-  if (state.events.length >= MAX_OPEN || state.gameOver) return;
+  if (state.events.length >= Math.min(MAX_OPEN + 1, maxOpenEvents(state)) || state.gameOver) return;
   const open = new Set(state.events.map((e) => e.template));
   state.eventLog ??= {};
   const recent = (id: string) => {
@@ -1180,7 +1182,7 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
   const total = weighted.reduce((a, x) => a + x.w, 0);
   // Výběr partnera přijde vždy, ostatní situace zhruba jednou za dva týdny.
   const urgent = weighted.find((x) => x.w >= 50);
-  if (!urgent && !rng.chance(Math.min(0.45, total * 0.06))) return;
+  if (!urgent && !rng.chance(Math.min(0.6, total * 0.06 * dramaFactor(state)))) return;
   let pick = urgent?.id;
   if (!pick) {
     let r = rng.next() * total;
@@ -1217,7 +1219,7 @@ function applyResolution(state: GameState, event: GameEvent, optionId: string, a
   resolvingAutomatically = auto;
   let message = '';
   try {
-    message = TEMPLATES[event.template]?.resolve(state, event, optionId) ?? '';
+    message = event.storyId ? resolveStoryEvent(state, event, optionId) : TEMPLATES[event.template]?.resolve(state, event, optionId) ?? '';
   } finally {
     resolvingAutomatically = false;
   }

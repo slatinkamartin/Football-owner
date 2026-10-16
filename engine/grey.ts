@@ -1,3 +1,4 @@
+import { strictnessFactor } from './settings';
 import { toScore } from './scales';
 import { addDays } from './calendar';
 import { annualCosts, book } from './finance';
@@ -47,7 +48,7 @@ export function league(state: GameState, delta: number): void {
 export function fine(state: GameState, base: number, note: string): number {
   const club = state.clubs[state.owner.clubId];
   const scale = annualCosts(club, tierOf(state, club.id)) / 70_000_000;
-  const amount = Math.max(20_000, Math.round((base * Math.max(0.3, scale) * fineFactor(state)) / 10_000) * 10_000);
+  const amount = Math.max(20_000, Math.round((base * Math.max(0.3, scale) * fineFactor(state) * strictnessFactor(state)) / 10_000) * 10_000);
   book(state, club.id, 'ostatni', -amount, note);
   return amount;
 }

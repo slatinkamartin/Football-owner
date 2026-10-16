@@ -42,6 +42,8 @@ export interface MatchOptions {
   detail?: boolean;
   /** Domácí výhoda v bodech síly (podle diváků a nálady fanoušků). */
   homeEdge?: number;
+  /** Jak moc rozhoduje rozdíl v síle (nastavení náhody; 1 = běžně). */
+  decisive?: number;
 }
 
 export function isAvailable(p: Player, date: string): boolean {
@@ -205,7 +207,7 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
   for (let minute = 1; minute <= length; minute++) {
     for (const [s, o, isHome] of [[H, A, true], [A, H, false]] as const) {
       if (!s.onPitch.length) continue;
-      const diff = s.strength - o.strength + (isHome ? homeEdge / 2 : -homeEdge / 2);
+      const diff = (s.strength - o.strength) * (opts?.decisive ?? 1) + (isHome ? homeEdge / 2 : -homeEdge / 2);
       const edge = Math.exp(diff * STRENGTH_FACTOR);
       const manDiff = s.onPitch.length - o.onPitch.length;
       const numbers = manDiff < 0 ? 0.7 : manDiff > 0 ? 1.25 : 1;
