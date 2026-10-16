@@ -1,5 +1,5 @@
 import { del, get, set } from 'idb-keyval';
-import { migrateSave, type GameState } from '../engine';
+import { migrateSave, type Career, type GameState } from '../engine';
 
 const KEY = 'majitel:ulozena-hra';
 
@@ -44,4 +44,25 @@ export function parseGame(text: string): GameState {
   const game = data && typeof data.version === 'number' ? migrateSave(data) : null;
   if (!game || !game.clubs || !game.owner) throw new Error('Tohle není uložená hra Majitele, nebo je z příliš staré verze.');
   return game;
+}
+
+const CAREER_KEY = 'majitel:kariera';
+
+/** Kariéra majitele mezi hrami (peníze, pověst, síň slávy). */
+export function saveCareer(career: Career | null): void {
+  try {
+    if (career) localStorage.setItem(CAREER_KEY, JSON.stringify(career));
+    else localStorage.removeItem(CAREER_KEY);
+  } catch {
+    // Bez úložiště kariéra nepokračuje, hra funguje dál.
+  }
+}
+
+export function loadCareer(): Career | null {
+  try {
+    const raw = localStorage.getItem(CAREER_KEY);
+    return raw ? (JSON.parse(raw) as Career) : null;
+  } catch {
+    return null;
+  }
 }

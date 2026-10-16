@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { DIFFICULTY, formatDate, settingsOf, updateSettings, type GameSettings, type GameState } from '../../engine';
+import { DIFFICULTY, formatDate, scenarioDef, scenarioStatus, settingsOf, updateSettings, type GameSettings, type GameState, type SeasonReport } from '../../engine';
+import { SeasonReportView } from './Report';
 import { parseGame, serializeGame } from '../storage';
 
 export function GameMenu({
@@ -42,6 +43,7 @@ export function GameMenu({
   return (
     <div className="grid two">
       <GameSettingsCard game={game} onChange={onLoad} />
+      <ChapterCard game={game} />
       <section className="card">
         <h2>Uložená hra</h2>
         <dl className="kv">
@@ -160,6 +162,43 @@ function GameSettingsCard({ game, onChange }: { game: GameState; onChange: (g: G
       </label>
       <label className="check"><input type="checkbox" checked={s.stops.injury} onChange={(e) => stop({ injury: e.target.checked })} /><span>zranění opory na víc než dva týdny</span></label>
       <label className="check"><input type="checkbox" checked={s.stops.milestone} onChange={(e) => stop({ milestone: e.target.checked })} /><span>milníku sezóny (start ligy, konec okna, licence…)</span></label>
+    </section>
+  );
+}
+
+/** Scénář, kariéra a archiv výročních zpráv. */
+function ChapterCard({ game }: { game: GameState }) {
+  const [open, setOpen] = useState<SeasonReport | null>(null);
+  const sc = game.scenario;
+  const st = sc && !sc.result ? scenarioStatus(game) : undefined;
+  return (
+    <section className="card">
+      <h2>Kapitola hry</h2>
+      {sc ? (
+        <p className="small">
+          <strong>Scénář: {scenarioDef(sc.id).title}</strong> ({scenarioDef(sc.id).seasons} sezóny od {sc.startSeason}/{String(sc.startSeason + 1).slice(2)}).{' '}
+          {sc.result ? sc.result.text : st?.text}
+        </p>
+      ) : (
+        <p className="small">Volná hra bez časového cíle.</p>
+      )}
+      {game.career && (
+        <p className="small">Kariéra: {game.career.clubs.map((c) => `${c.name} (${c.seasons})`).join(', ')}.</p>
+      )}
+      <h3>Výroční zprávy</h3>
+      {(game.seasonReports ?? []).length === 0 ? (
+        <p className="muted small">První výroční zpráva přijde na konci sezóny.</p>
+      ) : (
+        <ul className="plain small">
+          {game.seasonReports!.map((r) => (
+            <li key={r.season} className="row-between">
+              <span>{r.season}/{String(r.season + 1).slice(2)}: {r.position}. místo, {r.goalMet ? 'cíl splněn' : 'cíl nesplněn'}{r.grade ? `, vysvědčení ${r.grade}` : ''}</span>
+              <button className="linkbtn" onClick={() => setOpen(r)}>Otevřít</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {open && <SeasonReportView report={open} onClose={() => setOpen(null)} />}
     </section>
   );
 }

@@ -71,6 +71,7 @@ import { weeklyStories } from './stories';
 import { dailyEvents, eventOfferTick, extrasEffect, sectorEffect } from './venue';
 import { monthlyVenue } from './venue';
 import { businessIncome, monthlyBusiness, monthlyCity, monthlyUltras, seasonBusiness, seasonTrophies, ultrasEffect } from './surroundings';
+import { buildSeasonReport, evaluateScenario, scenarioSeasonEnd } from './meta';
 import { createSideGoals, seasonFfp, seasonRating, settleSideGoals } from './finplus';
 import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
@@ -578,6 +579,11 @@ function endSeason(state: GameState, rng: Rng): void {
   settleSideGoals(state);
   seasonRating(state);
   seasonFfp(state);
+  scenarioSeasonEnd(state);
+  if (ownComp) {
+    const target = goalTarget(state.owner.seasonGoal, ownComp);
+    buildSeasonReport(state, ownIndex + 1, `${goalLabel(state.owner.seasonGoal, ownComp)} (do ${target}. místa)`, ownIndex + 1 <= target);
+  }
   returnLoans(state);
   seasonEndContracts(state, rng);
   ageAndDevelopPlayers(state, rng);
@@ -925,6 +931,7 @@ function processDay(state: GameState, rng: Rng): void {
     refreshForeignMarket(state, rng);
     createSideGoals(state);
     seasonBusiness(state, rng);
+    evaluateScenario(state);
     {
       // Podmíněné doplatky za loňský postup nebo Evropu.
       const last = state.history[state.history.length - 1];

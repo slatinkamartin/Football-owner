@@ -1040,6 +1040,12 @@ export interface GameState {
   trophies?: import('./surroundings').Trophy[];
   /** Nabídky akcí na stadionu (koncerty, firemní dny, reprezentace) a přijaté akce. */
   eventOffers?: { id: string; kind: 'koncert' | 'firemni' | 'reprezentace' | 'kluziste'; label: string; income: number; date: string; damage: number; expires: string; accepted?: boolean }[];
+  /** Výroční zprávy sezón (nejnovější první). */
+  seasonReports?: import('./meta').SeasonReport[];
+  /** Scénář s cílem (bez něj volná hra). */
+  scenario?: { id: import('./meta').ScenarioId; startSeason: number; progress: number; result?: { stars: number; date: string; text: string; seen?: boolean } };
+  /** Kariéra majitele z předchozích klubů. */
+  career?: import('./meta').Career;
   /** Vedlejší cíle sezóny (sponzor, město, akcionáři). */
   sideGoals?: { season: number; goals: import('./finplus').SideGoal[] };
   /** Finanční vysvědčení poslední sezóny. */

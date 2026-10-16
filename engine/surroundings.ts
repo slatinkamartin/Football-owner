@@ -260,12 +260,12 @@ export function ultrasOnSale(state: GameState): void {
 
 export interface Trophy {
   season: number;
-  kind: 'titul' | 'pohar' | 'postup' | 'evropa' | 'stadion' | 'rekord' | 'odchovanec';
+  kind: 'titul' | 'pohar' | 'postup' | 'evropa' | 'stadion' | 'rekord' | 'odchovanec' | 'scenar';
   text: string;
   points: number;
 }
 
-export const TROPHY_POINTS: Record<Trophy['kind'], number> = { titul: 30, pohar: 15, postup: 15, evropa: 20, stadion: 10, rekord: 5, odchovanec: 5 };
+export const TROPHY_POINTS: Record<Trophy['kind'], number> = { titul: 30, pohar: 15, postup: 15, evropa: 20, stadion: 10, rekord: 5, odchovanec: 5, scenar: 20 };
 
 export function addTrophy(state: GameState, kind: Trophy['kind'], text: string): void {
   const list = state.trophies ?? [];

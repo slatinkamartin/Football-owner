@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { toggleWatch, deadlineDay, deadlineStart, clubLabel, dismissMatchPlan, pendingPrematch, advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
+import { careerFrom, markReportSeen, markScenarioSeen, scenarioDef, toggleWatch, deadlineDay, deadlineStart, clubLabel, dismissMatchPlan, pendingPrematch, advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
 import { money } from './format';
-import { deleteGame, loadGame, saveGame } from './storage';
+import { deleteGame, loadGame, saveCareer, saveGame } from './storage';
+import { SeasonReportView } from './screens/Report';
 import { Finance, type FinanceTab } from './screens/Finance';
 import { GameMenu } from './screens/GameMenu';
 import { MatchDetail } from './screens/MatchDetail';
@@ -286,6 +287,22 @@ export function App() {
         );
       })()}
 
+      {!live && !milestone && !game.gameOver && modals.length === 0 && game.seasonReports?.[0] && !game.seasonReports[0].seen && (
+        <SeasonReportView report={game.seasonReports[0]} onClose={() => update(markReportSeen(game, game.seasonReports![0].season))} />
+      )}
+
+      {!live && !milestone && !game.gameOver && game.scenario?.result && !game.scenario.result.seen && !(game.seasonReports?.[0] && !game.seasonReports[0].seen) && (
+        <div className="overlay">
+          <div className="card dialog" role="dialog" aria-modal="true" aria-label="Výsledek scénáře">
+            <h2>Scénář: {scenarioDef(game.scenario.id).title}</h2>
+            <p className="scenario-stars">{'★'.repeat(game.scenario.result.stars)}{'☆'.repeat(3 - game.scenario.result.stars)}</p>
+            <p>{game.scenario.result.text}</p>
+            <p className="muted small">Hra pokračuje jako volná hra se stejným klubem.</p>
+            <button className="primary" onClick={() => update(markScenarioSeen(game))}>Pokračovat</button>
+          </div>
+        </div>
+      )}
+
       {milestone && !game.gameOver && (
         <div className="overlay" onClick={() => setMilestone(null)}>
           <div className="card dialog milestone-dialog" role="dialog" aria-modal="true" aria-label={milestone.title} onClick={(e) => e.stopPropagation()}>
@@ -313,7 +330,10 @@ export function App() {
             <h2>{game.gameOver.kind === 'prodej' ? 'Klub prodán' : 'Konec hry'}</h2>
             <p>{game.gameOver.reason}</p>
             <p className="muted">{formatDate(game.gameOver.date)}</p>
-            <button className="primary" onClick={startOver}>Nová hra</button>
+            <div className="buttons">
+              <button className="primary" onClick={() => { saveCareer(careerFrom(game, game.career)); void startOver(); }}>Pokračovat v kariéře: koupit jiný klub</button>
+              <button onClick={() => { saveCareer(null); void startOver(); }}>Nová hra od začátku</button>
+            </div>
           </div>
         </div>
       )}

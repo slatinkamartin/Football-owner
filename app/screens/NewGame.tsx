@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import pack from '../../data/cz-zaklad/pack.json';
-import { DIFFICULTY, newGame, type DataPack, type Difficulty, type GameState } from '../../engine';
+import { careerAllows, DIFFICULTY, newCareerGame, newGame, newScenarioGame, SCENARIOS, type DataPack, type Difficulty, type GameState, type ScenarioId } from '../../engine';
+import { loadCareer, saveCareer } from '../storage';
 import { money, num } from '../format';
 
 const czPack = pack as DataPack;
@@ -16,11 +17,24 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
   const [difficulty, setDifficulty] = useState<Difficulty>('stredni');
   const [clubId, setClubId] = useState<string | null>(null);
   const [ownerShare, setOwnerShare] = useState(1);
+  const [career, setCareer] = useState(() => loadCareer());
+  const [mode, setMode] = useState<'volna' | 'scenar' | 'kariera'>(career ? 'kariera' : 'volna');
+  const [scenario, setScenario] = useState<ScenarioId>('zachrana');
 
   const start = () => {
+    const name = ownerName.trim() || 'Majitel';
+    if (mode === 'scenar') {
+      onStart(newScenarioGame(czPack, scenario, { ownerName: name, difficulty }));
+      return;
+    }
     if (!clubId) return;
-    onStart(newGame(czPack, { clubId, ownerName: ownerName.trim() || 'Majitel', difficulty, ownerShare }));
+    if (mode === 'kariera' && career) {
+      onStart(newCareerGame(czPack, career, { clubId, difficulty, ownerShare }));
+      return;
+    }
+    onStart(newGame(czPack, { clubId, ownerName: name, difficulty, ownerShare }));
   };
+  const locked = (reputation: number) => (mode === 'kariera' ? careerAllows(career ?? undefined, reputation) : undefined);
 
   return (
     <div className="app newgame">
@@ -36,11 +50,38 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
       )}
 
       <section className="card">
+        <h2>Jak chcete hrát</h2>
+        <div className="segmented">
+          <button className={mode === 'volna' ? 'active' : ''} onClick={() => setMode('volna')}>Volná hra</button>
+          <button className={mode === 'scenar' ? 'active' : ''} onClick={() => setMode('scenar')}>Scénář s cílem</button>
+          {career && <button className={mode === 'kariera' ? 'active' : ''} onClick={() => setMode('kariera')}>Pokračovat v kariéře</button>}
+        </div>
+        {mode === 'kariera' && career && (
+          <div className="career-box">
+            <p><strong>{career.name}</strong>: osobní peníze {money(career.wallet)}, pověst u médií {Math.round(career.media)}, odkaz {career.trophies.reduce((a, t) => a + t.points, 0)} bodů.</p>
+            <ul className="plain small">{career.clubs.map((c, i) => <li key={i}>• {c.name} ({c.seasons}): {c.result}</li>)}</ul>
+            <button className="linkbtn" onClick={() => { saveCareer(null); setCareer(null); setMode('volna'); }}>Zahodit kariéru a začít znovu</button>
+          </div>
+        )}
+        {mode === 'scenar' && (
+          <div className="choices">
+            {SCENARIOS.map((s) => (
+              <button key={s.id} className={`choice ${scenario === s.id ? 'selected' : ''}`} onClick={() => setScenario(s.id)}>
+                <strong>{s.title}</strong>
+                <span>{s.description}</span>
+                <span>Klub: {czPack.clubs.find((c) => c.id === s.clubId)?.name} · {s.seasons} {s.seasons < 5 ? 'sezóny' : 'sezón'}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card">
         <h2>Majitel</h2>
-        <label className="field">
+        {mode !== 'kariera' && <label className="field">
           <span>Jméno</span>
           <input value={ownerName} placeholder="Jak se jmenujete?" onChange={(e) => setOwnerName(e.target.value)} />
-        </label>
+        </label>}
         <div className="field">
           <span>Startovní podmínky</span>
           <div className="choices">
@@ -66,7 +107,7 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
         </div>
       </section>
 
-      <section className="card">
+      {mode !== 'scenar' && <section className="card">
         <h2>Vyber klub</h2>
         {czPack.competitions.map((comp) => (
           <div key={comp.id} className="club-group">
@@ -76,7 +117,7 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
                 .filter((c) => c.competition === comp.id)
                 .sort((a, b) => b.reputation - a.reputation)
                 .map((c) => (
-                  <button key={c.id} className={`club-card ${clubId === c.id ? 'selected' : ''}`} onClick={() => setClubId(c.id)}>
+                  <button key={c.id} className={`club-card ${clubId === c.id ? 'selected' : ''}`} disabled={!!locked(c.reputation)} title={locked(c.reputation)} onClick={() => setClubId(c.id)}>
                     <span className="crest" style={{ background: c.colors[0], borderColor: c.colors[1] }} />
                     <span className="club-card-text">
                       <strong>{c.name}</strong>
@@ -87,11 +128,11 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
             </div>
           </div>
         ))}
-      </section>
+      </section>}
 
       <div className="sticky-actions">
-        <button className="primary big" disabled={!clubId} onClick={start}>
-          {clubId ? `Koupit ${czPack.clubs.find((c) => c.id === clubId)?.shortName} a začít` : 'Vyber klub'}
+        <button className="primary big" disabled={mode !== 'scenar' && !clubId} onClick={start}>
+          {mode === 'scenar' ? `Začít scénář: ${SCENARIOS.find((s) => s.id === scenario)!.title}` : clubId ? `Koupit ${czPack.clubs.find((c) => c.id === clubId)?.shortName} a začít` : 'Vyber klub'}
         </button>
       </div>
       {czPack.note && <p className="muted small center">{czPack.note}</p>}

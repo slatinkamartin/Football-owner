@@ -39,3 +39,4 @@ export * from './market';
 export * from './finplus';
 export * from './surroundings';
 export * from './venue';
+export * from './meta';

@@ -917,3 +917,11 @@ table.sections td .muted.small { display: block; }
 .side-goals li:last-child { border-bottom: 0; }
 .side-goals .meter { width: 120px; }
 .grade-pill { font-size: 26px; font-weight: 800; color: var(--accent); }
+
+/* Etapa H: celek hry */
+.report { max-width: 640px; width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.report h2 { margin: 0; }
+.report-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.scenario-stars { font-size: 34px; color: #e0a030; margin: 0; letter-spacing: 4px; }
+.career-box { margin-top: 10px; padding: 10px 12px; background: var(--bg); border-radius: 8px; }
+.club-card:disabled { opacity: 0.4; }

@@ -61,6 +61,19 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.22: celek hry (etapa H)
+
+- **Výroční zpráva sezóny**: po konci sezóny se ukáže umístění, splnění cíle, finanční vysvědčení, hráč sezóny, nejlepší střelec, nejlepší a nejhorší rozhodnutí majitele, zlomové okamžiky a nové trofeje.
+  - Archiv zpráv je v menu Hra (kapitola).
+- **Scénáře s cílem a hodnocením (1–3 hvězdy)**:
+  - Záchrana (Zlín, 2 sezóny): klub v minusu s úvěrem;
+  - Vzestup (Kolín, 5 sezón): dostat klub do 1. ligy;
+  - Evropa (Hradec, 3 sezóny): s městem a patriotem jako spolumajiteli;
+  - Prodejní model (Jablonec, 4 sezóny): čistý zisk z prodejů 500 mil.
+  - Splněný scénář se zapíše do síně slávy.
+- **Kariéra majitele**: po prodeji klubu lze pokračovat s penězi a odkazem v jiném klubu.
+  - Velké kluby berou jen majitele s úspěchy (odkaz nebo mediální jméno).
+
 ### Novinky verze 0.21: stadion (etapa G)
 
 - **Sektory stadionu**:
