@@ -131,7 +131,7 @@ export function annualCosts(club: Club, tier: number): number {
 
 // ---------- Sponzoři ----------
 
-const SPONSOR_BASE: Record<number, number> = { 1: 22_000_000, 2: 7_000_000, 3: 3_000_000 };
+const SPONSOR_BASE: Record<number, number> = { 1: 27_000_000, 2: 8_000_000, 3: 3_000_000 };
 
 /**
  * Roční příjmy od sponzorů, z reklamy a merchandisingu podle velikosti a pověsti klubu
@@ -284,15 +284,24 @@ export function balanceSheet(state: GameState) {
   const overdraft = Math.max(0, -club.finance.balance);
   const buildings = (club.finance.assets ?? []).reduce((a, x) => a + x.value, 0);
   const loans = state.loans.reduce((a, l) => a + l.remaining, 0);
-  const debt = overdraft + loans;
+  const own = club.id;
+  const receivables = (state.payments ?? []).filter((p) => p.to === own).reduce((a, p) => a + p.amount, 0);
+  const payables = (state.payments ?? []).filter((p) => p.from === own).reduce((a, p) => a + p.amount, 0);
+  const ownerLoan = state.ownerLoan?.remaining ?? 0;
+  const tvAdvance = state.tvAdvance ? state.tvAdvance.monthsLeft * state.tvAdvance.monthly : 0;
+  const debt = overdraft + loans + payables + ownerLoan + tvAdvance;
   return {
     cash,
     registrations: Math.round(registrations),
     buildings: Math.round(buildings),
+    receivables: Math.round(receivables),
     overdraft,
     loans: Math.round(loans),
+    payables: Math.round(payables),
+    ownerLoan: Math.round(ownerLoan),
+    tvAdvance: Math.round(tvAdvance),
     debt: Math.round(debt),
-    equity: Math.round(cash + registrations + buildings - debt),
+    equity: Math.round(cash + registrations + buildings + receivables - debt),
   };
 }
 
@@ -320,9 +329,18 @@ export const LOAN_MONTHS = 36;
 /** Nabídky banky: podle velikosti klubu, nejvýš jeden úvěr najednou. */
 export function loanOffers(state: GameState): number[] {
   const club = state.clubs[state.owner.clubId];
-  if (state.loans.length) return [];
+  if (state.loans.some((l) => (l.kind ?? 'provozni') === 'provozni')) return [];
   const yearly = annualCosts(club, 1);
   return [0.1, 0.25, 0.5].map((k) => Math.round((yearly * k) / 1_000_000) * 1_000_000).filter((v) => v > 0);
+}
+
+/** Investiční úvěr: jen na rozestavěné stavby, až 80 % jejich ceny, levnější a na 10 let. */
+export const INVEST_RATE = 0.045;
+export const INVEST_MONTHS = 120;
+export function investmentLoanOffer(state: GameState): number {
+  if (state.loans.some((l) => l.kind === 'investicni')) return 0;
+  const building = state.projects.reduce((a, p) => a + p.cost, 0);
+  return Math.round((building * 0.8) / 1_000_000) * 1_000_000;
 }
 
 /** Postoj spolumajitelů k úvěrům (stejná logika jako hlasování v ownership.ts, bez cyklického importu). */
@@ -339,13 +357,16 @@ export function annuity(principal: number, rate: number, months: number): number
   return Math.round((principal * r) / (1 - Math.pow(1 + r, -months)));
 }
 
-export function takeLoan(prev: GameState, amount: number): GameState {
-  if (!loanOffers(prev).includes(amount) || prev.owner.ousted) return prev;
+export function takeLoan(prev: GameState, amount: number, kind: 'provozni' | 'investicni' = 'provozni'): GameState {
+  const allowed = kind === 'investicni' ? amount > 0 && amount === investmentLoanOffer(prev) : loanOffers(prev).includes(amount);
+  if (!allowed || prev.owner.ousted) return prev;
   if (!loanVotePasses(prev)) return prev;
   const state = structuredClone(prev);
-  const payment = annuity(amount, LOAN_RATE, LOAN_MONTHS);
-  state.loans.push({ id: `u${++state.nextId}`, principal: amount, remaining: amount, rate: LOAN_RATE, payment, monthsLeft: LOAN_MONTHS });
-  book(state, state.owner.clubId, 'uver', amount, 'Čerpání úvěru od banky');
+  const rate = kind === 'investicni' ? INVEST_RATE : LOAN_RATE;
+  const months = kind === 'investicni' ? INVEST_MONTHS : LOAN_MONTHS;
+  const payment = annuity(amount, rate, months);
+  state.loans.push({ id: `u${++state.nextId}`, kind, principal: amount, remaining: amount, rate, payment, monthsLeft: months });
+  book(state, state.owner.clubId, 'uver', amount, kind === 'investicni' ? 'Čerpání investičního úvěru na stavby' : 'Čerpání provozního úvěru od banky');
   return state;
 }
 

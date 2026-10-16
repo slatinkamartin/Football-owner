@@ -609,3 +609,61 @@ label.check input { margin-top: 3px; }
 @media (max-width: 760px) {
   .budget-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- Finance: podzáložky ---------- */
+.subtabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.subtabs button { white-space: nowrap; border-radius: 999px; padding: 6px 14px; font-size: 14px; }
+.subtabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.kv-row { display: contents; }
+.budget .budget-grid { grid-template-columns: minmax(0, 1.6fr) minmax(220px, 1fr); }
+.budget-aside { position: sticky; top: 200px; align-self: start; background: var(--bg); border-radius: 10px; padding: 12px 14px; }
+.budget-aside h3 { margin-top: 0; }
+.budget-aside .kv { margin-bottom: 10px; }
+.stepper { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 4px; }
+.stepper button { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.stepper button.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.step-no { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--line); font-size: 12px; font-weight: 700; color: var(--text); }
+.stepper button.active .step-no { background: var(--accent); color: #fff; }
+.choices.compact { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.choices.compact .choice span { font-size: 12px; }
+table.sections td input[type='range'] { display: block; margin: 4px 0 2px; max-width: 220px; }
+table.sections td .muted.small { display: block; }
+
+.kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.kpi { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.kpi-label { font-size: 12px; color: var(--muted); }
+.kpi-value { font-size: 20px; font-variant-numeric: tabular-nums; }
+.kpi-sub { font-size: 12px; color: var(--muted); }
+.alerts li { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; padding: 8px 10px; border-radius: 8px; font-size: 14px; }
+.alerts li.bad { background: var(--down); color: var(--neg); }
+.alerts li.warn { background: var(--warn-bg); color: var(--warn); }
+.flows li { display: grid; grid-template-columns: minmax(120px, 1.3fr) 1fr auto; gap: 8px; align-items: center; font-size: 13px; }
+.flow-bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.flow-bar span { display: block; height: 100%; border-radius: 4px; }
+.pos-bar { background: #2e9e5b; }
+.neg-bar { background: #d9534f; }
+
+.slots { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 10px; }
+.offers li { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; }
+.offers li:first-child { border-top: none; padding-top: 0; }
+.sections-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: 8px; }
+.meter.wide { width: 100%; }
+.wage-list li { gap: 6px; align-items: center; }
+.wage-cell { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wage-cell select { font-size: 12px; padding: 2px 4px; max-width: 92px; }
+@media (max-width: 760px) {
+  .budget .budget-grid { grid-template-columns: 1fr; }
+  .budget-aside { position: static; }
+  .flows li { grid-template-columns: 1fr auto; }
+  .flow-bar { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 640px) {
+  table.sections thead { display: none; }
+  table.sections tr { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  table.sections td { border: none; padding: 0; }
+  table.sections td:first-child { grid-column: 1 / -1; }
+  table.sections td.hide-sm { display: none; }
+  table.sections td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+  table.sections td input[type='range'] { max-width: none; width: 100%; }
+  .subtabs { margin-right: -16px; padding-right: 16px; }
+}

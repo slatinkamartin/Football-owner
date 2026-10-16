@@ -1,89 +1,110 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import {
+  balanceSheet,
   CATEGORY_LABEL,
   EXPENSE_CATEGORIES,
   formatShortDate,
   INCOME_CATEGORIES,
-  annuity,
-  loanOffers,
-  previewVote,
-  LOAN_MONTHS,
-  LOAN_RATE,
-  takeLoan,
-  balanceSheet,
   profitAndLoss,
   TAX_RATE,
-  injectCapital,
   type FinanceCategory,
   type FinanceTotals,
   type GameState,
 } from '../../engine';
-import { VoteInfo } from '../VoteInfo';
-import { BudgetCard } from './Budget';
 import { money } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
-import { LineChart } from '../chart';
+import { BudgetCard } from './finance/Budget';
+import { FinanceCosts } from './finance/Costs';
+import { FinanceFunding } from './finance/Funding';
+import { FinanceIncome } from './finance/Income';
+import { FinanceOverview } from './finance/Overview';
+
+export type FinanceTab = 'prehled' | 'rozpocet' | 'prijmy' | 'naklady' | 'financovani' | 'ucetnictvi';
+
+const TABS: { id: FinanceTab; label: string }[] = [
+  { id: 'prehled', label: 'Přehled' },
+  { id: 'rozpocet', label: 'Rozpočet' },
+  { id: 'prijmy', label: 'Příjmy' },
+  { id: 'naklady', label: 'Náklady' },
+  { id: 'financovani', label: 'Financování' },
+  { id: 'ucetnictvi', label: 'Účetnictví' },
+];
 
 export function Finance({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
+  const [tab, setTab] = useStoredState<FinanceTab>('finance:zalozka', 'prehled');
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [tab]);
+  return (
+    <div className="stack">
+      <nav className="subtabs" aria-label="Části financí">
+        {TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </nav>
+      {tab === 'prehled' && <FinanceOverview game={game} onOpen={setTab} />}
+      {tab === 'rozpocet' && <BudgetCard game={game} onChange={onChange} onOpen={setTab} />}
+      {tab === 'prijmy' && <FinanceIncome game={game} onChange={onChange} onBudget={() => setTab('rozpocet')} />}
+      {tab === 'naklady' && <FinanceCosts game={game} onChange={onChange} onBudget={() => setTab('rozpocet')} />}
+      {tab === 'financovani' && <FinanceFunding game={game} onChange={onChange} />}
+      {tab === 'ucetnictvi' && <Accounting game={game} />}
+    </div>
+  );
+}
+
+function Accounting({ game }: { game: GameState }) {
   const club = game.clubs[game.owner.clubId];
-  const [capital, setCapital] = useState('');
-
-  const capitalValue = Number(capital.replace(',', '.')) * 1_000_000;
-  const canInject = capitalValue > 0 && capitalValue <= game.owner.wallet;
-
   return (
     <div className="grid two">
-      <BudgetCard game={game} onChange={onChange} />
+      <ProfitLoss game={game} />
       <section className="card">
-        <h2>Stav</h2>
-        <dl className="kv">
-          <dt>Zůstatek klubu</dt>
-          <dd className={club.finance.balance < 0 ? 'neg' : ''}>{money(club.finance.balance)}</dd>
-          <dt>Vaše osobní peníze</dt>
-          <dd>{money(game.owner.wallet)}</dd>
-        </dl>
-        {club.finance.monthsNegative > 0 && (
-          <p className="warning">
-            Klub je {club.finance.monthsNegative}. měsíc v minusu. Po třetím měsíci v řadě zkrachuje.
-          </p>
-        )}
-        <h3>Vložit vlastní kapitál</h3>
-        <div className="inline-form">
-          <input inputMode="decimal" value={capital} placeholder="0" onChange={(e) => setCapital(e.target.value)} />
-          <span>mil. Kč</span>
-          <button
-            disabled={!canInject}
-            onClick={() => {
-              onChange(injectCapital(game, capitalValue));
-              setCapital('');
-            }}
-          >
-            Vložit
-          </button>
-        </div>
+        <h2>Peněžní toky</h2>
+        <CashFlow current={club.finance.season} last={club.finance.lastSeason} />
       </section>
-
       <section className="card">
-        <h2>Peněžní toky v sezóně</h2>
+        <h2>Pohyby podle kategorií</h2>
         <Totals current={club.finance.season} last={club.finance.lastSeason} />
       </section>
-
-      <section className="card wide">
-        <LineChart
-          title="Zůstatek klubu na začátku měsíce"
-          points={(club.finance.balanceHistory ?? []).map((h) => ({ label: `${h.date.slice(5, 7)}/${h.date.slice(2, 4)}`, value: h.balance }))}
-          format={(v) => money(v)}
-        />
-      </section>
-
-      <ProfitLoss game={game} onChange={onChange} />
-
       <Movements game={game} />
     </div>
   );
 }
 
-function ProfitLoss({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
+/** Výkaz peněžních toků: provozní, investiční a finanční činnost. */
+function CashFlow({ current, last }: { current: FinanceTotals; last?: FinanceTotals }) {
+  const groups: { label: string; cats: FinanceCategory[] }[] = [
+    { label: 'Provozní činnost', cats: ['vstupne', 'stadion', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'platy', 'vedeni', 'oddeleni', 'provoz', 'dane'] },
+    { label: 'Investiční činnost (stavby a přestupy)', cats: ['investice', 'prestupy'] },
+    { label: 'Finanční činnost (úvěry, půjčky, vklady)', cats: ['uver', 'vklad'] },
+  ];
+  const sum = (t: FinanceTotals | undefined, cats: FinanceCategory[]) => (t ? cats.reduce((a, c) => a + (t[c] ?? 0), 0) : 0);
+  const total = (t?: FinanceTotals) => groups.reduce((a, g) => a + sum(t, g.cats), 0);
+  return (
+    <table>
+      <thead>
+        <tr><th /><th className="num">Tato sezóna</th>{last && <th className="num">Minulá</th>}</tr>
+      </thead>
+      <tbody>
+        {groups.map((g) => (
+          <tr key={g.label}>
+            <td className="wrap">{g.label}</td>
+            <td className={`num ${sum(current, g.cats) < 0 ? 'neg' : 'pos'}`}>{money(sum(current, g.cats))}</td>
+            {last && <td className="num muted">{money(sum(last, g.cats))}</td>}
+          </tr>
+        ))}
+        <tr className="total">
+          <td>Změna hotovosti</td>
+          <td className={`num ${total(current) < 0 ? 'neg' : 'pos'}`}>{money(total(current))}</td>
+          {last && <td className="num">{money(total(last))}</td>}
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function ProfitLoss({ game }: { game: GameState }) {
   const club = game.clubs[game.owner.clubId];
   const f = club.finance;
   const now = profitAndLoss(f.season, f.accounting);
@@ -134,8 +155,12 @@ function ProfitLoss({ game, onChange }: { game: GameState; onChange: (g: GameSta
             <tr><td>Peníze na účtu</td><td className="num">{money(bs.cash)}</td></tr>
             <tr><td className="wrap">Hráčské registrace (neodepsaná hodnota)</td><td className="num">{money(bs.registrations)}</td></tr>
             <tr><td className="wrap">Stavby a vybavení (neodepsaná hodnota)</td><td className="num">{money(bs.buildings)}</td></tr>
+            {bs.receivables > 0 && <tr><td className="wrap">Pohledávky ze splátek přestupů</td><td className="num">{money(bs.receivables)}</td></tr>}
             <tr className="subhead"><td colSpan={2}>Pasiva</td></tr>
             <tr><td>Úvěry</td><td className="num">{money(bs.loans)}</td></tr>
+            {bs.payables > 0 && <tr><td className="wrap">Závazky ze splátek přestupů</td><td className="num">{money(bs.payables)}</td></tr>}
+            {bs.ownerLoan > 0 && <tr><td className="wrap">Půjčka majitele (podřízená)</td><td className="num">{money(bs.ownerLoan)}</td></tr>}
+            {bs.tvAdvance > 0 && <tr><td className="wrap">Záloha na TV peníze</td><td className="num">{money(bs.tvAdvance)}</td></tr>}
             <tr><td>Záporný zůstatek účtu</td><td className="num">{money(bs.overdraft)}</td></tr>
             <tr className="total"><td>Vlastní kapitál</td><td className={`num ${bs.equity < 0 ? 'neg' : ''}`}>{money(bs.equity)}</td></tr>
           </tbody>
@@ -143,44 +168,7 @@ function ProfitLoss({ game, onChange }: { game: GameState; onChange: (g: GameSta
         <p className="muted small">Stavby se zapisují do majetku a odepisují 10–30 let podle druhu.</p>
       </section>
 
-      <Loans game={game} onTake={(amount) => onChange(takeLoan(game, amount))} />
     </>
-  );
-}
-
-function Loans({ game, onTake }: { game: GameState; onTake: (amount: number) => void }) {
-  const offers = loanOffers(game);
-  return (
-    <section className="card">
-      <h2>Úvěr od banky</h2>
-      {game.loans.map((l) => (
-        <dl key={l.id} className="kv">
-          <dt>Zbývá splatit</dt>
-          <dd>{money(l.remaining)}</dd>
-          <dt>Měsíční splátka</dt>
-          <dd>{money(l.payment)}</dd>
-          <dt>Zbývá měsíců</dt>
-          <dd>{l.monthsLeft}</dd>
-          <dt>Úrok</dt>
-          <dd>{Math.round(l.rate * 100)} % ročně</dd>
-        </dl>
-      ))}
-      {offers.length > 0 && (
-        <>
-          <p className="muted small">
-            Banka půjčí na {LOAN_MONTHS / 12} roky s úrokem {Math.round(LOAN_RATE * 100)} % ročně. Splácí se každý měsíc, úroky jsou náklad ve výsledovce. Najednou lze mít jeden úvěr.
-          </p>
-          <VoteInfo vote={previewVote(game, 'uver', offers[0])} />
-          <div className="buttons">
-            {offers.map((amount) => (
-              <button key={amount} disabled={!previewVote(game, 'uver', amount).passes || !!game.owner.ousted} onClick={() => onTake(amount)}>
-                Půjčit {money(amount)} <span className="muted small">(splátka {money(annuity(amount, LOAN_RATE, LOAN_MONTHS))})</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </section>
   );
 }
 

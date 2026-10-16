@@ -23,7 +23,7 @@ npm run build      # produkční sestavení do složky dist/
 | `app/` | Uživatelské rozhraní (React) |
 | `data/cz-zaklad/` | Datový balíček: soutěže a kluby české pyramidy (1. až 3. liga) |
 
-## Co umí verze 0.8
+## Co umí verze 0.9
 
 - Výběr klubu z 1. až 3. ligy, startovních podmínek (osobní kapitál majitele) a podílu v klubu (100 %, 60 % nebo 35 %).
 - Týdenní tahy, celé sezóny se 4 soutěžemi (1. liga, 2. liga, ČFL, MSFL), postupy a sestupy včetně pravidel pro B-týmy.
@@ -60,6 +60,31 @@ npm run build      # produkční sestavení do složky dist/
 - **Smlouvy:** prodlužování, uvolnění hráče, odchody po skončení smlouvy (důležitým hráčům prodlužuje ředitel sám).
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
+
+### Novinky verze 0.9: Finance
+
+- **Finance s podzáložkami:**
+  - Přehled: ukazatele, upozornění, kam jdou peníze, vývoj zůstatku.
+  - Rozpočet: čtyři kroky s plánem v kostce.
+  - Příjmy, Náklady a Financování.
+  - Účetnictví: výsledovka, rozvaha, výkaz peněžních toků, pohyby.
+- **Mzdový rozpočet po sekcích:** opory, základ, rotace a mladí, každá s vlastním rozpočtem. Hráče řadí hra podle role a dají se přeřadit ručně. Sportovní ředitel podepisuje a prodlužuje jen v rámci sekce, vyjednávání ukazuje, kolik v sekci zbývá. Platová hierarchie ovlivňuje náladu v kabině. Přehled podepsaných platů na další tři sezóny.
+- **Systém prémií:**
+  - vyšší pevné platy;
+  - vyvážený;
+  - nižší pevné platy a vysoké prémie, kdy hráči víc táhnou.
+
+  Prémie za splnění cíle.
+- **Sponzorská místa:** generální partner, dres, název stadionu, dodavatel dresů, pivovar, tréninkové centrum, mládež. Nabídky na 1–3 roky, pevná částka nebo bonusy za umístění, pohár a Evropu. Na nabídky, na které majitel nereaguje, podepíše obchodní oddělení nejvyšší.
+- **Financování:**
+  - půjčka majitele (vrací se s úrokem, svaz ji bere jako vlastní zdroje);
+  - kontokorent;
+  - provozní a investiční úvěr;
+  - prodej budoucích TV peněz;
+  - dotace na mládež, stavby a energie.
+- **Přestupy:** odstupné ve splátkách (pohledávky a závazky v rozvaze), prodej s podílem z dalšího přestupu.
+- **Licenční řízení** 31. 3. s nápravou do 31. 5. Při nesplnění pokuta a odečet bodů.
+- **Krizový režim:** po druhém měsíci v minusu krizový plán (záchranný vklad, výprodej, snížení platů), insolvence až po čtvrtém.
 
 ### Novinky verze 0.8
 

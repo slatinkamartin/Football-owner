@@ -20,3 +20,6 @@ export * from './grey';
 export * from './budget';
 export * from './europe';
 export * from './atmosphere';
+export * from './wages';
+export * from './sponsors';
+export * from './financing';

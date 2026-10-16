@@ -51,6 +51,8 @@ export interface Stadium {
   capacity: number;
   /** Kapacita na začátku hry (měřítko běžných příjmů). */
   originalCapacity?: number;
+  /** Původní název (při prodeji názvu stadionu sponzorovi). */
+  originalName?: string;
 }
 
 export interface Player {
@@ -98,6 +100,75 @@ export interface Player {
   bookValue?: number;
   /** Měsíční odpis registrace. */
   amortization?: number;
+  /** Ruční zařazení do mzdové sekce (jen klub majitele). */
+  wageSection?: WageSection;
+  /** Podíl z dalšího prodeje pro bývalý klub. */
+  sellOn?: { clubId: string; pct: number };
+}
+
+export type WageSection = 'opory' | 'zaklad' | 'rotace' | 'mladi';
+export type BonusScheme = 'fixni' | 'vyvazeny' | 'vykonovy';
+
+// ---------- Sponzoři ----------
+
+export type SponsorSlot = 'generalni' | 'dres' | 'stadion' | 'trenink' | 'mladez' | 'dodavatel' | 'pivovar';
+export type SponsorBonusKind = 'umisteni' | 'pohar' | 'evropa';
+
+export interface SponsorBonus {
+  kind: SponsorBonusKind;
+  amount: number;
+  /** Pro umístění: nejhůř toto místo. */
+  target?: number;
+}
+
+export interface SponsorContract {
+  slot: SponsorSlot;
+  name: string;
+  /** Pevná roční částka. */
+  annual: number;
+  /** Poslední sezóna smlouvy (rok začátku sezóny). */
+  untilSeason: number;
+  bonus?: SponsorBonus;
+}
+
+export interface SponsorOffer extends SponsorContract {
+  id: string;
+  years: number;
+  expires: string;
+  style: 'jistota' | 'bonus' | 'kratka';
+}
+
+// ---------- Financování ----------
+
+export interface Payment {
+  id: string;
+  due: string;
+  from: string;
+  to: string;
+  amount: number;
+  note: string;
+}
+
+export interface OwnerLoan {
+  principal: number;
+  remaining: number;
+  rate: number;
+}
+
+export interface GrantApplication {
+  id: string;
+  kind: 'mladez' | 'stadion' | 'energie';
+  amount: number;
+  decided: string;
+  season: number;
+  result?: 'schvaleno' | 'zamitnuto';
+}
+
+export interface LicenceState {
+  season: number;
+  status: 'ok' | 'podminka' | 'sankce';
+  checked: string;
+  note: string;
 }
 
 // ---------- Vývoj a kariéra hráče ----------
@@ -186,6 +257,8 @@ export interface IncomingOffer {
   expires: string;
   advice: 'prijmout' | 'odmitnout';
   note: string;
+  /** Domácí kupec platí ve splátkách (polovina hned). */
+  instalments?: boolean;
 }
 
 export interface Negotiation {
@@ -202,6 +275,8 @@ export interface Negotiation {
   counter?: number;
   againstAdvice: boolean;
   log: string[];
+  /** Odstupné ve splátkách (polovina hned, zbytek do roka, o 5 % dražší). */
+  instalments?: boolean;
 }
 
 export interface TransferRecord {
@@ -307,6 +382,11 @@ export interface ClubPolicy {
   departments?: Departments;
   /** Sportovní ředitel sám prodlužuje smlouvy a doplňuje kádr (výchozí ano). */
   autoSquad?: boolean;
+  /** Rozdělení mzdového stropu do sekcí (podíly, součet 1). */
+  wageSplit?: Record<WageSection, number>;
+  bonusScheme?: BonusScheme;
+  /** Sjednaný kontokorent. */
+  overdraft?: boolean;
   /** Násobek běžného mzdového rozpočtu (0,7 až 1,5). */
   wageMultiplier: number;
   /** Rozpočet na odstupné za posily na celou sezónu v Kč. */
@@ -332,6 +412,8 @@ export interface Club {
   fanMood: number;
   /** Smlouva s generálním partnerem na aktuální sezónu (jen klub majitele). */
   sponsorDeal?: SponsorDeal;
+  /** Sponzorské smlouvy klubu majitele. */
+  sponsors?: SponsorContract[];
   /** Poškozený trávník do tohoto data (nižší návštěva, víc zranění). */
   pitchDamagedUntil?: string;
   /** Kolik ostatní kluby utratily za přestupy v aktuální sezóně. */
@@ -386,6 +468,8 @@ export interface SponsorDeal {
 
 export interface Loan {
   id: string;
+  /** Provozní úvěr, nebo investiční (jen na stavby, levnější a delší). */
+  kind?: 'provozni' | 'investicni';
   principal: number;
   remaining: number;
   /** Roční úroková sazba. */
@@ -654,7 +738,7 @@ export interface EuropeSeason {
   resolved?: boolean;
 }
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 export interface GameState {
   version: typeof SAVE_VERSION;
@@ -682,6 +766,16 @@ export interface GameState {
   loans: Loan[];
   /** Rozpočet sezóny klubu majitele. */
   budget?: SeasonBudget;
+  sponsorOffers?: SponsorOffer[];
+  /** Splátky přestupů (pohledávky a závazky klubu majitele). */
+  payments?: Payment[];
+  ownerLoan?: OwnerLoan;
+  /** Prodané budoucí TV peníze: kolik měsíců a kolik se strhává. */
+  tvAdvance?: { monthsLeft: number; monthly: number };
+  grants?: GrantApplication[];
+  licence?: LicenceState;
+  /** Krizový režim (klub nemá na závazky). */
+  crisis?: { since: string };
   /** Evropské poháry českých klubů v aktuální sezóně a historie. */
   europe?: EuropeSeason;
   europeHistory?: EuropeEntry[];

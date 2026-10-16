@@ -314,4 +314,6 @@ Cíl: odehrát několik sezón a cítit, že rozhodnutí majitele mají dopad.
 
 **Verze 0.8 (hotovo):** ekonomika zdola (platy jako hlavní náklad, sponzoři podle trhu, oddělení, provoz), rozpočet sezóny se schválením, hlasováním akcionářů a plánem proti skutečnosti, permanentky, evropské poháry, rychlejší pověst za úspěch, hospodaření ostatních klubů, domácí prostředí, motivace trenéra, kabina, spokojenost s platem, sestupová klauzule, ředitel drží kádr.
 
-**Další krok:** skuteční hráči v datovém balíčku, odehrané evropské zápasy, scénáře.
+**Verze 0.9 (hotovo):** Finance s podzáložkami, mzdový rozpočet po sekcích a systém prémií, sponzorská místa s nabídkami, půjčka majitele, kontokorent, investiční úvěr, záloha na TV peníze, dotace, splátky přestupů, podíl z dalšího prodeje, licenční řízení a krizový režim.
+
+**Další krok:** vstupné podle sektorů, merchandising, skuteční hráči v datovém balíčku, odehrané evropské zápasy, scénáře.

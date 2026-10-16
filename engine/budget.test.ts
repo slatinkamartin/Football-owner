@@ -122,7 +122,7 @@ describe('Evropa a lidé', () => {
     expect(dressingRoom(s).bonus).toBeLessThan(0);
   });
 
-  it('starší uložená hra (verze 7) se převede a platy se přepočítají', () => {
+  it('starší uložená hra (verze 7) se převede, platy se přepočítají a přibudou sponzorská místa', () => {
     const old = structuredClone(start) as unknown as Record<string, unknown> & { version: number };
     old.version = 7;
     const p = squadOf(start, 'bohemians')[0];
@@ -130,6 +130,7 @@ describe('Evropa a lidé', () => {
     expect(m.version).toBe(start.version);
     expect(m.budget?.approved).toBeTruthy();
     expect(m.players[p.id].wage).toBeGreaterThan(p.wage);
+    expect(m.clubs.bohemians.sponsors?.length).toBeGreaterThan(0);
     expect(annualCosts(m.clubs.bohemians, 1)).toBeGreaterThan(0);
   });
 });

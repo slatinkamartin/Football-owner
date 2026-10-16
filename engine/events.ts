@@ -4,10 +4,11 @@ import { generatePlayer, playerAge, squadOf, squadQualityForReputation } from '.
 import type { Rng } from './rng';
 import { fine, fineFactor, greyAction, league, media } from './grey';
 import { campaignCost, clubValuation, confidenceVote, distributableProfit, payDividend, satisfy, shareholderConfidence } from './ownership';
+import { executeTransfer, playerValue as playerValueOf } from './transfers';
 import { coachOf, goalTarget, ownPosition, type ActionResult } from './staff';
 import { computeTable } from './standings';
 import type { Club, GameEvent, GameState, Player, Position } from './types';
-import { addNews, clamp, competitionOf, tierOf } from './world';
+import { addNews, clamp, competitionOf, FOREIGN_PREFIX, tierOf } from './world';
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -18,7 +19,7 @@ const MAX_OPEN = 3;
 /** Kolik dní musí uplynout, než se stejná situace může zopakovat. */
 const COOLDOWN: Record<string, number> = { sazkovka: 330, partner: 300, soustredeni: 300, dotace: 300, asistent: 300, pyro: 75, noc: 50, serie: 40, regenerace: 150, travnik: 120, talent: 90, specialista: 45, odchod: 60, protest: 60, 'obrazova-prava': 400, tapping: 150, 'spriznena-firma': 300, 'kontroverzni-sponzor': 365, navstevnost: 200, 'mladez-odkup': 200, lobbing: 300, naming: 1100, 'trener-nabidka': 300, charita: 120, vyjezd: 90, 'investor-nabidka': 365, 'svaz-bezpecnost': 365, 'novinar-investigace': 60, tiskovka: 45, rozhovor: 90, 'kauza-hrac': 90, 'svaz-spor': 60, valna: 300, navrat: 60 };
 /** Situace, které přicházejí i odvolanému majiteli. */
-const OUSTED_TEMPLATES = new Set(['navrat']);
+const OUSTED_TEMPLATES = new Set(['navrat', 'krize']);
 const EXPIRES_DAYS = 14;
 const fmt = (v: number) => `${Math.round(v).toLocaleString('cs-CZ')} Kč`;
 const mil = (v: number) => `${(v / 1_000_000).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč`;
@@ -465,7 +466,7 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   partner: {
-    weight: (s) => (month(s) === 7 && ownClub(s).sponsorDeal?.season !== s.season ? 50 : 0),
+    weight: () => 0,
     create: (s) => {
       const base = commercialMonthly({ ...ownClub(s), sponsorDeal: undefined }, tierOf(s, s.owner.clubId));
       const winBonus = round(base * 0.5, 10_000);
@@ -682,7 +683,7 @@ export const TEMPLATES: Record<string, Template> = {
   // ---------- Další rozhodnutí majitele ----------
 
   naming: {
-    weight: (s) => (!ownClub(s).stadium.name.includes('Arena') ? 0.25 : 0),
+    weight: () => 0,
     create: (s) => {
       const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.06, 100_000);
       const brand = ['Fortuna', 'Epet', 'Tipsport', 'Moneta', 'Malina', 'Raiffeisen', 'Kaufland'][s.nextId % 7];
@@ -1020,6 +1021,61 @@ export const TEMPLATES: Record<string, Template> = {
       fans(s, -2);
       league(s, 2);
       return 'Klub se ke sporné situaci nevyjadřoval.';
+    },
+  },
+
+  // ---------- Krize ----------
+
+  krize: {
+    weight: () => 0,
+    create: (s) => {
+      const club = ownClub(s);
+      const limit = club.policy.overdraft ? Math.round((annualCosts(club, tierOf(s, club.id)) * 0.1) / 1_000_000) * 1_000_000 : 0;
+      const amount = round(Math.max(0, -club.finance.balance - limit) + annualCosts(club, tierOf(s, club.id)) * 0.05, 100_000);
+      const top = [...squad(s)].sort((a, b) => playerValueOf(s, b) - playerValueOf(s, a)).slice(0, 2);
+      return {
+        title: 'Krizový plán: klub nemá na závazky',
+        text: `Účet je druhý měsíc v minusu. Když se to nezlepší, po čtvrtém měsíci přijde insolvence. Na stabilizaci je potřeba asi ${mil(amount)}.`,
+        amount,
+        defaultOption: 'vyprodej',
+        options: [
+          { id: 'vklad', label: 'Záchranný vklad majitele', hint: `−${mil(amount)} z vašich peněz (máte ${mil(s.owner.wallet)})` },
+          { id: 'vyprodej', label: 'Výprodej nejdražších hráčů', hint: `${top.map(pName).join(' a ')} odejdou do ciziny za 80 % hodnoty, trenér −10` },
+          { id: 'platy', label: 'Snížit všem platy o 20 %', hint: 'Morálka týmu −15, důvěra trenéra −10, média −5' },
+        ],
+      };
+    },
+    resolve: (s, e, o) => {
+      const club = ownClub(s);
+      let text: string;
+      if (o === 'vklad' && s.owner.wallet >= e.amount!) {
+        s.owner.wallet -= e.amount!;
+        book(s, club.id, 'vklad', e.amount!, 'Záchranný vklad majitele');
+        text = 'Majitel klub zachránil vkladem.';
+      } else if (o === 'platy') {
+        for (const p of squad(s)) p.wage = Math.max(5_000, Math.round((p.wage * 0.8) / 1000) * 1000);
+        teamMorale(s, -15);
+        trust(s, 'trener', -10);
+        media(s, -5);
+        text = 'Hráči neradi přijali snížení platů.';
+      } else {
+        const top = [...squad(s)].sort((a, b) => playerValueOf(s, b) - playerValueOf(s, a)).slice(0, 2);
+        let total = 0;
+        for (const p of top) {
+          const fee = Math.round((playerValueOf(s, p) * 0.8) / 100_000) * 100_000;
+          total += fee;
+          executeTransfer(s, p, `${FOREIGN_PREFIX}krize`, fee, p.wage, 3);
+        }
+        trust(s, 'trener', -10);
+        text = `Klub prodal ${top.length} hráče za ${mil(total)}.`;
+      }
+      const limit = club.policy.overdraft ? Math.round((annualCosts(club, tierOf(s, club.id)) * 0.1) / 1_000_000) * 1_000_000 : 0;
+      if (club.finance.balance >= -limit) {
+        s.crisis = undefined;
+        club.finance.monthsNegative = 0;
+        text += ' Krize je zažehnána.';
+      }
+      return text;
     },
   },
 

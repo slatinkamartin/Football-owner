@@ -163,10 +163,15 @@ describe('průběh hry', () => {
     expect(injectCapital(start, start.owner.wallet + 1)).toBe(start);
   });
 
-  it('bez peněz klub zkrachuje', () => {
+  it('bez peněz přijde krizový plán a pak insolvence', () => {
     let s = updatePolicy(start, { wageMultiplier: 1.5, ticketPrice: 5000 });
-    s = { ...s, clubs: { ...s.clubs, bohemians: { ...s.clubs.bohemians, finance: { ...s.clubs.bohemians.finance, balance: -50_000_000 } } } };
-    s = playSeasons(s, 20);
-    expect(s.gameOver).toBeDefined();
-  });
+    s = { ...s, clubs: { ...s.clubs, bohemians: { ...s.clubs.bohemians, finance: { ...s.clubs.bohemians.finance, balance: -400_000_000 } } } };
+    let sawCrisis = false;
+    for (let i = 0; i < 30 && !s.gameOver; i++) {
+      s = playSeasons(s, 1);
+      sawCrisis ||= !!s.crisis || s.news.some((n) => n.title.startsWith('Krizový plán'));
+    }
+    expect(sawCrisis).toBe(true);
+    expect(s.gameOver?.kind).toBe('krach');
+  }, 60_000);
 });

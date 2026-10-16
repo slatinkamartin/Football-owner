@@ -83,7 +83,7 @@ export function Stadium({ game, onChange }: Props) {
         </section>
 
         <section className="card">
-          <h2>Fanoušci a partner</h2>
+          <h2>Fanoušci a partneři</h2>
           <dl className="kv meters">
             <dt>Nálada fanoušků</dt>
             <dd><Meter value={club.fanMood} /> {Math.round(club.fanMood)}</dd>
@@ -93,16 +93,9 @@ export function Stadium({ game, onChange }: Props) {
           </p>
           <dl className="kv">
             <dt>Generální partner</dt>
-            <dd>{club.sponsorDeal?.season === game.season ? club.sponsorDeal.name : 'zatím bez smlouvy'}</dd>
-            {club.sponsorDeal?.season === game.season && (
-              <>
-                <dt>Podmínky</dt>
-                <dd>
-                  {Math.round(club.sponsorDeal.factor * 100)} % běžných komerčních příjmů
-                  {club.sponsorDeal.winBonus > 0 && `, bonus ${money(club.sponsorDeal.winBonus)} za výhru`}
-                </dd>
-              </>
-            )}
+            <dd>{club.sponsors?.find((c) => c.slot === 'generalni')?.name ?? 'volné místo'}</dd>
+            <dt>Název stadionu</dt>
+            <dd>{club.sponsors?.find((c) => c.slot === 'stadion')?.name ?? 'neprodán'}</dd>
           </dl>
         </section>
       </div>

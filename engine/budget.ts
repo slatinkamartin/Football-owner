@@ -12,15 +12,16 @@ import {
   departmentsOf,
   operatingMonthly,
   prizeMoney,
-  sponsorsAnnual,
   tvMonthly,
   wageBudgetMonthly,
 } from './finance';
-import { ownerCommercialFactor } from './grey';
 import { satisfy } from './ownership';
 import { squadOf } from './players';
-import { commercialFactor, financeFactor, goalTarget, staffAbility, STAFF_KEY, expectedPosition, type ActionResult } from './staff';
+import { financeFactor, goalTarget, staffAbility, STAFF_KEY, expectedPosition, type ActionResult } from './staff';
 import { matchdayExtras } from './stadium';
+import { goalBonusPoints, pointsBonusFactor, suggestedSplit } from './wages';
+import { overdraftLimit } from './financing';
+import { sponsorForecast } from './sponsors';
 import type { BudgetLine, BudgetPlan, Club, GameState, StaffRole } from './types';
 import { addNews, clamp, competitionOf, tierOf } from './world';
 
@@ -108,8 +109,15 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const size = comp?.clubIds.length ?? 16;
   const points = Math.round(45 * (1 + (size / 2 - position) / size));
   const europe = state.europe?.season === state.season ? state.europe.entries.find((e) => e.clubId === club.id) : undefined;
-  const loanPayments = state.loans.reduce((a, l) => a + l.payment * Math.min(12, l.monthsLeft), 0);
-  const marketing = 1 + 0.08 * departmentEffect(club, tier, 'marketing');
+  const loanPayments =
+    state.loans.reduce((a, l) => a + l.payment * Math.min(12, l.monthsLeft), 0) +
+    (state.tvAdvance ? state.tvAdvance.monthsLeft * state.tvAdvance.monthly : 0) +
+    (state.ownerLoan ? state.ownerLoan.remaining * state.ownerLoan.rate : 0) +
+    (club.policy.overdraft ? overdraftLimit(state) * 0.005 : 0);
+  const yearEnd = `${state.season + 1}-06-30`;
+  const scheduled = (state.payments ?? [])
+    .filter((p) => p.due <= yearEnd)
+    .reduce((a, p) => a + (p.to === club.id ? p.amount : p.from === club.id ? -p.amount : 0), 0);
   const wages = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
   const depts = departmentsOf(club, tier);
 
@@ -117,14 +125,14 @@ export function forecastSeason(state: GameState): BudgetPlan {
     { key: 'vstupne', label: 'Vstupné a permanentky', amount: ticketsNow + games * Math.max(0, att - holders) * club.policy.ticketPrice, categories: ['vstupne'] },
     { key: 'stadion', label: 'Catering, fanshop a VIP', amount: games * matchdayExtras(club, att, tier), categories: ['stadion'] },
     { key: 'tv', label: 'TV práva a odměna za umístění', amount: tvMonthly(tier) * 12 + prizeMoney(tier, position, size), categories: ['tv'] },
-    { key: 'komercni', label: 'Sponzoři a reklama', amount: sponsorsAnnual(club, tier) * marketing * ownerCommercialFactor(state) * commercialFactor(state), categories: ['komercni'] },
+    { key: 'komercni', label: 'Sponzoři a reklama', amount: sponsorForecast(state), categories: ['komercni'] },
     { key: 'evropa', label: 'Evropské poháry', amount: europe?.revenue ?? 0, categories: ['evropa'] },
-    { key: 'platy', label: 'Platy a prémie hráčů', amount: -(wages * 12 + points * bonusPerPoint(club)), categories: ['platy'] },
+    { key: 'platy', label: 'Platy a prémie hráčů', amount: -(wages * 12 + bonusPerPoint(club) * (points * pointsBonusFactor(state, club.id) + (comp && position <= goalTarget(state.owner.seasonGoal, comp) ? goalBonusPoints(state) : 0))), categories: ['platy'] },
     { key: 'vedeni', label: 'Trenér a ředitelé', amount: -staffWages(state) * 12, categories: ['vedeni'] },
     { key: 'oddeleni', label: 'Oddělení (skauting, mládež, medicína, marketing)', amount: -DEPARTMENT_KEYS.reduce((a, k) => a + depts[k], 0), categories: ['oddeleni'] },
     { key: 'provoz', label: 'Provoz klubu a stadionu', amount: -operatingMonthly(club, tier) * financeFactor(state) * 12, categories: ['provoz'] },
-    { key: 'prestupy', label: 'Přestupy (rozpočet na odstupné)', amount: -club.policy.transferBudget, categories: ['prestupy'] },
-    { key: 'uver', label: 'Splátky úvěru', amount: -loanPayments, categories: ['uver'] },
+    { key: 'prestupy', label: 'Přestupy (rozpočet na odstupné a splátky)', amount: -club.policy.transferBudget + scheduled, categories: ['prestupy'] },
+    { key: 'uver', label: 'Úvěry, půjčky a zálohy (splátky a úroky)', amount: -loanPayments, categories: ['uver'] },
   ].map((l) => ({ ...l, amount: Math.round(l.amount) }) as BudgetLine);
 
   const result = lines.reduce((a, l) => a + l.amount, 0);
@@ -156,8 +164,12 @@ export function budgetWarnings(state: GameState, plan = forecastSeason(state)): 
   const club = ownClub(state);
   const tier = tierOf(state, club.id);
   const comp = competitionOf(state, club.id);
-  if (plan.cashMin < 0) {
-    out.push({ tone: 'bad', text: `Licence: v průběhu sezóny by klubu chybělo až ${Math.round(-plan.cashMin / 100_000) / 10} mil. Kč. Svaz chce doložit financování (vklad majitele, úvěr, nebo prodeje).` });
+  const od = club.policy.overdraft ? overdraftLimit(state) : 0;
+  const tolerance = annualCosts(club, tier) * 0.01;
+  if (plan.cashMin < -od - tolerance) {
+    out.push({ tone: 'bad', text: `Licence: v průběhu sezóny by klubu chybělo až ${Math.round(-(plan.cashMin + od) / 100_000) / 10} mil. Kč${od ? ' i po vyčerpání kontokorentu' : ''}. Svaz chce doložit financování (vklad nebo půjčka majitele, úvěr, nebo prodeje).` });
+  } else if (plan.cashMin < -tolerance) {
+    out.push({ tone: 'warn', text: 'Během sezóny klub sáhne do kontokorentu. Počítejte s úroky 12 %.' });
   }
   if (comp) {
     const target = goalTarget(state.owner.seasonGoal, comp);
@@ -264,22 +276,23 @@ export function prepareBudget(state: GameState): void {
   const tier = tierOf(state, club.id);
   state.budget = { season: state.season };
   club.policy.departments ??= departmentReference(club, tier);
+  club.policy.wageSplit ??= suggestedSplit(state);
   club.policy.seasonTicketPrice ??= defaultSeasonTicketPrice(tier);
   const cfo = staffAbility(state, 'financni');
   // Návrh rozpočtu na přestupy: tolik, aby klubu během sezóny nedošly peníze.
   // Finanční ředitel navíc drží rezervu 5 % nákladů, účetní jen nulu.
   club.policy.transferBudget = defaultTransferBudget(club);
   const plan = forecastSeason(state);
-  const reserve = cfo !== undefined ? annualCosts(club, tier) * 0.05 : 0;
+  const reserve = annualCosts(club, tier) * (cfo !== undefined ? 0.05 : 0.01);
   if (plan.cashMin < reserve) {
     club.policy.transferBudget = Math.max(0, Math.round((club.policy.transferBudget - (reserve - plan.cashMin)) / 100_000) * 100_000);
   }
   // Velká plánovaná ztráta: návrh sníží mzdový strop pod současné platy, aby ředitel neprodlužoval drahé smlouvy.
   const after = forecastSeason(state);
-  if (after.result < -annualCosts(club, tier) * 0.15) {
+  if (after.result + club.policy.transferBudget < -annualCosts(club, tier) * 0.15) {
     const bill = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
     const base = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
-    club.policy.wageMultiplier = Math.max(0.5, Math.min(club.policy.wageMultiplier, (bill * 0.85) / Math.max(1, base)));
+    club.policy.wageMultiplier = Math.max(0.5, Math.min(club.policy.wageMultiplier, bill / Math.max(1, base)));
   }
   addNews(state, {
     kind: 'info',

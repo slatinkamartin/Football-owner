@@ -3,6 +3,11 @@ import { Chips, DataTable, useStoredState } from '../table';
 import { PlayerLink } from '../nav';
 import {
   acceptOffer,
+  isForeign,
+  SECTION_LABEL,
+  sectionRoomFor,
+  SELL_ON_DISCOUNT,
+  SELL_ON_PCT,
   approveProposal,
   askingPrice,
   budgetRemaining,
@@ -108,7 +113,9 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
   const [fee, setFee] = useState(String(Math.round((n.counter ?? n.askingFee * 0.85) / 1_000_000 * 10) / 10));
   const [wage, setWage] = useState(String(n.stage === 'hrac' && n.counter ? n.counter : Math.round(n.minWage * 0.9 / 1000) * 1000));
   const [years, setYears] = useState(3);
+  const [split, setSplit] = useState(false);
   const done = n.stage === 'hotovo' || n.stage === 'neuspech';
+  const room = p && n.stage === 'hrac' ? sectionRoomFor(game, p, Number(wage.replace(/\s/g, '')) || 0) : undefined;
 
   return (
     <section className="card negotiation">
@@ -129,9 +136,13 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
           <label htmlFor="neg-fee">Odstupné</label>
           <input id="neg-fee" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
           <span>mil. Kč</span>
-          <button className="primary" onClick={() => onResult(offerFee(game, Number(fee.replace(',', '.')) * 1_000_000))}>
+          <button className="primary" onClick={() => onResult(offerFee(game, Number(fee.replace(',', '.')) * 1_000_000, split))}>
             Nabídnout
           </button>
+          <label className="check">
+            <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} />
+            <span>Ve splátkách (polovina hned, zbytek do roka; klub chce o 5 % víc)</span>
+          </label>
         </div>
       )}
       {n.stage === 'hrac' && (
@@ -147,7 +158,17 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
           </button>
         </div>
       )}
-      {n.stage === 'hrac' && <p className="muted small">K platu přibude odměna agentovi ve výši dvou měsíčních platů.</p>}
+      {n.stage === 'hrac' && (
+        <p className="muted small">
+          K platu přibude odměna agentovi ve výši dvou měsíčních platů.
+          {room && (
+            <>
+              {' '}Hráč patří do mzdové sekce <strong>{SECTION_LABEL[room.section]}</strong>:{' '}
+              <span className={room.room < 0 ? 'neg' : 'pos'}>{room.room < 0 ? `přečerpá ji o ${money(-room.room)} měsíčně` : `zbude ${money(room.room)} měsíčně`}</span>.
+            </>
+          )}
+        </p>
+      )}
       <div className="buttons">
         <button onClick={onClose}>{done ? 'Zavřít' : 'Ukončit jednání'}</button>
       </div>
@@ -176,7 +197,13 @@ function Proposals({ game, onResult, onReject }: { game: GameState; onResult: (r
               <li key={x.id}>
                 <PlayerLine game={game} p={p} />
                 <p className="muted small">{x.note}</p>
-                <p className="small">Odhad: odstupné {money(x.estimatedFee)}, plat {money(x.estimatedWage)} měsíčně.</p>
+                <p className="small">
+                  Odhad: odstupné {money(x.estimatedFee)}, plat {money(x.estimatedWage)} měsíčně
+                  {(() => {
+                    const r = sectionRoomFor(game, p, x.estimatedWage);
+                    return <> · sekce {SECTION_LABEL[r.section]}, zbude {money(r.room)}</>;
+                  })()}.
+                </p>
                 <div className="buttons">
                   <button className="primary" onClick={() => onResult(approveProposal(game, x.id))}>Schválit, ať to dojedná</button>
                   <button onClick={() => onReject(x.id)}>Zamítnout</button>
@@ -214,8 +241,14 @@ function Offers({ game, onResult, onReject }: { game: GameState; onResult: (r: A
                   <Badge tone={o.advice === 'prijmout' ? 'good' : 'warn'}>{o.advice === 'prijmout' ? 'Ředitel: přijmout' : 'Ředitel: odmítnout'}</Badge>{' '}
                   {o.note}
                 </p>
+                {o.instalments && <p className="small muted">Kupec platí ve splátkách: polovina hned, zbytek do roka.</p>}
                 <div className="buttons">
                   <button className="primary" onClick={() => onResult(acceptOffer(game, o.id))}>Prodat</button>
+                  {!isForeign(o.buyerId) && (
+                    <button onClick={() => onResult(acceptOffer(game, o.id, true))} title="Méně peněz teď, podíl z příštího přestupu hráče">
+                      Prodat za {money(o.fee * (1 - SELL_ON_DISCOUNT))} + {Math.round(SELL_ON_PCT * 100)} % z dalšího prodeje
+                    </button>
+                  )}
                   <button onClick={() => onReject(o.id)}>Odmítnout</button>
                 </div>
               </li>

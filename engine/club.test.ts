@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
-import { expireEvents, maybeCreateEvent, resolveEvent } from './events';
+import { signSponsor, sponsorMonthly } from './sponsors';
 import { projectOptions, startProject } from './facilities';
 import { balanceSheet, commercialMonthly, loanOffers, monthlyLoans, takeLoan } from './finance';
 import { advanceWeek, newGame } from './game';
-import { createRng } from './rng';
 import type { DataPack, GameState } from './types';
 
 const czPack = pack as DataPack;
@@ -50,19 +49,21 @@ describe('úvěr', () => {
 });
 
 describe('situace k rozhodnutí', () => {
-  it('výběr partnera přijde v červenci, volba se projeví a po termínu platí výchozí', () => {
+  it('sponzorská místa: část obsazená, na volná přijdou nabídky, podpis zvedne příjmy', () => {
     const s = structuredClone(start);
-    maybeCreateEvent(s, createRng(1));
-    const partner = s.events.find((e) => e.template === 'partner')!;
-    expect(partner).toBeDefined();
-    const chosen = resolveEvent(s, partner.id, 'vykon').state;
-    expect(chosen.clubs.bohemians.sponsorDeal?.winBonus).toBeGreaterThan(0);
-    expect(chosen.events.find((e) => e.id === partner.id)).toBeUndefined();
-
-    const lazy = structuredClone(s);
-    lazy.date = partner.expires;
-    expireEvents(lazy);
-    expect(lazy.clubs.bohemians.sponsorDeal?.factor).toBe(1.08);
+    expect(s.clubs.bohemians.sponsors?.length).toBe(3);
+    const offers = s.sponsorOffers ?? [];
+    expect(offers.length).toBeGreaterThanOrEqual(8);
+    const naming = offers.find((o) => o.slot === 'stadion')!;
+    const before = sponsorMonthly(s).contracts;
+    const r = signSponsor(s, naming.id);
+    expect(r.ok).toBe(true);
+    expect(sponsorMonthly(r.state).contracts).toBeGreaterThan(before);
+    expect(r.state.clubs.bohemians.stadium.name).toContain('Arena');
+    expect(r.state.sponsorOffers!.some((o) => o.slot === 'stadion')).toBe(false);
+    const bonus = offers.find((o) => o.style === 'bonus')!;
+    expect(bonus.bonus!.amount).toBeGreaterThan(0);
+    expect(bonus.annual).toBeLessThan(offers.find((o) => o.slot === bonus.slot && o.style === 'jistota')!.annual);
   });
 });
 
