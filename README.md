@@ -61,6 +61,23 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.14: zahraniční trh a velké investice
+
+- **Zahraniční skauting** (Přestupy › Zahraniční trh): skautské sítě v šesti regionech (Slovensko a Polsko, Balkán, Skandinávie, Afrika, Jižní Amerika, hostování z velkých lig) za roční poplatek. Skauti v každém regionu vyhlédnou pět hráčů, trh se obnoví 1. 7. a 1. 12.
+- **Nejistý odhad**: hodnocení i potenciál se ukazují jako rozpětí. Zúží ho sledování (každý týden, nejvýš 5 hráčů), skautské oddělení, schopný ředitel, analytika a partnerský klub.
+- **Cena cizince**: odstupné (menší ligy prodávají levněji), odměna agentovi, u hráčů mimo EU pracovní povolení. Hráčů mimo EU smí být v kádru nejvýš sedm.
+- **Zabydlování**: cizinec první měsíce hraje slaběji (až o 12 %). Rychleji se zabydlí s krajanem v kádru nebo s integračním programem.
+- **Hostování s opcí** z velkých lig: bez odstupného, opci lze využít během sezóny, jinak se hráč 30. 6. vrací.
+- **Sportovní ředitel** smí podle přestupové politiky nakupovat i v regionech se skautskou sítí. Ostatní kluby ligy také kupují v cizině, takže liga drží krok.
+- **Fanoušci**: sedm a více cizinců v základní sestavě kazí náladu fanoušků i patriotů. Hvězdná posila ji zvedne.
+- **Velké investice** (Stadion): nový stadion (dvě velikosti), tréninkový areál, komerční areál.
+  - Platí se měsíčně po dobu stavby a město přispěje. Na splátky lze čerpat investiční úvěr.
+  - Hrozí prodražení a zpoždění.
+  - Rozestavěná stavba je majetek v rozvaze a odepisuje se po dokončení.
+  - U každé stavby je odhad návratnosti.
+- **Programy klubu**: B-tým (vývoj mladých), ženský tým (nálada, město, sponzor), analytické oddělení (přesnější skauting, síla +1), partnerský klub v zahraničí (region zdarma, přesnější odhady, levnější hráči), integrační manažer.
+- **Finance**: nové řádky Zahraniční skauting, Programy klubu a Komerční areál. Splátky staveb jsou ve výhledu i v závazcích na další sezóny.
+
 ### Novinky verze 0.13: stabilita na dlouhé hraní (test 3 týmů × 5 sezón)
 
 - **Důvěra vedení:** každý měsíc se pomalu vrací k normálu, průběžně se trestá jen výrazné zaostání za cílem, za titul, pohár a postup je bonus. Když majitel situaci nerozhodne a vyřeší ji vedení, vztahy utrpí jen málo.

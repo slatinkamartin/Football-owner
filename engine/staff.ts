@@ -498,7 +498,9 @@ export function refreshStaffPool(state: GameState, rng: Rng): void {
 export function scoutingError(state: GameState): number {
   const club = state.clubs[state.owner.clubId];
   const dept = departmentEffect(club, tierOf(state, club.id), 'skauting');
-  return ((100 - directorAbility(state)) / 12) * (1 - 0.35 * dept);
+  // Datové a analytické oddělení zpřesní odhady o 30 %.
+  const analytics = (state.programs ?? []).some((p) => p.kind === 'analytika') ? 0.7 : 1;
+  return ((100 - directorAbility(state)) / 12) * (1 - 0.35 * dept) * analytics;
 }
 
 export function squadLevel(state: GameState, clubId: string): number {

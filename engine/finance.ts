@@ -176,18 +176,23 @@ export function defaultTransferBudget(club: Club): number {
   return Math.round((baseWageBudget(club) * 12 * 0.25) / 100_000) * 100_000;
 }
 
+/** Efekt nového stadionu: chodí víc lidí. */
+export function newStadiumFactor(club: Club): number {
+  return club.facilities?.newStadium ? 1.15 : 1;
+}
+
 /** Návštěvnost domácího zápasu. */
 export function matchAttendance(rng: Rng, home: Club, away: Club, tier: number, homeForm: number, capacity = home.stadium.capacity, damaged = false): number {
   const priceFactor = Math.pow(defaultTicketPrice(tier) / Math.max(home.policy.ticketPrice, 1), 0.8);
   const opponentFactor = 1 + (away.reputation - 50) / 200;
   const formFactor = 1 + homeForm * 0.2;
-  const moodFactor = 0.85 + 0.3 * ((home.fanMood ?? 50) / 100);
+  const moodFactor = (0.85 + 0.3 * ((home.fanMood ?? 50) / 100)) * newStadiumFactor(home);
   const raw = baseAttendance(home.reputation, tier) * priceFactor * opponentFactor * formFactor * moodFactor * (damaged ? 0.9 : 1) * rng.normal(1, 0.08);
   return Math.max(50, Math.min(capacity, Math.round(raw)));
 }
 
 export function emptyTotals(): FinanceTotals {
-  return { vstupne: 0, stadion: 0, tv: 0, komercni: 0, evropa: 0, pohar: 0, ostatni: 0, uver: 0, platy: 0, vedeni: 0, oddeleni: 0, provoz: 0, prestupy: 0, investice: 0, dane: 0, vklad: 0, fanshop: 0, akce: 0, udrzba: 0, soustredeni: 0, bezpecnost: 0, komunita: 0 };
+  return { vstupne: 0, stadion: 0, tv: 0, komercni: 0, evropa: 0, pohar: 0, ostatni: 0, uver: 0, platy: 0, vedeni: 0, oddeleni: 0, provoz: 0, prestupy: 0, investice: 0, dane: 0, vklad: 0, fanshop: 0, akce: 0, udrzba: 0, soustredeni: 0, bezpecnost: 0, komunita: 0, skautsit: 0, programy: 0, areal: 0 };
 }
 
 export function book(state: GameState, clubId: string, category: FinanceCategory, amount: number, note: string): void {
@@ -225,6 +230,9 @@ export const CATEGORY_LABEL: Record<FinanceCategory, string> = {
   soustredeni: 'Soustředění a cestování',
   bezpecnost: 'Pořadatelé a bezpečnost',
   komunita: 'Komunita, ženský a dětský fotbal',
+  skautsit: 'Zahraniční skauting',
+  programy: 'Programy klubu (B-tým, ženy, analytika, partner)',
+  areal: 'Komerční areál (hotel, obchody)',
 };
 
 // ---------- Účetnictví (klub majitele) ----------
@@ -267,6 +275,7 @@ export function profitAndLoss(totals: FinanceTotals, acc: Accounting = emptyAcco
     { label: CATEGORY_LABEL.stadion, amount: totals.stadion ?? 0 },
     { label: CATEGORY_LABEL.fanshop, amount: totals.fanshop ?? 0 },
     { label: CATEGORY_LABEL.akce, amount: totals.akce ?? 0 },
+    { label: CATEGORY_LABEL.areal, amount: totals.areal ?? 0 },
     { label: CATEGORY_LABEL.evropa, amount: totals.evropa ?? 0 },
     { label: CATEGORY_LABEL.pohar, amount: totals.pohar },
     { label: CATEGORY_LABEL.ostatni, amount: totals.ostatni ?? 0 },
@@ -281,6 +290,8 @@ export function profitAndLoss(totals: FinanceTotals, acc: Accounting = emptyAcco
     { label: CATEGORY_LABEL.soustredeni, amount: totals.soustredeni ?? 0 },
     { label: CATEGORY_LABEL.bezpecnost, amount: totals.bezpecnost ?? 0 },
     { label: CATEGORY_LABEL.komunita, amount: totals.komunita ?? 0 },
+    { label: CATEGORY_LABEL.skautsit, amount: totals.skautsit ?? 0 },
+    { label: CATEGORY_LABEL.programy, amount: totals.programy ?? 0 },
     { label: 'Odpisy hráčských registrací', amount: -acc.amortization },
     { label: 'Odpis při uvolnění hráčů', amount: -acc.writeOffs },
     { label: 'Odměny agentům', amount: -acc.agentFees },
@@ -356,7 +367,9 @@ export const INVEST_RATE = 0.045;
 export const INVEST_MONTHS = 120;
 export function investmentLoanOffer(state: GameState): number {
   if (state.loans.some((l) => l.kind === 'investicni')) return 0;
-  const building = state.projects.reduce((a, p) => a + p.cost, 0);
+  // Rozestavěné stavby: malé projekty celou cenou, velké tím, co zbývá zaplatit.
+  const big = (state.bigProjects ?? []).reduce((a, p) => a + Math.max(0, p.cost - p.grant - p.paid), 0);
+  const building = state.projects.reduce((a, p) => a + p.cost, 0) + big;
   return Math.round((building * 0.8) / 1_000_000) * 1_000_000;
 }
 

@@ -40,6 +40,7 @@ import {
 } from '../../engine';
 import { Badge, Notice } from '../components';
 import { money } from '../format';
+import { ForeignMarket } from './ForeignMarket';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
 
@@ -89,6 +90,7 @@ export function Transfers({ game, onChange }: Props) {
       </div>
 
       <Search game={game} onResult={apply} />
+      <ForeignMarket game={game} onChange={onChange} onResult={apply} />
       <History game={game} />
     </div>
   );

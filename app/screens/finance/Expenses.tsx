@@ -411,6 +411,12 @@ export function FinanceExpenses({ game, onChange, onOpen, focus }: { game: GameS
         </LineCard>
 
         <LineCard id="provoz" title="Administrativa, cestování a energie" lines={line('provoz')} note={`Pevná částka podle soutěže (${money(adminMonthly(tier))} měsíčně). Schopný finanční ředitel ji snižuje.`} />
+
+        <LineCard id="skautsit" title="Zahraniční skauting" lines={line('skautsit')} effects={['hráči ze zahraničí na trhu', 'přesnost odhadů', 'nákupy ředitele v cizině']}
+          note="Skautské sítě v regionech se otevírají a ruší v záložce Přestupy (Zahraniční trh). Region partnerského klubu je zdarma." />
+
+        <LineCard id="programy" title="Programy klubu" lines={line('programy')} effects={['vývoj mladých (B-tým)', 'nálada a město (ženský tým)', 'skauting a síla (analytika)', 'zabydlování cizinců']}
+          note="Programy se spouštějí a ukončují v záložce Stadion (Programy klubu). Sponzor ženského týmu je v příjmech mezi sponzory." />
       </div>
     </div>
   );

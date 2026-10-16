@@ -852,3 +852,12 @@ table.sections td .muted.small { display: block; }
 .wide .composition { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 .stars { color: #e0a030; letter-spacing: 1px; font-size: 15px; white-space: nowrap; }
 .stars-empty { color: var(--line); }
+
+/* Zahraniční trh a investice */
+.region-grid, .invest-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin: 10px 0; }
+.region, .invest { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.region p, .invest p { margin: 0; }
+.region.on { border-color: var(--accent); }
+.invest .kv { margin-top: 4px; }
+.confirm-box { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; max-width: 320px; margin-left: auto; text-align: right; white-space: normal; }
+.foreign-table td.wrap { min-width: 160px; }

@@ -56,7 +56,8 @@ function addDays(iso: string, days: number): string {
 
 /** Výkon hráče v zápase: kvalita upravená kondicí, morálkou a formou. */
 export function effective(p: Player): number {
-  return p.overall * (0.85 + 0.15 * (p.fitness / 100)) * (0.96 + 0.08 * ((p.morale ?? 60) / 100)) + formBonus(p);
+  // Cizinec, který se teprve zabydluje, hraje pod svou úroveň.
+  return p.overall * (1 - (p.adapt ?? 0)) * (0.85 + 0.15 * (p.fitness / 100)) * (0.96 + 0.08 * ((p.morale ?? 60) / 100)) + formBonus(p);
 }
 
 /** Sestava, jakou by postavil trenér: podle formace, kvality, kondice a jeho přístupu k mladým. */

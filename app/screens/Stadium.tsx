@@ -14,6 +14,7 @@ import {
 } from '../../engine';
 import { Badge, Meter, Notice, Stars } from '../components';
 import { VoteInfo } from '../VoteInfo';
+import { Investments } from './Investments';
 import { money, num } from '../format';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
@@ -50,6 +51,7 @@ export function Stadium({ game, onChange }: Props) {
             <dd>
               {num(club.stadium.capacity)}
               {capacity < club.stadium.capacity && <span className="muted small"> (při stavbě {num(capacity)})</span>}
+              {f.newStadium && <> <Badge tone="good">nový stadion</Badge></>}
             </dd>
             <dt>VIP skyboxy</dt>
             <dd>{f.vip} <span className="muted small">· {money(vipRate(tier))} za zápas</span></dd>
@@ -72,6 +74,9 @@ export function Stadium({ game, onChange }: Props) {
             <dt>Regenerace a medicína</dt>
             <dd><Stars value={f.medical} /></dd>
           </dl>
+          {(f.complex || f.commercial) && (
+            <p className="small">{f.complex && <Badge tone="good">tréninkový areál</Badge>} {f.commercial ? <Badge tone="good">komerční areál</Badge> : null}</p>
+          )}
           <ul className="plain small muted">
             <li>Trénink: {LEVEL_TEXT.training[f.training]}, vývoj hráčů {Math.round((0.8 + 0.1 * f.training) * 100)} % běžného.</li>
             <li>Akademie: {LEVEL_TEXT.academy[f.academy]}, {f.academy >= 4 ? 3 : f.academy >= 2 ? 2 : 1} dorostenci ročně.</li>
@@ -122,7 +127,7 @@ export function Stadium({ game, onChange }: Props) {
       )}
 
       <section className="card">
-        <h2>Nové stavby a vybavení</h2>
+        <h2>Menší stavby a vybavení</h2>
         <p className="muted small">
           Stavba se zaplatí hned z peněz klubu a stane se majetkem v rozvaze, který se postupně odepisuje. Najednou může běžet jedna stavba od každého druhu.{game.shareholders.length > 0 && ' Stavby nad 20 mil. Kč schvalují spolumajitelé.'}
           Klub má teď {money(club.finance.balance)}.
@@ -164,6 +169,8 @@ export function Stadium({ game, onChange }: Props) {
           </table>
         </div>
       </section>
+
+      <Investments game={game} onResult={apply} />
     </div>
   );
 }

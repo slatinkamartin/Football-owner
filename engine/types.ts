@@ -104,6 +104,75 @@ export interface Player {
   wageSection?: WageSection;
   /** Podíl z dalšího prodeje pro bývalý klub. */
   sellOn?: { clubId: string; pct: number };
+  /** Státní příslušnost (bez ní český hráč). */
+  nationality?: string;
+  /** Hráč mimo EU (pracovní povolení, limit cizinců). */
+  nonEu?: boolean;
+  /** Ztráta výkonu při zabydlování v nové zemi (0–0,15), měsíčně klesá. */
+  adapt?: number;
+  /** Hostování z ciziny: na konci sezóny se vrací, pokud klub nevyužije opci. */
+  loan?: { fromId: string; buyOption: number };
+}
+
+// ---------- Zahraniční trh ----------
+
+export type ScoutRegion = 'okoli' | 'balkan' | 'sever' | 'afrika' | 'amerika' | 'velke';
+
+/** Hráč vyhlédnutý zahraničními skauty (ještě není v české simulaci). */
+export interface ForeignTarget {
+  id: string;
+  region: ScoutRegion;
+  /** Prodávající klub (id se zahraniční předponou). */
+  clubId: string;
+  player: Player;
+  /** Požadované odstupné (u hostování 0). */
+  fee: number;
+  /** Požadovaný měsíční plat. */
+  wage: number;
+  /** Hostování: poplatek za hostování a cena opce. */
+  loan?: { fee: number; buyOption: number };
+  /** Kolik týdnů ho skauti sledují (zpřesňuje odhad). */
+  watched?: number;
+  watching?: boolean;
+}
+
+export interface ForeignMarket {
+  /** Regiony s placenou skautskou sítí. */
+  networks: ScoutRegion[];
+  targets: ForeignTarget[];
+  /** Kdy se trh naposledy obnovil. */
+  refreshed?: string;
+}
+
+// ---------- Velké investice ----------
+
+export type BigProjectKind = 'stadion' | 'velkystadion' | 'areal' | 'komercni';
+export type ProgramKind = 'btym' | 'zeny' | 'analytika' | 'partner' | 'integrace';
+
+export interface BigProject {
+  id: string;
+  kind: BigProjectKind;
+  label: string;
+  /** Celková cena (po případném překročení). */
+  cost: number;
+  /** Příspěvek města a kraje (snižuje splátky). */
+  grant: number;
+  paid: number;
+  start: string;
+  end: string;
+  /** Cílová kapacita nového stadionu. */
+  capacity?: number;
+  /** Doba odepisování v letech. */
+  years: number;
+  overrun?: boolean;
+}
+
+export interface ClubProgram {
+  kind: ProgramKind;
+  since: string;
+  /** Partnerský klub: region a klub. */
+  region?: ScoutRegion;
+  partnerId?: string;
 }
 
 export type WageSection = 'opory' | 'zaklad' | 'rotace' | 'mladi';
@@ -324,13 +393,18 @@ export type FinanceCategory =
   | 'udrzba'
   | 'soustredeni'
   | 'bezpecnost'
-  | 'komunita';
+  | 'komunita'
+  | 'skautsit'
+  | 'programy'
+  | 'areal';
 
 /** Kategorie přidané ve verzi 10 (pro převod uložených her). */
 export const NEW_CATEGORIES_V10: FinanceCategory[] = ['fanshop', 'akce', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita'];
+/** Kategorie přidané ve verzi 11 (zahraniční skauting, programy klubu, komerční areál). */
+export const NEW_CATEGORIES_V11: FinanceCategory[] = ['skautsit', 'programy', 'areal'];
 
-export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'fanshop', 'akce', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'uver', 'vklad'];
-export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'oddeleni', 'provoz', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita', 'prestupy', 'investice', 'dane'];
+export const INCOME_CATEGORIES: FinanceCategory[] = ['vstupne', 'stadion', 'fanshop', 'akce', 'areal', 'tv', 'komercni', 'evropa', 'pohar', 'ostatni', 'uver', 'vklad'];
+export const EXPENSE_CATEGORIES: FinanceCategory[] = ['platy', 'vedeni', 'oddeleni', 'provoz', 'udrzba', 'soustredeni', 'bezpecnost', 'komunita', 'skautsit', 'programy', 'prestupy', 'investice', 'dane'];
 
 export type Level = 'nizka' | 'bezna' | 'vysoka';
 export type SalesPolicy = 'drzet' | 'dobra' | 'prodejni';
@@ -426,6 +500,8 @@ export interface ClubPolicy {
   community?: number;
   /** Minimální rezerva peněz, pod kterou ředitel nesmí jít. */
   cashReserve?: number;
+  /** Kde smí sportovní ředitel sám nakupovat: jen doma, nebo i v regionech se skautskou sítí. */
+  directorMarket?: 'doma' | 'zahranici';
 }
 
 export interface Club {
@@ -470,6 +546,12 @@ export interface Facilities {
   academy: number;
   /** Regenerace a zdravotní péče 1–5: méně a kratší zranění. */
   medical: number;
+  /** Nový stadion (lidé chodí víc, efekt nového stadionu). */
+  newStadium?: boolean;
+  /** Tréninkový areál (komplex): rychlejší vývoj a lákadlo pro hráče. */
+  complex?: boolean;
+  /** Komerční areál u stadionu (hotel, obchody): hodnota stavby, ze které plyne nájem. */
+  commercial?: number;
 }
 
 export type ProjectKind = 'kapacita' | 'vip' | 'catering' | 'vyhrivani' | 'trenink' | 'akademie' | 'medicina';
@@ -487,6 +569,8 @@ export interface Project {
 
 /** Dlouhodobý majetek v rozvaze (stavby a vybavení), odepisovaný měsíčně. */
 export interface FixedAsset {
+  /** Rozestavěná velká investice (odepisuje se až po dokončení). */
+  projectId?: string;
   label: string;
   value: number;
   monthly: number;
@@ -805,7 +889,7 @@ export interface EuropeSeason {
   resolved?: boolean;
 }
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 
 export interface GameState {
   /** Rozpracované akce na stadionu (zlomky, které se ještě nekonaly). */
@@ -813,6 +897,11 @@ export interface GameState {
   /** Zaplacená soustředění v sezóně (bonus jen za to, co se opravdu zaplatilo). */
   campsPaid?: { season: number; summer?: CampChoice; winter?: CampChoice };
   version: typeof SAVE_VERSION;
+  /** Zahraniční skauting a vyhlédnutí hráči. */
+  foreign?: ForeignMarket;
+  /** Velké víceleté investice a programy klubu. */
+  bigProjects?: BigProject[];
+  programs?: ClubProgram[];
   packId: string;
   seed: number;
   rngState: number;

@@ -2,6 +2,7 @@ import { book, ownerAccounting, playerWage, wageBudgetMonthly } from './finance'
 import { schemeWageFactor, SECTION_LABEL, sectionRoomFor, sectionsOf, sectionUsage } from './wages';
 import { scheduleInstalments } from './financing';
 import { FOREIGN_CLUBS } from './names';
+import { directorForeignPick, directorSignForeign } from './foreign';
 import { bestEleven, generatePlayer, marketValue, playerAge, SQUAD_SHAPE, squadOf, squadQualityForReputation } from './players';
 import type { Rng } from './rng';
 import { directorAbility, directorOf, scoutingError, severance, type ActionResult } from './staff';
@@ -83,8 +84,8 @@ export function wageDemand(state: GameState, p: Player, clubId: string): number 
 export function interest(state: GameState, p: Player, clubId: string): { ok: boolean; reason: string } {
   const club = state.clubs[clubId];
   const gap = p.overall - squadQualityForReputation(club.reputation);
-  // Vyšší mzdový rozpočet přiláká i hráče, kteří by jinak nepřišli.
-  if (gap > 12 + (club.policy.wageMultiplier - 1) * 15) return { ok: false, reason: `${playerName(p)} chce hrát ve vyšší úrovni a o přestup nemá zájem.` };
+  // Vyšší mzdový rozpočet a tréninkový areál přilákají i hráče, kteří by jinak nepřišli.
+  if (gap > 12 + (club.policy.wageMultiplier - 1) * 15 + (club.facilities?.complex ? 3 : 0)) return { ok: false, reason: `${playerName(p)} chce hrát ve vyšší úrovni a o přestup nemá zájem.` };
   return { ok: true, reason: '' };
 }
 
@@ -472,6 +473,7 @@ export function generateOffers(state: GameState, rng: Rng): void {
     .filter((id) => id !== own && !state.clubs[id].reserveOf && state.clubs[id].reputation >= ownRep - 5);
 
   squad.forEach((p, rank) => {
+    if (p.loan) return;
     if (state.market.offers.length >= maxOffers || state.market.offers.some((o) => o.playerId === p.id)) return;
     const listed = state.market.listed.includes(p.id) || (p.morale ?? 60) < 25;
     const value = playerValue(state, p);
@@ -594,6 +596,14 @@ export function releaseCost(state: GameState, p: Player): number {
 export function releasePlayer(prev: GameState, playerId: string): ActionResult {
   const p = prev.players[playerId];
   if (!p || p.clubId !== prev.owner.clubId) return { state: prev, ok: false, message: 'Hráč nepatří do klubu.' };
+  if (p.loan) {
+    // Hostování lze ukončit předčasně: hráč se vrátí bez odstupného.
+    const state = structuredClone(prev);
+    delete state.players[playerId];
+    const message = `${playerName(p)} ukončil hostování a vrátil se do ${clubLabel(state, p.loan.fromId)}.`;
+    addNews(state, { kind: 'info', title: message });
+    return { state, ok: true, message };
+  }
   const state = structuredClone(prev);
   const cost = releaseCost(state, p);
   if (cost > 0) book(state, p.clubId, 'platy', -cost, `Vyplacení smlouvy: ${playerName(p)}`);
@@ -611,7 +621,8 @@ export function releasePlayer(prev: GameState, playerId: string): ActionResult {
 }
 
 export function contractExpiring(state: GameState, p: Player): boolean {
-  return p.contractUntil <= state.season + 1;
+  // Hráč na hostování se po sezóně vrací, smlouva se neprodlužuje.
+  return !p.loan && p.contractUntil <= state.season + 1;
 }
 
 export function renewalDemand(state: GameState, p: Player): number {
@@ -801,7 +812,13 @@ export function directorSignings(state: GameState, rng: Rng): void {
     .map((p) => ({ p, fee: askingPrice(state, p, keys), wage: wageDemand(state, p, own) }))
     .filter((x) => x.fee <= remaining * 0.6 && interest(state, x.p, own).ok && sectionRoomFor(state, x.p, x.wage).room >= 0 && wageBill(state, own) + x.wage <= wageBudgetMonthly(club))
     .sort((a, b) => b.p.overall - a.p.overall || a.fee - b.fee);
+  // V regionech se skautskou sítí hledá i v cizině (podle odhadu skautů, takže s rizikem).
+  const abroad = directorForeignPick(state, position, bar, remaining);
   const pick = candidates[0];
+  if (abroad && (!pick || abroad.est > pick.p.overall + 1)) {
+    directorSignForeign(state, abroad.target, abroad.price);
+    return;
+  }
   if (!pick) return;
   const from = pick.p.clubId;
   executeTransfer(state, pick.p, own, pick.fee, pick.wage, rng.int(2, 4));
@@ -815,7 +832,7 @@ export function directorSignings(state: GameState, rng: Rng): void {
 // ---------- Přestupy mezi ostatními kluby ----------
 
 /** Pozice, kde má klub nejslabšího hráče základní sestavy (nebo nedostatek hráčů). */
-function weakestPosition(squad: Player[]): { position: Position; bar: number } {
+export function weakestPosition(squad: Player[]): { position: Position; bar: number } {
   const xi = bestEleven(squad);
   let best: { position: Position; bar: number; score: number } = { position: 'MF', bar: 0, score: Infinity };
   for (const pos of Object.keys(SQUAD_SHAPE) as Position[]) {

@@ -302,6 +302,9 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
         <button onClick={() => onOpen('prestupy')}>Přestupová politika ›</button>
       </LineCard>
 
+ <LineCard id="areal" title="Komerční areál (hotel, obchody)" lines={line('areal')} effects={['nájmy nezávislé na výsledcích', 'roste s náladou fanoušků']}
+        note="Komerční areál se staví v záložce Stadion (Velké investice). Vydělává asi 8,5 % své ceny ročně." />
+
       <LineCard id="ostatni" title="Dotace a mimořádné příjmy" lines={line('ostatni')} effects={['vztah s městem', 'komunitní rozpočet zvyšuje šanci']}
         note={<>O dotace se žádá ve Financování. <button className="linkbtn" onClick={() => onOpen('financovani')}>Financování ›</button></>}
       />

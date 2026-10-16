@@ -8,7 +8,10 @@ import { addNews, tierOf } from './world';
 
 /** Kapacita, která je k dispozici (při přestavbě je část tribun uzavřená). */
 export function effectiveCapacity(state: GameState, club: Club): number {
-  const building = club.id === state.owner.clubId && state.projects.some((p) => p.kind === 'kapacita');
+  if (club.id !== state.owner.clubId) return club.stadium.capacity;
+  // Nový stadion: klub hraje na provizorních tribunách.
+  if ((state.bigProjects ?? []).some((p) => p.kind === 'stadion' || p.kind === 'velkystadion')) return Math.round(club.stadium.capacity * 0.7);
+  const building = state.projects.some((p) => p.kind === 'kapacita');
   return Math.round(club.stadium.capacity * (building ? 0.85 : 1));
 }
 

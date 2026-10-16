@@ -1,3 +1,4 @@
+import type { ScoutRegion } from './types';
 export const FIRST_NAMES = [
   'Adam', 'Aleš', 'Antonín', 'David', 'Dominik', 'Filip', 'František', 'Jakub', 'Jan', 'Jaroslav',
   'Jiří', 'Josef', 'Kamil', 'Karel', 'Kryštof', 'Lukáš', 'Marek', 'Martin', 'Matěj', 'Michal',
@@ -45,7 +46,7 @@ export const POOL_TOWNS: { town: string; region: 'cechy' | 'morava' }[] = [
  * Zahraniční kluby, které kupují hráče z české ligy. Úroveň 1 = top 5 lig, 2 = silné evropské ligy,
  * 3 = okolní ligy. Kupují za skutečné peníze, ale v simulaci nehrají.
  */
-export const FOREIGN_CLUBS: { id: string; name: string; country: string; level: 1 | 2 | 3 }[] = [
+export const FOREIGN_CLUBS: { id: string; name: string; country: string; level: 1 | 2 | 3 | 4; region?: ScoutRegion }[] = [
   { id: 'westham', name: 'West Ham United', country: 'Anglie', level: 1 },
   { id: 'brentford', name: 'Brentford', country: 'Anglie', level: 1 },
   { id: 'leicester', name: 'Leicester City', country: 'Anglie', level: 1 },
@@ -74,4 +75,48 @@ export const FOREIGN_CLUBS: { id: string; name: string; country: string; level: 
   { id: 'slovan', name: 'Slovan Bratislava', country: 'Slovensko', level: 3 },
   { id: 'rapid', name: 'Rapid Vídeň', country: 'Rakousko', level: 3 },
   { id: 'ludogorec', name: 'Ludogorec Razgrad', country: 'Bulharsko', level: 3 },
+  // Úroveň 4: kluby, od kterých se hráči kupují přes zahraniční skauting (samy z české ligy nekupují).
+  { id: 'dac', name: 'DAC Dunajská Streda', country: 'Slovensko', level: 4, region: 'okoli' },
+  { id: 'trnava', name: 'Spartak Trnava', country: 'Slovensko', level: 4, region: 'okoli' },
+  { id: 'zilina', name: 'MŠK Žilina', country: 'Slovensko', level: 4, region: 'okoli' },
+  { id: 'gornik', name: 'Górnik Zabrze', country: 'Polsko', level: 4, region: 'okoli' },
+  { id: 'jagiellonia', name: 'Jagiellonia Białystok', country: 'Polsko', level: 4, region: 'okoli' },
+  { id: 'pogon', name: 'Pogoń Szczecin', country: 'Polsko', level: 4, region: 'okoli' },
+  { id: 'hajduk', name: 'Hajduk Split', country: 'Chorvatsko', level: 4, region: 'balkan' },
+  { id: 'zvezda', name: 'Crvena zvezda', country: 'Srbsko', level: 4, region: 'balkan' },
+  { id: 'partizan', name: 'Partizan Bělehrad', country: 'Srbsko', level: 4, region: 'balkan' },
+  { id: 'sarajevo', name: 'FK Sarajevo', country: 'Bosna a Hercegovina', level: 4, region: 'balkan' },
+  { id: 'maribor', name: 'NK Maribor', country: 'Slovinsko', level: 4, region: 'balkan' },
+  { id: 'cfr', name: 'CFR Kluž', country: 'Rumunsko', level: 4, region: 'balkan' },
+  { id: 'midtjylland', name: 'FC Midtjylland', country: 'Dánsko', level: 4, region: 'sever' },
+  { id: 'bodo', name: 'Bodø/Glimt', country: 'Norsko', level: 4, region: 'sever' },
+  { id: 'molde', name: 'Molde FK', country: 'Norsko', level: 4, region: 'sever' },
+  { id: 'malmo', name: 'Malmö FF', country: 'Švédsko', level: 4, region: 'sever' },
+  { id: 'djurgarden', name: 'Djurgårdens IF', country: 'Švédsko', level: 4, region: 'sever' },
+  { id: 'hjk', name: 'HJK Helsinky', country: 'Finsko', level: 4, region: 'sever' },
+  { id: 'asec', name: 'ASEC Mimosas', country: 'Pobřeží slonoviny', level: 4, region: 'afrika' },
+  { id: 'generation', name: 'Génération Foot', country: 'Senegal', level: 4, region: 'afrika' },
+  { id: 'hearts', name: 'Hearts of Oak', country: 'Ghana', level: 4, region: 'afrika' },
+  { id: 'enyimba', name: 'Enyimba', country: 'Nigérie', level: 4, region: 'afrika' },
+  { id: 'wydad', name: 'Wydad Casablanca', country: 'Maroko', level: 4, region: 'afrika' },
+  { id: 'mazembe', name: 'TP Mazembe', country: 'DR Kongo', level: 4, region: 'afrika' },
+  { id: 'velez', name: 'Vélez Sarsfield', country: 'Argentina', level: 4, region: 'amerika' },
+  { id: 'lanus', name: 'CA Lanús', country: 'Argentina', level: 4, region: 'amerika' },
+  { id: 'danubio', name: 'Danubio', country: 'Uruguay', level: 4, region: 'amerika' },
+  { id: 'idv', name: 'Independiente del Valle', country: 'Ekvádor', level: 4, region: 'amerika' },
+  { id: 'nacional', name: 'Atlético Nacional', country: 'Kolumbie', level: 4, region: 'amerika' },
+  { id: 'bragantino', name: 'RB Bragantino', country: 'Brazílie', level: 4, region: 'amerika' },
 ];
+
+/** Země EU a EHP: hráči z nich nepotřebují pracovní povolení a nepočítají se do limitu cizinců. */
+export const EU_COUNTRIES = new Set(['Slovensko', 'Polsko', 'Maďarsko', 'Chorvatsko', 'Slovinsko', 'Rumunsko', 'Bulharsko', 'Rakousko', 'Německo', 'Itálie', 'Francie', 'Nizozemsko', 'Belgie', 'Dánsko', 'Švédsko', 'Finsko', 'Norsko', 'Řecko']);
+
+/** Jména podle regionů (aby hráč z Ghany nebo Argentiny nezněl česky). */
+export const REGION_NAMES: Record<ScoutRegion, { first: string[]; last: string[] }> = {
+  okoli: { first: ['Marek', 'Tomáš', 'Jakub', 'Patrik', 'Kacper', 'Bartosz', 'Michał', 'Dávid', 'Matúš', 'Szymon'], last: ['Kováč', 'Hrubý', 'Nowak', 'Kowalski', 'Wiśniewski', 'Bednár', 'Lewandowski', 'Šimko', 'Zieliński', 'Hamšík'] },
+  balkan: { first: ['Luka', 'Marko', 'Nikola', 'Ivan', 'Stefan', 'Dino', 'Andrej', 'Mateo', 'Filip', 'Darko'], last: ['Petrović', 'Jovanović', 'Kovačić', 'Marić', 'Babić', 'Horvat', 'Popescu', 'Ilić', 'Hadžić', 'Novak'] },
+  sever: { first: ['Erik', 'Mads', 'Oskar', 'Jonas', 'Lukas', 'Emil', 'Viktor', 'Elias', 'Aksel', 'Joel'], last: ['Hansen', 'Johansson', 'Nielsen', 'Larsen', 'Berg', 'Lindqvist', 'Virtanen', 'Andersen', 'Holm', 'Nyström'] },
+  afrika: { first: ['Moussa', 'Kwame', 'Ibrahim', 'Samuel', 'Cheikh', 'Yaw', 'Emmanuel', 'Youssef', 'Ismaila', 'Victor'], last: ['Traoré', 'Mensah', 'Diallo', 'Okafor', 'Ndiaye', 'Koné', 'Boateng', 'Sarr', 'Mbemba', 'El Amrani'] },
+  amerika: { first: ['Matías', 'Santiago', 'Lucas', 'Facundo', 'Juan', 'Gabriel', 'Nicolás', 'Thiago', 'Diego', 'Andrés'], last: ['González', 'Rodríguez', 'Fernández', 'Silva', 'Pereira', 'Gómez', 'Martínez', 'Cabrera', 'Ramírez', 'Santos'] },
+  velke: { first: ['Oliver', 'Leon', 'Jamie', 'Lorenzo', 'Hugo', 'Noah', 'Finn', 'Mattia', 'Jules', 'Harvey'], last: ['Smith', 'Müller', 'Rossi', 'Dubois', 'Wright', 'Schneider', 'Bianchi', 'Martin', 'Walker', 'Fischer'] },
+};

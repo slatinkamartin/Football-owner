@@ -98,7 +98,7 @@ describe('řádky rozpočtu a jejich dopad', () => {
     old.version = 9;
     for (const c of Object.values((old as unknown as typeof start).clubs)) delete (c.finance.season as Partial<typeof c.finance.season>).fanshop;
     const m = migrateSave(old)!;
-    expect(m.version).toBe(10);
+    expect(m.version).toBe(11);
     expect(m.clubs.bohemians.finance.season.fanshop).toBe(0);
     expect(() => advanceDays(m, 40)).not.toThrow();
   });

@@ -65,8 +65,10 @@ import {
 } from './staff';
 import { computeTable, formScore } from './standings';
 import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emergencyFill, generateOffers, generateProposals, refreshFreeAgents, seasonEndContracts } from './transfers';
+import { aiForeignSignings, monthlyForeign, refreshForeignMarket, returnLoans, weeklyForeign } from './foreign';
+import { analyticsBonus, completeBigProjects, monthlyBigProjects, monthlyPrograms } from './investments';
 import { adminMonthly, pitchFactor, campBonus, dailyOperations, homeMatchOperations, maintenanceInjury, monthlyOperations } from './operations';
-import { NEW_CATEGORIES_V10, SAVE_VERSION, type Departments, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
+import { NEW_CATEGORIES_V10, NEW_CATEGORIES_V11, SAVE_VERSION, type Departments, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
 import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
 
 export const START_SEASON = 2026;
@@ -556,6 +558,7 @@ function endSeason(state: GameState, rng: Rng): void {
       book(state, own.id, 'platy', -goalBonusPoints(state) * bonusPerPoint(own), 'Prémie hráčům za splnění cíle sezóny');
     }
   }
+  returnLoans(state);
   seasonEndContracts(state, rng);
   ageAndDevelopPlayers(state, rng);
 }
@@ -623,7 +626,7 @@ function playMatchesOn(state: GameState, rng: Rng): void {
   const tables = new Map<string, ReturnType<typeof computeTable>>();
   const ownId = state.owner.clubId;
   const ownCompId = competitionOf(state, ownId)?.id;
-  const spirit = ownTeamSpirit(state) + schemeSpirit(state) + campBonus(state);
+  const spirit = ownTeamSpirit(state) + schemeSpirit(state) + campBonus(state) + analyticsBonus(state);
   for (const { fixture: f, name, tier, cup, comp } of today) {
     const home = state.clubs[f.homeId];
     const away = state.clubs[f.awayId];
@@ -716,6 +719,9 @@ function monthlyFinance(state: GameState, rng: Rng): void {
 
       if (own) {
         monthlyOperations(state, rng);
+        monthlyForeign(state);
+        monthlyPrograms(state);
+        monthlyBigProjects(state, rng);
         boardCoversLoss(state);
         monthlyFinancing(state);
       }
@@ -847,10 +853,12 @@ function processDay(state: GameState, rng: Rng): void {
       addNews(state, { kind: 'info', title: `Vedení navrhuje cíl sezóny: ${goalLabel(goal, ownComp)}`, text: 'Cíl můžete změnit ve Vedení. Podle něj se hodnotí trenér, ředitel i vaše práce.' });
     }
     ensureInterimStaff(state, rng);
+    refreshForeignMarket(state, rng);
     prepareBudget(state);
     addNews(state, { kind: 'sezona', title: `Začíná sezóna ${seasonLabel(state.season)}`, text: 'Přestupní okno je otevřené do 31. 8. Nezapomeňte stanovit cíl sezóny.' });
   }
   completeProjects(state);
+  completeBigProjects(state);
   checkBan(state);
   dailyFinancing(state, rng);
   dailyOperations(state);
@@ -861,12 +869,16 @@ function processDay(state: GameState, rng: Rng): void {
     if (e && e.result !== 'predkola') sponsorEuropeBonus(state);
   }
   if (state.date.endsWith('-01') && md !== SEASON_START) generateSponsorOffers(state, rng);
+  // Zahraniční trh se obnoví i před zimním oknem.
+  if (md === '12-01') refreshForeignMarket(state, rng);
   if (md === '06-20') createEvent(state, rng, 'valna', `${state.date.slice(0, 4)}-06-29`);
   expireEvents(state);
   if (state.owner.ousted) boardDecides(state);
   if (dayOfWeek(state.date) === 1) {
     maybeCreateEvent(state, rng);
     aiDomesticTransfers(state, rng);
+    aiForeignSignings(state, rng);
+    weeklyForeign(state);
     directorSignings(state, rng);
   }
   phaseNews(state);
@@ -982,13 +994,25 @@ export function migrateSave(saved: { version: number } & Record<string, unknown>
   if (saved.version < 8) migrateToV8(state);
   migrateToV9(state);
   migrateToV10(state);
+  migrateToV11(state);
   state.version = SAVE_VERSION;
   addNews(state, {
     kind: 'info',
-    title: 'Nová verze hry: řádky rozpočtu',
-    text: 'Ve Financích se řádky rozpočtu nastavují v Příjmech a Výdajích: catering, fanshop, akce na stadionu, prodejní politika, údržba, soustředění, bezpečnost a komunita. Rozpočet ukazuje přehlednou výsledovku a závazky na tři roky.',
+    title: 'Nová verze hry: zahraniční trh a velké investice',
+    text: 'V Přestupech je zahraniční skauting (regiony, odhady s nejistotou, hostování s opcí, limit hráčů mimo EU). Ve Stadionu jsou velké investice (nový stadion, tréninkový a komerční areál) a programy klubu (B-tým, ženský tým, analytika, partnerský klub, integrace).',
   });
   return state;
+}
+
+/** Verze 11: zahraniční skauting, programy klubu a komerční areál. */
+function migrateToV11(state: GameState): void {
+  for (const club of Object.values(state.clubs)) {
+    for (const totals of [club.finance.season, club.finance.lastSeason]) {
+      if (!totals) continue;
+      for (const k of NEW_CATEGORIES_V11) totals[k] ??= 0;
+    }
+  }
+  state.foreign ??= { networks: [], targets: [] };
 }
 
 /** Verze 10: nové kategorie financí (fanshop, akce, údržba, soustředění, bezpečnost, komunita). */

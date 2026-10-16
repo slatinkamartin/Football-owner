@@ -224,12 +224,13 @@ export function BudgetCard({ game, onChange, onOpen }: Props) {
                 <tr><td>Platy ve smlouvách</td>{future.map((f) => <td key={f.season} className="num neg">{money(f.wages)} <span className="muted small">({f.players})</span></td>)}</tr>
                 <tr><td>Splátky přestupů</td>{future.map((f) => <td key={f.season} className="num">{money(f.transfers)}</td>)}</tr>
                 <tr><td>Úvěry</td>{future.map((f) => <td key={f.season} className="num">{money(f.loans)}</td>)}</tr>
+                <tr><td>Stavby a programy klubu</td>{future.map((f) => <td key={f.season} className="num">{money(f.investments)}</td>)}</tr>
                 <tr><td>Sponzorské smlouvy</td>{future.map((f) => <td key={f.season} className="num pos">{money(f.sponsors)}</td>)}</tr>
                 <tr><td>TV práva (stejná soutěž)</td>{future.map((f) => <td key={f.season} className="num pos">{money(f.tv)}</td>)}</tr>
                 <tr className="total">
                   <td>Jisté saldo</td>
                   {future.map((f) => {
-                    const v = f.wages + f.transfers + f.loans + f.sponsors + f.tv;
+                    const v = f.wages + f.transfers + f.loans + f.investments + f.sponsors + f.tv;
                     return <td key={f.season} className={`num ${v < 0 ? 'neg' : 'pos'}`}>{money(v)}</td>;
                   })}
                 </tr>

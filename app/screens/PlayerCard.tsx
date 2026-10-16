@@ -117,8 +117,26 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
               </>
             );
           })()}
+          {p.nationality && (
+            <>
+              <dt>Národnost</dt>
+              <dd>{p.nationality}{p.nonEu ? ' (mimo EU)' : ''}</dd>
+            </>
+          )}
+          {p.adapt ? (
+            <>
+              <dt>Zabydlování</dt>
+              <dd className="neg">hraje o {Math.round(p.adapt * 100)} % slaběji, ještě asi {Math.max(1, Math.ceil(p.adapt / 0.025))} měs.</dd>
+            </>
+          ) : null}
+          {p.loan && (
+            <>
+              <dt>Hostování</dt>
+              <dd>z {clubLabel(game, p.loan.fromId)}, opce {money(p.loan.buyOption)}</dd>
+            </>
+          )}
           <dt>Smlouva do</dt>
-          <dd className={contractExpiring(game, p) ? 'neg' : ''}>{p.clubId === FREE ? '–' : `30. 6. ${p.contractUntil}`}</dd>
+          <dd className={contractExpiring(game, p) ? 'neg' : ''}>{p.clubId === FREE ? '–' : p.loan ? 'konec sezóny (hostování)' : `30. 6. ${p.contractUntil}`}</dd>
           {own && p.bookValue !== undefined && (
             <>
               <dt>Účetní hodnota registrace</dt>

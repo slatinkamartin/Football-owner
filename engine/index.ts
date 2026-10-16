@@ -26,3 +26,5 @@ export * from './financing';
 export * from './milestones';
 export * from './operations';
 export * from './scales';
+export * from './foreign';
+export * from './investments';
