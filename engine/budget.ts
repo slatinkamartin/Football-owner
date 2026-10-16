@@ -535,12 +535,20 @@ export function prepareBudget(state: GameState): void {
   const contracted = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
   const baseCap = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
   if (wageBudgetMonthly(club) < contracted) club.policy.wageMultiplier = Math.min(2, Math.ceil((contracted / Math.max(1, baseCap)) * 20) / 20);
+  // Velká nevyužitá hotovost: návrh zvedne mzdový strop (o 10 %) a rozpočet na přestupy, aby peníze pracovaly.
+  const idle = club.finance.balance - annualCosts(club, tier) * 1.2;
+  let idleNote = '';
+  if (idle > 0 && club.policy.wageMultiplier < 1.6 && (forecastSeason(state).ownerNeed ?? 0) === 0) {
+    club.policy.wageMultiplier = Math.min(1.6, Math.round((club.policy.wageMultiplier + 0.1) * 100) / 100);
+    club.policy.transferBudget = Math.round((club.policy.transferBudget + idle * 0.25) / 100_000) * 100_000;
+    idleNote = ' Klub má velkou nevyužitou hotovost, návrh proto zvedá mzdový strop o 10 % a rozpočet na přestupy.';
+  }
   state.budget.draft = policySnapshot(club, tier);
   const need = forecastSeason(state).ownerNeed ?? 0;
   addNews(state, {
     kind: need ? 'varovani' : 'info',
     title: `Rozpočtová porada: schvalte rozpočet do ${BUDGET_DEADLINE.split('-').reverse().map(Number).join('. ')}.`,
-    text: `${cfo !== undefined ? 'Finanční ředitel připravil návrh.' : 'Návrh připravila účetní podle loňska.'}${need ? ` Ani s úsporami klub sezónu bez peněz navíc neutáhne: potřeba od majitele asi ${mil(need)}.` : ''} Najdete ho ve Financích.`,
+    text: `${cfo !== undefined ? 'Finanční ředitel připravil návrh.' : 'Návrh připravila účetní podle loňska.'}${need ? ` Ani s úsporami klub sezónu bez peněz navíc neutáhne: potřeba od majitele asi ${mil(need)}.` : ''} Najdete ho ve Financích.${idleNote}`,
   });
 }
 

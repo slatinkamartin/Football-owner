@@ -41,11 +41,11 @@ export interface RegionInfo {
 }
 
 export const REGIONS: Record<ScoutRegion, RegionInfo> = {
-  okoli: { label: 'Slovensko a Polsko', note: 'levní hráči podobní české lize, rychle se zabydlí', annual: 1_500_000, quality: -1, ages: [20, 29], price: 0.5, wage: 0.95, adapt: 0.03, err: 0.8, growth: 0, agent: 0.08 },
-  balkan: { label: 'Balkán', note: 'technicky zdatní hráči, dobrý poměr ceny a výkonu', annual: 2_500_000, quality: 1, ages: [20, 28], price: 0.55, wage: 1, adapt: 0.06, err: 1.1, growth: 1, agent: 0.1 },
-  sever: { label: 'Skandinávie', note: 'spolehliví profesionálové, ale dražší na platech', annual: 3_000_000, quality: 2, ages: [21, 29], price: 0.65, wage: 1.3, adapt: 0.04, err: 0.9, growth: 0, agent: 0.08 },
-  afrika: { label: 'Afrika', note: 'mladí s velkým potenciálem a levným odstupným; delší zabydlování a pracovní povolení', annual: 3_500_000, quality: -3, ages: [18, 22], price: 0.35, wage: 0.85, adapt: 0.12, err: 1.7, growth: 6, agent: 0.15 },
-  amerika: { label: 'Jižní Amerika', note: 'talenty s nejvyšším potenciálem; dražší, agenti berou víc', annual: 5_000_000, quality: 0, ages: [18, 23], price: 0.7, wage: 1.15, adapt: 0.1, err: 1.5, growth: 7, agent: 0.15 },
+  okoli: { label: 'Slovensko a Polsko', note: 'levní hráči podobní české lize, rychle se zabydlí', annual: 1_500_000, quality: -1, ages: [20, 29], price: 0.5, wage: 0.8, adapt: 0.03, err: 0.8, growth: 0, agent: 0.08 },
+  balkan: { label: 'Balkán', note: 'technicky zdatní hráči, dobrý poměr ceny a výkonu', annual: 2_500_000, quality: 1, ages: [20, 28], price: 0.55, wage: 0.85, adapt: 0.06, err: 1.1, growth: 1, agent: 0.1 },
+  sever: { label: 'Skandinávie', note: 'spolehliví profesionálové, ale dražší na platech', annual: 3_000_000, quality: 2, ages: [21, 29], price: 0.65, wage: 1.15, adapt: 0.04, err: 0.9, growth: 0, agent: 0.08 },
+  afrika: { label: 'Afrika', note: 'mladí s velkým potenciálem a levným odstupným; delší zabydlování a pracovní povolení', annual: 3_500_000, quality: -3, ages: [18, 22], price: 0.35, wage: 0.7, adapt: 0.12, err: 1.7, growth: 6, agent: 0.15 },
+  amerika: { label: 'Jižní Amerika', note: 'talenty s nejvyšším potenciálem; dražší, agenti berou víc', annual: 5_000_000, quality: 0, ages: [18, 23], price: 0.7, wage: 0.95, adapt: 0.1, err: 1.5, growth: 7, agent: 0.15 },
   velke: { label: 'Hostování z velkých lig', note: 'mladí hráči top klubů na hostování s opcí; bez odstupného, po sezóně se vrací', annual: 4_000_000, quality: 4, ages: [19, 22], price: 1.3, wage: 1.2, adapt: 0.05, err: 0.6, growth: 4, agent: 0.03, loans: true },
 };
 
@@ -118,7 +118,8 @@ export function makeForeignPlayer(state: GameState, rng: Rng, region: ScoutRegio
 function makeTarget(state: GameState, rng: Rng, region: ScoutRegion): ForeignTarget {
   const info = REGIONS[region];
   const own = state.clubs[state.owner.clubId];
-  const { player: p, sellerId } = makeForeignPlayer(state, rng, region, ownLevel(state) + info.quality + rng.normal(0, 4));
+  // Skauti hledají posily kolem úrovně naší sestavy (generátor přidá rozptyl ±5).
+  const { player: p, sellerId } = makeForeignPlayer(state, rng, region, ownLevel(state) - 2 + info.quality);
   const value = marketValue(p, state.season) * costScale(tierOf(state, own.id)) ** 0.5;
   const wage = roundMoney(playerWage(p.overall, own.reputation) * info.wage * (0.9 + 0.25 * rng.next()), 1_000);
   p.wage = wage;

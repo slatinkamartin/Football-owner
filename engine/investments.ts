@@ -150,6 +150,8 @@ export interface BigOption {
 const roundSeats = (v: number) => Math.round(v / 500) * 500;
 const SEAT_COST: Record<number, number> = { 1: 85_000, 2: 55_000, 3: 35_000 };
 const WEEKS: Record<BigProjectKind, number> = { stadion: 130, velkystadion: 156, areal: 70, komercni: 80 };
+/** Vlastní podíl, který musí klub mít na účtu před zahájením (zbytek může financovat investiční úvěr). */
+export const OWN_SHARE = 0.2;
 /** Roční výnos komerčního areálu jako podíl ceny stavby (nájmy, hotel, kongresy). */
 export const COMMERCIAL_YIELD = 0.085;
 
@@ -184,7 +186,8 @@ function stadiumGain(state: GameState, capacity: number): number {
 export function bigProjectOptions(state: GameState): BigOption[] {
   const club = own(state);
   const tier = tierOf(state, club.id);
-  const k = scale(tier);
+  // Areály se dimenzují podle velikosti klubu (pověst), ne jen podle soutěže.
+  const k = scale(tier) * clamp((club.reputation / 75) ** 2, 0.35, 1.3);
   const seat = SEAT_COST[Math.min(3, tier)] ?? 35_000;
   const cap = club.stadium.capacity;
   const running = state.bigProjects ?? [];
@@ -245,7 +248,7 @@ export function bigProjectOptions(state: GameState): BigOption[] {
     else if (o.kind === 'areal' && club.facilities.training < 3) blocked = 'Nejdřív tréninkové centrum aspoň na 3 hvězdy.';
     else if (o.kind === 'komercni' && club.facilities.commercial) blocked = 'Klub už komerční areál má.';
     else if ((o.kind === 'stadion' || o.kind === 'velkystadion') && club.facilities.newStadium && cap >= (o.capacity ?? 0)) blocked = 'Klub už nový stadion této velikosti má.';
-    else if (club.finance.balance < monthly * 3) blocked = `Klub nemá na první tři splátky (${mil(monthly * 3)}). Pomůže vklad nebo půjčka majitele.`;
+    else if (club.finance.balance < Math.max(monthly * 3, (o.cost - grant) * OWN_SHARE)) blocked = `Banka financuje nejvýš 80 %: klub musí mít aspoň ${mil(Math.max(monthly * 3, (o.cost - grant) * OWN_SHARE))} vlastních peněz. Pomůže vklad nebo půjčka majitele.`;
     return { ...o, grant, monthly, yearlyGain: gain, payback, blocked };
   });
 }
@@ -276,7 +279,7 @@ export function startBigProject(prev: GameState, kind: BigProjectKind): ActionRe
   club.finance.assets = [...(club.finance.assets ?? []), { projectId: project.id, label: `${option.label} (rozestavěno)`, value: 0, monthly: 0 }];
   if (kind === 'stadion' || kind === 'velkystadion') club.fanMood = clamp(club.fanMood + 5, 0, 100);
   satisfy(state, kind === 'komercni' ? 3 : 5, kind === 'komercni' ? ['investor', 'spekulant'] : ['mesto', 'patriot']);
-  const message = `Zahájena stavba: ${option.label}. Cena ${mil(option.cost)}, město přispěje ${mil(option.grant)}, splátky asi ${mil(option.monthly)} měsíčně do ${project.end.split('-').reverse().join('. ')}.`;
+  const message = `Zahájena stavba: ${option.label}. Cena ${mil(option.cost)}, město přispěje ${mil(option.grant)}, splátky asi ${mil(option.monthly)} měsíčně do ${project.end.split('-').reverse().join('. ')}. Na splátky můžete čerpat investiční úvěr (Finance › Financování).`;
   addNews(state, { kind: 'sezona', title: `Zahájena stavba: ${option.label}`, text: message });
   return { state, ok: true, message };
 }
