@@ -69,6 +69,9 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
           {p.suspension > 0 && <Badge tone="warn">stop {p.suspension}</Badge>}
           {game.market.listed.includes(p.id) && <Badge tone="warn">na prodej</Badge>}
           {own && p.morale < 25 && <Badge tone="bad">nespokojený</Badge>}
+          {!own && nav.watch && (
+            <button className="linkbtn" onClick={() => nav.watch!(p.id)}>{(game.watchlist ?? []).includes(p.id) ? '★ sledovaný' : '☆ sledovat'}</button>
+          )}
         </div>
       </header>
 

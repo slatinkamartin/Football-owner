@@ -112,6 +112,8 @@ export interface Player {
   adapt?: number;
   /** Kolikrát se hráč nedávno dostal do sestavy kola (zvedá zájem kupců, měsíčně slábne). */
   spotlight?: number;
+  /** Výstupní klauzule: za tuto částku může hráč odejít (jiný klub ji může kdykoli v okně zaplatit). */
+  releaseClause?: number;
   /** Hostování z ciziny: na konci sezóny se vrací, pokud klub nevyužije opci. */
   loan?: { fromId: string; buyOption: number };
 }
@@ -332,6 +334,8 @@ export interface IncomingOffer {
   note: string;
   /** Domácí kupec platí ve splátkách (polovina hned). */
   instalments?: boolean;
+  /** Druhý kupec přihazuje (souboj o hráče). */
+  competing?: boolean;
 }
 
 export interface Negotiation {
@@ -350,6 +354,10 @@ export interface Negotiation {
   log: string[];
   /** Odstupné ve splátkách (polovina hned, zbytek do roka, o 5 % dražší). */
   instalments?: boolean;
+  /** Konkurenční klub, který o hráče usiluje taky. */
+  rival?: { clubId: string; fee: number; wage: number };
+  /** Doplatek prodávajícímu při postupu nebo Evropě (levnější odstupné teď). */
+  conditional?: boolean;
 }
 
 export interface TransferRecord {
@@ -649,6 +657,14 @@ export interface Story {
   log: string[];
   done?: boolean;
   outcome?: 'dobre' | 'spatne' | 'neutralni';
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  style: 'ferovy' | 'chamtivy' | 'kontakty';
+  /** Vztah s majitelem 0–100. */
+  relation: number;
 }
 
 export interface OwnerPromise {
@@ -994,6 +1010,18 @@ export interface GameState {
   campsPaid?: { season: number; summer?: CampChoice; winter?: CampChoice };
   version: typeof SAVE_VERSION;
   stories?: Story[];
+  /** Agenti hráčů a vztah s majitelem. */
+  agents?: Agent[];
+  /** Hráči jiných klubů, které sledují skauti. */
+  watchlist?: string[];
+  /** Tipy od agentů: hráč je k mání levněji do data. */
+  tips?: { playerId: string; agentId: string; until: string }[];
+  /** Podmíněné doplatky za nákupy (při postupu nebo Evropě). */
+  conditionals?: { playerId: string; playerName: string; sellerId: string; amount: number; season: number; kind: 'evropa' | 'postup' }[];
+  /** Po prodeji opory: ředitel hledá náhradu. */
+  domino?: { soldName: string; soldOverall: number; position: Position; budget: number; until: string };
+  /** Deadline day: hráči nabídnutí v posledních dnech okna se slevou. */
+  deadlineDeals?: string[];
   /** Sliby majitele vedení (posila, rozpočet z pohovoru). */
   promises?: OwnerPromise[];
   /** Letní přijímačky dorostu klubu majitele. */

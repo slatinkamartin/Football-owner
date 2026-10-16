@@ -68,6 +68,7 @@ import { aiDomesticTransfers, directorSignings, aiSalesAbroad, closeWindow, emer
 import { decisiveness, settingsOf } from './settings';
 import { recordPulse, pulseValues, snapshotPulse } from './pulse';
 import { weeklyStories } from './stories';
+import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
 import { afterOwnMatch, halftimeAdjust, pendingPrematch, planEffect } from './matchday';
 import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyRivalOwners } from './league';
@@ -792,6 +793,8 @@ function monthlyFinance(state: GameState, rng: Rng): void {
   wageMorale(state);
   monthlyDevelopment(state, rng);
   monthlyDelegation(state);
+  monthlyAgents(state, rng);
+  monthlyWatch(state);
   // Pozornost ze sestavy kola měsíčně slábne.
   for (const p of Object.values(state.players)) if (p.spotlight) p.spotlight = p.spotlight > 1 ? p.spotlight - 1 : undefined;
   monthlyAmortization(state);
@@ -900,6 +903,15 @@ function processDay(state: GameState, rng: Rng): void {
     }
     ensureInterimStaff(state, rng);
     refreshForeignMarket(state, rng);
+    {
+      // Podmíněné doplatky za loňský postup nebo Evropu.
+      const last = state.history[state.history.length - 1];
+      const prevTier = last ? state.competitions[last.ownerClub.competitionId]?.tier : undefined;
+      const nowTier = competitionOf(state, state.owner.clubId)?.tier;
+      const promoted = !!prevTier && !!nowTier && nowTier < prevTier;
+      const europe = !!state.europe?.entries.some((e) => e.clubId === state.owner.clubId && e.season === state.season);
+      settleConditionals(state, promoted, europe);
+    }
     prepareBudget(state);
     // Finanční ředitel s pravomocí schválí návrh sám (majitel ho dál může upravit).
     if (delegationOf(state.clubs[state.owner.clubId]).finance && state.clubs[state.owner.clubId].staff.financeId) {
@@ -930,6 +942,7 @@ function processDay(state: GameState, rng: Rng): void {
   if (dayOfWeek(state.date) === 1) {
     weeklyStories(state, rng);
     checkPromises(state);
+    weeklyReleaseClauses(state, rng);
     weeklyRivalOwners(state, rng);
     snapshotPulse(state);
     maybeCreateEvent(state, rng);
@@ -942,7 +955,11 @@ function processDay(state: GameState, rng: Rng): void {
   const window = transferWindow(state.date);
   if (md === '01-08') addNews(state, { kind: 'info', title: 'Otevřelo se zimní přestupní okno (do 14. 2.)' });
   if (window && md !== SEASON_START && (md.endsWith('-01') || md.endsWith('-15') || md === '01-08')) generateProposals(state);
-  if (window && dayOfWeek(state.date) === 1) generateOffers(state, rng);
+  // Deadline day: nabídky a přestupy soupeřů každý den.
+  const deadline = deadlineDay(state);
+  if (window && (dayOfWeek(state.date) === 1 || deadline)) generateOffers(state, rng);
+  if (deadline && dayOfWeek(state.date) !== 1) aiDomesticTransfers(state, rng);
+  dailyDeadline(state, rng);
   playMatchesOn(state, rng);
   afterMatchday(state, rng);
   for (const comp of Object.values(state.competitions)) {
@@ -1016,6 +1033,7 @@ export function advanceUntil(prev: GameState, target: PlayTarget): { state: Game
   let fixtureId: string | undefined;
   let reason: string | undefined;
   const prematchAtStart = !!pendingPrematch(state);
+  const deadlineAtStart = !!deadlineDay(state);
   for (let i = 0; i < 400 && !state.gameOver; i++) {
     const played = stepDay(state, rng, own);
     if (played) fixtureId = played;
@@ -1042,6 +1060,10 @@ export function advanceUntil(prev: GameState, target: PlayTarget): { state: Game
         reason = `Zranění opory: ${hurt.firstName} ${hurt.lastName} (do ${formatDate(hurt.injuredUntil!)})`;
         break;
       }
+    }
+    if (stops.milestone && !deadlineAtStart && deadlineDay(state)) {
+      reason = 'Deadline day: poslední tři dny přestupního okna, hra jde po dnech';
+      break;
     }
     const prematch = pendingPrematch(state);
     if (stops.decision && prematch && !prematchAtStart) {

@@ -1,3 +1,4 @@
+import { agentFeeFactor } from './market';
 import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
 import { advanceWeek, newGame } from './game';
@@ -116,7 +117,7 @@ describe('přestupy', () => {
     expect(p.wage).toBe(n.minWage);
     expect(p.contractUntil).toBe(start.season + 3);
     expect(r.state.market.spent).toBe(n.minFee);
-    expect(r.state.clubs.slavia.finance.balance).toBe(before.clubs.slavia.finance.balance - n.minFee - n.minWage * 2);
+    expect(r.state.clubs.slavia.finance.balance).toBe(before.clubs.slavia.finance.balance - n.minFee - Math.round(n.minWage * 2 * agentFeeFactor(before, playerId)));
     expect(r.state.clubs.pardubice.finance.balance).toBe(before.clubs.pardubice.finance.balance + n.minFee);
   });
 

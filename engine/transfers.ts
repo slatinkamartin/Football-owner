@@ -1,3 +1,4 @@
+import { AGENT_STYLE_LABEL, agentFeeFactor, agentOf, agentWageFactor, changeAgentRelation, closeDomino, deadlineDay, deadlineDiscount, releaseClauseFor, startDomino, tipDiscount } from './market';
 import { crisisDiscount, noteTimeline } from './league';
 import { book, ownerAccounting, playerWage, wageBudgetMonthly } from './finance';
 import { schemeWageFactor, SECTION_LABEL, sectionRoomFor, sectionsOf, sectionUsage } from './wages';
@@ -65,7 +66,7 @@ export function askingPrice(state: GameState, p: Player, keyPlayers?: Set<string
   // Hráč, se kterým majitel potají jednal, tlačí na svůj klub, aby ho pustil levněji.
   const tapped = state.grey?.tapped?.includes(p.id) ? 0.75 : 1;
   // Šetřílek v krizi prodává levněji.
-  return roundMoney(playerValue(state, p) * contractFactor * keyFactor * tapped * crisisDiscount(state, p.clubId));
+  return roundMoney(playerValue(state, p) * contractFactor * keyFactor * tapped * crisisDiscount(state, p.clubId) * tipDiscount(state, p.id) * deadlineDiscount(state, p.id));
 }
 
 /** Tržní plat hráče v daném klubu (kolik by klub jeho úrovně za takového hráče běžně platil). */
@@ -80,6 +81,8 @@ export function wageDemand(state: GameState, p: Player, clubId: string): number 
   if (p.clubId !== FREE && tierOf(state, clubId) > tierOf(state, p.clubId)) demand *= 1.25;
   demand *= 0.95 + 0.2 * hash01(`${p.id}-${state.season}-plat`);
   demand *= schemeWageFactor(state, clubId);
+  // Agent hráče (chamtivý tlačí výš, dobrý vztah s majitelem stahuje nároky).
+  if (clubId === state.owner.clubId) demand *= agentWageFactor(state, p.id);
   return roundMoney(Math.max(demand, 5_000), 1_000);
 }
 
@@ -242,8 +245,42 @@ export function startNegotiation(prev: GameState, playerId: string): ActionResul
     ],
   };
   if (!opinion.recommend) negotiation.log.push(`Sportovní ředitel přestup nedoporučuje: ${opinion.reasons.join(' ')}`);
+  // Konkurence: o dobrého hráče se může přetahovat i jiný klub.
+  const rival = rivalBidder(state, p);
+  if (rival) {
+    negotiation.rival = rival;
+    negotiation.log.push(`O hráče usiluje i ${clubLabel(state, rival.clubId)}: nabízí ${rival.fee.toLocaleString('cs-CZ')} Kč a plat ${rival.wage.toLocaleString('cs-CZ')} Kč.`);
+  }
+  const agent = agentOf(state, p.id);
+  negotiation.log.push(`Hráče zastupuje agent ${agent.name} (${AGENT_STYLE_LABEL[agent.style].label}, vztah ${Math.round(agent.relation)}).`);
   state.market.negotiation = negotiation;
   return { state, ok: true, message: negotiation.log.join(' ') };
+}
+
+/** Konkurenční klub, který o hráče usiluje taky (u lepších hráčů častěji). */
+function rivalBidder(state: GameState, p: Player): Negotiation['rival'] {
+  const own = state.owner.clubId;
+  const level = bestEleven(squadOf(state, own)).reduce((a, x) => a + x.overall, 0) / 11;
+  const chance = p.overall >= level ? 0.35 : p.overall >= level - 4 ? 0.15 : 0;
+  if (hash01(`${p.id}-${state.date}-rival`) >= chance) return undefined;
+  const ownRep = state.clubs[own].reputation;
+  const comp = Object.values(state.competitions).find((c) => c.clubIds.includes(own));
+  const clubs = (comp?.clubIds ?? []).filter((id) => id !== own && id !== p.clubId && state.clubs[id].reputation >= ownRep - 8 && !state.clubs[id].reserveOf);
+  if (!clubs.length) return undefined;
+  const clubId = clubs[Math.floor(hash01(`${p.id}-rivalclub`) * clubs.length)];
+  const fee = p.clubId === FREE ? 0 : roundMoney(askingPrice(state, p) * (1 + 0.2 * hash01(`${p.id}-rivalfee`)));
+  const wage = roundMoney(wageDemand(state, p, own) * (1.05 + 0.1 * hash01(`${p.id}-rivalwage`)), 1_000);
+  return { clubId, fee, wage };
+}
+
+/** Jednání skončilo neúspěchem a hráče přetáhl konkurent. */
+function loseToRival(state: GameState, neg: Negotiation): string {
+  const p = state.players[neg.playerId];
+  if (!neg.rival || !p || p.clubId === state.owner.clubId) return '';
+  executeTransfer(state, p, neg.rival.clubId, neg.rival.fee, neg.rival.wage, 3);
+  state.owner.trust.reditel = clamp(state.owner.trust.reditel - 1, 0, 100);
+  addNews(state, { kind: 'info', title: `${playerName(p)} míří do ${clubLabel(state, neg.rival.clubId)}`, text: 'Souboj o hráče jsme prohráli.' });
+  return ` Hráče přetáhl ${clubLabel(state, neg.rival.clubId)}.`;
 }
 
 export function cancelNegotiation(prev: GameState): GameState {
@@ -253,7 +290,7 @@ export function cancelNegotiation(prev: GameState): GameState {
   return state;
 }
 
-export function offerFee(prev: GameState, fee: number, instalments = false): ActionResult {
+export function offerFee(prev: GameState, fee: number, instalments = false, conditional = false): ActionResult {
   const n = prev.market.negotiation;
   if (!n || n.stage !== 'klub') return { state: prev, ok: false, message: 'Neprobíhá jednání s klubem.' };
   const value = roundMoney(fee);
@@ -264,12 +301,14 @@ export function offerFee(prev: GameState, fee: number, instalments = false): Act
   const neg = state.market.negotiation!;
   const seller = clubLabel(state, neg.sellerId);
   let message: string;
-  // Splátky prodávající přijme jen s příplatkem 5 %.
-  const effective = instalments ? value / 1.05 : value;
-  if (effective >= neg.minFee) {
+  // Splátky prodávající přijme jen s příplatkem 5 %, doplatek při postupu/Evropě počítá napůl.
+  const effective = (instalments ? value / 1.05 : value) * (conditional ? 1.15 : 1);
+  const required = Math.max(neg.minFee, neg.rival ? neg.rival.fee * 1.02 : 0);
+  if (effective >= required) {
     neg.stage = 'hrac';
     neg.agreedFee = value;
     neg.instalments = instalments;
+    neg.conditional = conditional;
     neg.counter = undefined;
     neg.roundsLeft = 3;
     message = `${seller} přijal nabídku ${value.toLocaleString('cs-CZ')} Kč. Teď je na řadě smlouva s hráčem.`;
@@ -277,7 +316,10 @@ export function offerFee(prev: GameState, fee: number, instalments = false): Act
     neg.roundsLeft -= 1;
     if (neg.roundsLeft <= 0) {
       neg.stage = 'neuspech';
-      message = `${seller} ukončil jednání.`;
+      message = `${seller} ukončil jednání.${loseToRival(state, neg)}`;
+    } else if (neg.rival && effective >= neg.minFee) {
+      neg.counter = roundMoney(neg.rival.fee * 1.03);
+      message = `${seller} dává přednost nabídce ${clubLabel(state, neg.rival.clubId)} (${neg.rival.fee.toLocaleString('cs-CZ')} Kč). Musíte přeplatit.`;
     } else if (effective >= neg.minFee * 0.75) {
       neg.counter = roundMoney(Math.max(neg.minFee, (neg.askingFee + value) / 2));
       message = `${seller} nabídku odmítl a požaduje ${neg.counter.toLocaleString('cs-CZ')} Kč.`;
@@ -289,7 +331,7 @@ export function offerFee(prev: GameState, fee: number, instalments = false): Act
   return { state, ok: neg.stage !== 'neuspech', message };
 }
 
-export function offerTerms(prev: GameState, wage: number, years: number): ActionResult {
+export function offerTerms(prev: GameState, wage: number, years: number, release = false): ActionResult {
   const n = prev.market.negotiation;
   if (!n || n.stage !== 'hrac') return { state: prev, ok: false, message: 'Neprobíhá jednání s hráčem.' };
   const state = structuredClone(prev);
@@ -301,10 +343,17 @@ export function offerTerms(prev: GameState, wage: number, years: number): Action
   if (p.clubId !== neg.sellerId) {
     neg.stage = 'neuspech';
     message = `${playerName(p)} mezitím přestoupil jinam.`;
-  } else if (value >= neg.minWage) {
+  } else if (value >= Math.max(neg.minWage * (release ? 0.9 : 1), neg.rival ? neg.rival.wage : 0)) {
     const own = state.owner.clubId;
+    const sellerId = p.clubId;
     executeTransfer(state, p, own, neg.agreedFee, value, clamp(years, 1, 5), { instalments: neg.instalments });
-    const agentFee = value * 2;
+    if (release) p.releaseClause = releaseClauseFor(state, p, neg.agreedFee);
+    if (neg.conditional && neg.agreedFee > 0) {
+      const tier = tierOf(state, own);
+      state.conditionals = [...(state.conditionals ?? []), { playerId: p.id, playerName: playerName(p), sellerId, amount: roundMoney(neg.agreedFee * 0.3), season: state.season, kind: tier === 1 ? 'evropa' : 'postup' }];
+    }
+    const agentFee = Math.round(value * 2 * agentFeeFactor(state, p.id));
+    changeAgentRelation(state, p.id, 4);
     book(state, own, 'prestupy', -agentFee, `Odměna agentovi: ${playerName(p)}`);
     ownerAccounting(state).agentFees += agentFee;
     neg.stage = 'hotovo';
@@ -322,10 +371,14 @@ export function offerTerms(prev: GameState, wage: number, years: number): Action
     neg.roundsLeft -= 1;
     if (neg.roundsLeft <= 0) {
       neg.stage = 'neuspech';
-      message = `${playerName(p)} a jeho agent jednání ukončili.`;
-    } else if (value >= neg.minWage * 0.85) {
-      neg.counter = neg.minWage;
-      message = `Agent požaduje ${neg.minWage.toLocaleString('cs-CZ')} Kč měsíčně.`;
+      changeAgentRelation(state, p.id, -2);
+      message = `${playerName(p)} a jeho agent jednání ukončili.${loseToRival(state, neg)}`;
+    } else if (neg.rival && value >= neg.minWage) {
+      neg.counter = neg.rival.wage;
+      message = `${clubLabel(state, neg.rival.clubId)} nabízí plat ${neg.rival.wage.toLocaleString('cs-CZ')} Kč. Agent chce aspoň tolik.`;
+    } else if (value >= neg.minWage * (release ? 0.9 : 1) * 0.85) {
+      neg.counter = roundMoney(neg.minWage * (release ? 0.9 : 1), 1_000);
+      message = `Agent požaduje ${neg.counter.toLocaleString('cs-CZ')} Kč měsíčně.`;
     } else {
       message = 'Agent nabídku odmítl jako urážlivou.';
     }
@@ -495,8 +548,11 @@ export function generateOffers(state: GameState, rng: Rng): void {
     if (!buyerId && rng.chance(domesticChance)) buyerId = rng.pick(domestic);
     if (!buyerId) return;
 
-    const fee = offerFeeFor(rng, value, level, listed);
+    // Agent s kontakty do ciziny prodá dráž do zahraničí.
+    const contacts = level && agentOf(state, p.id).style === 'kontakty' ? 1.08 : 1;
+    const fee = roundMoney(offerFeeFor(rng, value, level, listed) * contacts);
     if (fee <= 0) return;
+    const deadline = !!deadlineDay(state);
     const key = rank < 5;
     // Opory se prodávají jen za výrazně víc, než jsou, i v prodejním klubu.
     const goodPrice = policy === 'drzet' ? value * 1.4 : policy === 'prodejni' && !key ? value * 0.95 : value * 1.15;
@@ -507,7 +563,7 @@ export function generateOffers(state: GameState, rng: Rng): void {
       playerId: p.id,
       buyerId,
       fee,
-      expires: addDaysIso(state.date, 10),
+      expires: addDaysIso(state.date, deadline ? 1 : 10),
       instalments: !isForeign(buyerId) && rng.chance(0.5),
       advice,
       note:
@@ -518,6 +574,14 @@ export function generateOffers(state: GameState, rng: Rng): void {
             : 'Sportovní ředitel doporučuje odmítnout: hráč má vyšší hodnotu.',
     });
     addNews(state, { kind: 'info', title: `${clubLabel(state, buyerId)} nabízí za ${playerName(p)} ${fee.toLocaleString('cs-CZ')} Kč` });
+    // Souboj o hráče: druhý kupec přihodí.
+    const second = rng.chance(0.2) ? (isForeign(buyerId) ? domestic.find((id) => id !== buyerId) : foreignBuyer(rng, p, state.season)?.id) : undefined;
+    if (second && second !== buyerId) {
+      const fee2 = roundMoney(fee * (1.05 + rng.next() * 0.1));
+      state.market.offers[state.market.offers.length - 1].competing = true;
+      state.market.offers.push({ id: `o${++state.nextId}`, playerId: p.id, buyerId: second, fee: fee2, expires: addDaysIso(state.date, deadline ? 1 : 7), instalments: false, competing: true, advice: fee2 >= goodPrice || advice === 'prijmout' ? 'prijmout' : 'odmitnout', note: `Přihazuje proti nabídce ${clubLabel(state, buyerId)}.` });
+      addNews(state, { kind: 'info', title: `Souboj o ${playerName(p)}: ${clubLabel(state, second)} přihazuje ${fee2.toLocaleString('cs-CZ')} Kč` });
+    }
   });
 }
 
@@ -572,6 +636,8 @@ export function acceptOffer(prev: GameState, offerId: string, sellOn = false): A
   if (offer.advice === 'odmitnout') state.owner.trust.reditel = clamp(state.owner.trust.reditel - 4, 0, 100);
   if (key) state.owner.trust.trener = clamp(state.owner.trust.trener - 5, 0, 100);
   if (squad.indexOf(p) < 3) noteTimeline(state, `prodej opory ${p.lastName}`);
+  if (squad.indexOf(p) < 5) startDomino(state, p, fee);
+  if (offer.advice === 'prijmout') changeAgentRelation(state, p.id, 2);
   const message = `${playerName(p)} přestoupil do ${clubLabel(state, offer.buyerId)} za ${fee.toLocaleString('cs-CZ')} Kč${offer.instalments ? ' (ve splátkách)' : ''}${sellOn && !isForeign(offer.buyerId) ? `, s podílem ${Math.round(SELL_ON_PCT * 100)} % z dalšího prodeje` : ''}.`;
   addNews(state, { kind: 'info', title: `Prodej: ${playerName(p)}`, text: key ? `${message} Trenér nese odchod opory nelibě.` : message });
   return { state, ok: true, message };
@@ -742,6 +808,8 @@ export function trimFreeAgents(state: GameState): void {
 
 /** Konec okna: návrhy a nabídky propadnou, chybějící hráče doplní kádr z nouze. */
 export function closeWindow(state: GameState, rng: Rng): void {
+  closeDomino(state);
+  state.deadlineDeals = [];
   state.market.proposals = [];
   state.market.offers = [];
   if (state.market.negotiation && state.market.negotiation.stage !== 'hotovo') state.market.negotiation = undefined;

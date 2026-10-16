@@ -903,3 +903,11 @@ table.sections td .muted.small { display: block; }
 /* Etapa C: lidé */
 .interview { max-width: 560px; display: flex; flex-direction: column; gap: 8px; max-height: 92vh; overflow-y: auto; }
 .interview h2 { margin: 0; }
+
+/* Etapa D: přestupy */
+.deadline { border: 2px solid var(--neg); }
+.watch-row { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.watch-row:last-child { border-bottom: 0; }
+.star-btn { background: none; border: none; padding: 0 4px 0 0; color: #e0a030; font-size: 15px; cursor: pointer; }
+.inline-form label.check { flex-basis: 100%; margin: 2px 0; }
+.inline-form label.check input { width: auto; }

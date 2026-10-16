@@ -41,6 +41,7 @@ import {
 import { Badge, Notice } from '../components';
 import { money } from '../format';
 import { ForeignMarket } from './ForeignMarket';
+import { AgentsCard, DeadlineCard, DominoCard, WatchlistCard } from './MarketExtras';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
 
@@ -82,6 +83,8 @@ export function Transfers({ game, onChange }: Props) {
 
       <Notice message={message?.text ?? null} ok={message?.ok} />
 
+      <DeadlineCard game={game} onResult={apply} />
+      <DominoCard game={game} onResult={apply} />
       {game.market.negotiation && <NegotiationCard game={game} onResult={apply} onClose={() => onChange(cancelNegotiation(game))} />}
 
       <div className="grid two">
@@ -90,6 +93,10 @@ export function Transfers({ game, onChange }: Props) {
       </div>
 
       <Search game={game} onResult={apply} />
+      <div className="grid two">
+        <WatchlistCard game={game} onResult={apply} />
+        <AgentsCard game={game} />
+      </div>
       <ForeignMarket game={game} onChange={onChange} onResult={apply} />
       <History game={game} />
     </div>
@@ -116,6 +123,8 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
   const [wage, setWage] = useState(String(n.stage === 'hrac' && n.counter ? n.counter : Math.round(n.minWage * 0.9 / 1000) * 1000));
   const [years, setYears] = useState(3);
   const [split, setSplit] = useState(false);
+  const [conditional, setConditional] = useState(false);
+  const [release, setRelease] = useState(false);
   const done = n.stage === 'hotovo' || n.stage === 'neuspech';
   const room = p && n.stage === 'hrac' ? sectionRoomFor(game, p, Number(wage.replace(/\s/g, '')) || 0) : undefined;
 
@@ -138,12 +147,16 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
           <label htmlFor="neg-fee">Odstupné</label>
           <input id="neg-fee" inputMode="decimal" value={fee} onChange={(e) => setFee(e.target.value)} />
           <span>mil. Kč</span>
-          <button className="primary" onClick={() => onResult(offerFee(game, Number(fee.replace(',', '.')) * 1_000_000, split))}>
+          <button className="primary" onClick={() => onResult(offerFee(game, Number(fee.replace(',', '.')) * 1_000_000, split, conditional))}>
             Nabídnout
           </button>
           <label className="check">
             <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} />
             <span>Ve splátkách (polovina hned, zbytek do roka; klub chce o 5 % víc)</span>
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={conditional} onChange={(e) => setConditional(e.target.checked)} />
+            <span>Doplatek 30 % při {game.competitions && Object.values(game.competitions).find((c) => c.clubIds.includes(game.owner.clubId))?.tier === 1 ? 'postupu do Evropy' : 'postupu'} (prodávající bere nabídku asi o 15 % výš)</span>
           </label>
         </div>
       )}
@@ -155,9 +168,13 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
           <select id="neg-years" value={years} onChange={(e) => setYears(Number(e.target.value))}>
             {[1, 2, 3, 4, 5].map((y) => <option key={y} value={y}>{y} {y === 1 ? 'rok' : y < 5 ? 'roky' : 'let'}</option>)}
           </select>
-          <button className="primary" onClick={() => onResult(offerTerms(game, Number(wage.replace(/\s/g, '')), years))}>
+          <button className="primary" onClick={() => onResult(offerTerms(game, Number(wage.replace(/\s/g, '')), years, release))}>
             Nabídnout smlouvu
           </button>
+          <label className="check">
+            <input type="checkbox" checked={release} onChange={(e) => setRelease(e.target.checked)} />
+            <span>Výstupní klauzule (hráč chce o 10 % nižší plat, ale může odejít, když někdo zaplatí klauzuli)</span>
+          </label>
         </div>
       )}
       {n.stage === 'hrac' && (
@@ -237,7 +254,7 @@ function Offers({ game, onResult, onReject }: { game: GameState; onResult: (r: A
                   <strong>{clubLabel(game, o.buyerId)}</strong> nabízí za <strong><PlayerLink id={p.id}>{playerName(p)}</PlayerLink></strong> {money(o.fee)}
                 </span>
                 <p className="muted small">
-                  Tržní hodnota {money(playerValue(game, p))}. Platí do {formatShortDate(o.expires)}.
+                  Tržní hodnota {money(playerValue(game, p))}. Platí do {formatShortDate(o.expires)}.{o.competing && <> <Badge tone="warn">souboj kupců</Badge></>}
                 </p>
                 <p className="small">
                   <Badge tone={o.advice === 'prijmout' ? 'good' : 'warn'}>{o.advice === 'prijmout' ? 'Ředitel: přijmout' : 'Ředitel: odmítnout'}</Badge>{' '}

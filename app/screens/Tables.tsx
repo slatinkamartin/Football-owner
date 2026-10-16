@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { seasonOutlook, isRival, ratingText, averageRating, competitionOf, finalStandings, playerAge, playerName, POSITION_LABEL, POSITION_SHORT, type GameState, type Position } from '../../engine';
 import { Chips, DataTable, useStoredState } from '../table';
-import { ClubLink, PlayerLink } from '../nav';
+import { ClubLink, PlayerLink, useNav } from '../nav';
 import { RivalsLine, RoundReportCard, StandingsPath } from './LeagueExtras';
 
 export function Tables({ game }: { game: GameState }) {
   const ownId = game.owner.clubId;
+  const nav = useNav();
   const comps = Object.values(game.competitions).sort((a, b) => a.tier - b.tier || a.name.localeCompare(b.name, 'cs'));
   const [compId, setCompId] = useState(competitionOf(game, ownId)?.id ?? comps[0].id);
   const comp = game.competitions[compId];
@@ -128,7 +129,19 @@ export function Tables({ game }: { game: GameState }) {
           limit={30}
           empty="Zatím nikdo nenastoupil."
           columns={[
-            { key: 'name', label: 'Hráč', value: (p) => p.lastName, render: (p) => <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> },
+            {
+              key: 'name',
+              label: 'Hráč',
+              value: (p) => p.lastName,
+              render: (p) => (
+                <>
+                  {p.clubId !== ownId && nav.watch && (
+                    <button className="star-btn" title="Sledovat hráče" onClick={(e) => { e.stopPropagation(); nav.watch!(p.id); }}>{(game.watchlist ?? []).includes(p.id) ? '★' : '☆'}</button>
+                  )}
+                  <PlayerLink id={p.id}>{playerName(p)}</PlayerLink>
+                </>
+              ),
+            },
             { key: 'club', label: 'Klub', value: (p) => game.clubs[p.clubId].shortName, className: () => 'muted' },
             { key: 'pos', label: 'Poz.', value: (p) => ['GK', 'DF', 'MF', 'FW'].indexOf(p.position), render: (p) => POSITION_SHORT[p.position], className: () => 'muted' },
             { key: 'age', label: 'Věk', num: true, hideSm: true, value: (p) => playerAge(p, game.season) },

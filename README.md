@@ -61,6 +61,25 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.18: přestupy (etapa D)
+
+- **Deadline day**: poslední tři dny okna hra zastaví a jde po dnech (s možností přeskočit na konec okna).
+  - Nabídky na vaše hráče platí den a soupeři nakupují každý den.
+  - Kluby uvolňují hráče se slevou 15 %.
+- **Konkurence o hráče**:
+  - o dobrého hráče se může přetahovat jiný klub; prodávající chce přeplatit jeho nabídku a agent jeho plat;
+  - prohraný souboj znamená, že hráč odejde ke konkurentovi;
+  - o vaše hráče se mohou přetahovat dva kupci.
+- **Agenti jako postavy**:
+  - šest agentů s povahou: férový, chamtivý, s kontakty do ciziny;
+  - vztah mění odměny a platy;
+  - dobrý vztah přináší tipy na hráče (o 10 % levněji), chamtivý agent se špatným vztahem pouští informace médiím.
+- **Klauzule**:
+  - výstupní klauzule (hráč chce o 10 % nižší plat, ale může odejít, když někdo klauzuli zaplatí);
+  - doplatek 30 % při postupu nebo Evropě (prodávající bere nabídku asi o 15 % výš).
+- **Domino po prodeji opory**: ředitel hned navrhne náhradu v rámci utržených peněz. Bez náhrady do konce okna klesne nálada fanoušků.
+- **Sledovaní hráči**: hvězdička v Tabulkách a na kartě hráče. Ředitel hlásí výhodnou chvíli (končící smlouva, nespokojenost, klub v krizi, tip agenta, deadline day).
+
 ### Novinky verze 0.17: lidé (etapa C)
 
 - **Žádosti hráčů**: přidat na platu, víc minut, volno kvůli rodině, nová smlouva po skvělé sezóně. Vyhovět stojí peníze nebo klid v kabině, odmítnutí sráží morálku.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { clubLabel, dismissMatchPlan, pendingPrematch, advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
+import { toggleWatch, deadlineDay, deadlineStart, clubLabel, dismissMatchPlan, pendingPrematch, advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveGame } from './storage';
 import { Finance, type FinanceTab } from './screens/Finance';
@@ -73,6 +73,9 @@ export function App() {
 
   const nav = {
     open: openModal,
+    watch: (playerId: string) => {
+      if (game) update(toggleWatch(game, playerId).state);
+    },
     negotiate: (playerId: string) => {
       if (!game) return;
       const r = startNegotiation(game, playerId);
@@ -91,7 +94,16 @@ export function App() {
   const phase = currentPhase(game);
   const nm = nextMilestone(game);
   const nmDays = nm ? daysUntil(game, nm.date) : 99;
-  const step = nm && nmDays <= 7 ? { label: `Do ${nm.short} ›`, days: nmDays, milestone: nm } : { label: 'Týden ›', days: 7, milestone: undefined };
+  const dd = deadlineDay(game);
+  const ddStart = deadlineStart(game);
+  const ddDays = ddStart ? daysUntil(game, ddStart) : 99;
+  const step = dd
+    ? { label: 'Další den ›', days: 1, milestone: undefined }
+    : ddDays <= 7 && ddDays <= nmDays
+      ? { label: 'Do deadline day ›', days: ddDays, milestone: undefined }
+      : nm && nmDays <= 7
+        ? { label: `Do ${nm.short} ›`, days: nmDays, milestone: nm }
+        : { label: 'Týden ›', days: 7, milestone: undefined };
   const advance = (next: GameState) => {
     setStopReason(null);
     update(next);
@@ -157,6 +169,11 @@ export function App() {
               >
                 Do zápasu ›
               </button>
+              {dd && (
+                <button title="Přeskočit zbytek deadline day" onClick={() => advance(advanceDays(game, dd.daysLeft + 1).state)}>
+                  Na konec okna ›
+                </button>
+              )}
               <select
                 className="play-until"
                 aria-label="Hrát do…"

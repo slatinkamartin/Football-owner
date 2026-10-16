@@ -6,6 +6,8 @@ export interface Nav {
   open: (m: ModalRef) => void;
   /** Začít jednání o hráči (přepne na Přestupy). */
   negotiate: (playerId: string) => void;
+  /** Přidat nebo odebrat hráče ze sledovaných. */
+  watch?: (playerId: string) => void;
 }
 
 export const NavContext = createContext<Nav>({ open: () => {}, negotiate: () => {} });
