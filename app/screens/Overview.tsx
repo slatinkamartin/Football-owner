@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   coachOf,
   scenarioDef,
+  PRODEJNI_TARGET,
   scenarioStatus,
   tierOf,
   annualCosts,
@@ -310,16 +311,16 @@ function ScenarioCard({ game }: { game: GameState }) {
   if (sc.id === 'zachrana') {
     const debt = game.ownerLoan?.remaining ?? 0;
     const net = club.finance.balance - debt;
-    goal = { label: `Zůstatek klubu${debt ? ' po odečtení půjčky majitele' : ''} (cíl aspoň 0) a 1. liga`, value: `${money(net)} · ${tier === 1 ? '1. liga ✓' : 'mimo 1. ligu ✕'}`, pct: net >= 0 ? 100 : Math.max(5, 100 - (Math.abs(net) / Math.max(1, annualCosts(club, tier) * 0.3)) * 100), ok: net >= 0 && tier === 1 };
+    goal = { label: `Zůstatek klubu${debt ? ' po odečtení půjčky majitele' : ''} (★ od −10 % nákladů, ★★ od nuly) a 1. liga`, value: `${money(net)} · ${tier === 1 ? '1. liga ✓' : 'mimo 1. ligu ✕'}`, pct: net >= 0 ? 100 : Math.max(5, 100 - (Math.abs(net) / Math.max(1, annualCosts(club, tier) * 0.2)) * 100), ok: net >= -annualCosts(club, tier) * 0.1 && tier === 1 };
   } else if (sc.id === 'vzestup') {
-    goal = { label: 'Soutěž (cíl 1. liga)', value: `${comp?.name ?? '–'}${tier === 1 ? ' ✓' : ` · zbývá ${tier - 1} ${tier - 1 === 1 ? 'postup' : 'postupy'}`}`, pct: tier === 1 ? 100 : tier === 2 ? 50 : 10, ok: tier === 1 };
+    goal = { label: 'Soutěž (★ 2. liga, ★★ 1. liga, ★★★ 1. liga do 5 sezón)', value: `${comp?.name ?? '–'}${tier === 1 ? ' ✓' : ` · zbývá ${tier - 1} ${tier - 1 === 1 ? 'postup' : 'postupy'}`}`, pct: tier === 1 ? 100 : tier === 2 ? 50 : 10, ok: tier === 1 };
   } else if (sc.id === 'evropa') {
     const table = comp ? computeTable(comp, game) : [];
     const pos = table.findIndex((r) => r.clubId === club.id) + 1;
     const played = table.find((r) => r.clubId === club.id)?.played ?? 0;
     goal = { label: 'Umístění v 1. lize (cíl do 4. místa)', value: tier !== 1 ? 'mimo 1. ligu' : played ? `teď ${pos}. místo` : 'sezóna ještě nezačala', pct: tier === 1 && played ? Math.max(0, Math.min(100, ((table.length - pos + 1) / Math.max(1, table.length - 3)) * 100)) : 0, ok: tier === 1 && played > 0 && pos <= 4 };
   } else {
-    const target = Number(def.description.match(/(\d+)\s*mil/)?.[1] ?? 500) * 1_000_000;
+    const target = PRODEJNI_TARGET;
     const total = sc.progress + (finished ? 0 : club.finance.season.prestupy ?? 0);
     goal = { label: `Čistý zisk z přestupů (cíl ${money(target)})`, value: `${money(total)} (${Math.round((total / target) * 100)} %)`, pct: Math.max(0, Math.min(100, (total / target) * 100)), ok: total >= target };
   }
