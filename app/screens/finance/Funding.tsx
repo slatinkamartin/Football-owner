@@ -69,11 +69,11 @@ export function FinanceFunding({ game, onChange }: { game: GameState; onChange: 
           <div className="inline-form wrap">
             <input inputMode="decimal" value={amount} placeholder="0" onChange={(e) => setAmount(e.target.value)} aria-label="Částka v milionech" />
             <span>mil. Kč</span>
-            <button disabled={!valid} onClick={() => { onChange(injectCapital(game, value)); setAmount(''); setMessage({ text: `Vložil jste ${money(value)}.`, ok: true }); }}>Vložit (dar)</button>
+            <button disabled={!valid} onClick={() => { onChange(injectCapital(game, value)); setAmount(''); setMessage({ text: `Do klubu jde ${money(value)} z vašich peněz.`, ok: true }); }}>Vložit (dar)</button>
             <button disabled={!valid} onClick={() => { apply(lendToClub(game, value)); setAmount(''); }}>Půjčit klubu</button>
           </div>
           <p className="muted small">
-            Vklad je dar: zvedne vlastní kapitál, ale zpátky ho nedostanete (leda dividendou). Půjčka se vrací s úrokem {Math.round(OWNER_LOAN_RATE * 100)} % a svaz ji při licenci bere jako vlastní zdroje.
+            Vklad je dar: zvedne vlastní kapitál, ale zpátky ho nedostanete{game.shareholders.length > 0 ? ' (leda dividendou)' : ''}. Půjčka se vrací s úrokem {Math.round(OWNER_LOAN_RATE * 100)} % a svaz ji při licenci bere jako vlastní zdroje.
           </p>
           {game.ownerLoan && (
             <button disabled={club.finance.balance <= 0} onClick={() => apply(repayOwnerLoan(game, Math.min(game.ownerLoan!.remaining, club.finance.balance)))}>

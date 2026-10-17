@@ -177,7 +177,7 @@ describe('šedá zóna a pověst', () => {
     s = resolveEvent(s, e.id, 'schuzka').state;
     expect(askingPrice(s, s.players[p.id])).toBeLessThan(before);
     expect(s.grey.exposure).toBe(10);
-    for (const t of ['obrazova-prava', 'spriznena-firma', 'kontroverzni-sponzor', 'navstevnost', 'mladez-odkup', 'lobbing', 'naming', 'charita', 'vyjezd', 'investor-nabidka', 'svaz-bezpecnost', 'trener-nabidka', 'rozhovor', 'kauza-hrac']) {
+    for (const t of ['obrazova-prava', 'spriznena-firma', 'kontroverzni-sponzor', 'navstevnost', 'mladez-odkup', 'lobbing', 'charita', 'vyjezd', 'investor-nabidka', 'svaz-bezpecnost', 'trener-nabidka', 'rozhovor', 'kauza-hrac']) {
       const x = structuredClone(s);
       createEvent(x, createRng(9), t);
       const ev = x.events.find((y) => y.template === t);

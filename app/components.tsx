@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 /** Vodorovný ukazatel hodnoty (schopnosti, důvěra, povaha). */
-export function Meter({ value, max = 100, tone }: { value: number; max?: number; tone?: 'good' | 'warn' | 'bad' }) {
+export function Meter({ value, max = 100, tone }: { value: number; max?: number; tone?: 'good' | 'warn' | 'bad' | 'neutral' }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const auto = pct >= 60 ? 'good' : pct >= 35 ? 'warn' : 'bad';
   return (

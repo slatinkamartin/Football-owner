@@ -20,9 +20,20 @@ const mil = (v: number) => `${(v / 1_000_000).toLocaleString('cs-CZ', { maximumF
 export const OWNER_LOAN_RATE = 0.03;
 
 /** Majitel půjčí klubu: na rozdíl od vkladu se peníze vracejí (s úrokem 3 %). Svaz ji bere jako podřízenou. */
+/** Zápis čisté půjčky majitele v sezóně (pro fair play). */
+function noteOwnerLending(state: GameState, delta: number): void {
+  const cur = state.ownerLent?.season === state.season ? state.ownerLent.amount : 0;
+  state.ownerLent = { season: state.season, amount: cur + delta };
+}
+
+/** Kolik majitel klubu letos čistě půjčil (půjčky minus splátky, nejméně 0). */
+export function ownerLentThisSeason(state: GameState): number {
+  return state.ownerLent?.season === state.season ? Math.max(0, state.ownerLent.amount) : 0;
+}
+
 export function lendToClub(prev: GameState, amount: number): ActionResult {
   const value = Math.floor(amount);
-  if (value <= 0 || value > prev.owner.wallet) return { state: prev, ok: false, message: 'Na to nemáte dost osobních peněz.' };
+  if (!Number.isFinite(value) || value <= 0 || value > prev.owner.wallet) return { state: prev, ok: false, message: 'Na to nemáte dost osobních peněz.' };
   if (prev.owner.ousted) return { state: prev, ok: false, message: 'Klub teď řídí představenstvo.' };
   const state = structuredClone(prev);
   state.owner.wallet -= value;
@@ -31,6 +42,7 @@ export function lendToClub(prev: GameState, amount: number): ActionResult {
   loan.remaining += value;
   state.ownerLoan = loan;
   book(state, state.owner.clubId, 'uver', value, 'Půjčka od majitele');
+  noteOwnerLending(state, value);
   const message = `Půjčil jste klubu ${mil(value)}. Klub ji splácí, kdy bude mít peníze; úrok ${Math.round(OWNER_LOAN_RATE * 100)} % ročně.`;
   addNews(state, { kind: 'info', title: 'Půjčka majitele', text: message });
   return { state, ok: true, message };
@@ -45,6 +57,7 @@ export function repayOwnerLoan(prev: GameState, amount: number): ActionResult {
   state.ownerLoan!.remaining -= value;
   state.owner.wallet += value;
   book(state, state.owner.clubId, 'uver', -value, 'Splátka půjčky majiteli');
+  noteOwnerLending(state, -value);
   if (state.ownerLoan!.remaining <= 0) state.ownerLoan = undefined;
   return { state, ok: true, message: `Klub vám vrátil ${mil(value)}.` };
 }
@@ -263,6 +276,44 @@ export function monthlyFinancing(state: GameState): void {
 /** Měsíce v minusu nad kontokorent: 2 = krizový režim, 4 = insolvence. */
 export const CRISIS_MONTHS = 2;
 export const INSOLVENCY_MONTHS = 4;
+
+/** Po kolika měsících v minusu přijde insolvence (poloprofesionální 3. liga má víc trpělivosti). */
+export function insolvencyMonths(state: GameState): number {
+  return tierOf(state, state.owner.clubId) >= 3 ? 6 : INSOLVENCY_MONTHS;
+}
+
+/**
+ * Těsně před insolvencí: vedení samo požádá majitele o nouzovou půjčku (když na ni má),
+ * aby klub nezkrachoval jen proto, že majitel nestihl zareagovat. Vrací true, když půjčka krizi zažehnala.
+ */
+export function emergencyOwnerLoan(state: GameState): boolean {
+  if (state.owner.ousted || state.gameOver || state.owner.wallet <= 0) return false;
+  const club = own(state);
+  const need = Math.ceil((-club.finance.balance - activeOverdraft(state) + annualCosts(club, tierOf(state, club.id)) * 0.03) / 100_000) * 100_000;
+  if (need <= 0) return false;
+  const value = Math.min(need, Math.floor(state.owner.wallet / 100_000) * 100_000);
+  if (value <= 0) return false;
+  state.owner.wallet -= value;
+  const loan = state.ownerLoan ?? { principal: 0, remaining: 0, rate: OWNER_LOAN_RATE };
+  loan.principal += value;
+  loan.remaining += value;
+  state.ownerLoan = loan;
+  book(state, club.id, 'uver', value, 'Nouzová půjčka od majitele');
+  noteOwnerLending(state, value);
+  const solved = club.finance.balance >= -activeOverdraft(state);
+  addNews(state, {
+    kind: 'varovani',
+    title: `Vedení si v nouzi půjčilo od majitele ${mil(value)}`,
+    text: solved
+      ? 'Klubu hrozila insolvence, finanční ředitel proto čerpal z vašich osobních peněz jako půjčku majitele (úrok 3 %). Klub ji splácí, až bude mít peníze. Řešte příčinu: náklady, platy, nebo prodej hráčů.'
+      : 'Ani vaše osobní peníze nestačily pokrýt závazky.',
+  });
+  if (solved) {
+    club.finance.monthsNegative = 0;
+    state.crisis = undefined;
+  }
+  return solved;
+}
 
 export function enterCrisis(state: GameState, rng: Rng): void {
   if (state.crisis || state.gameOver) return;

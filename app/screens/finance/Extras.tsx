@@ -1,12 +1,92 @@
-import { useMemo } from 'react';
-import { ffpStatus, financialRating, GIVER_LABEL, scenarioSummary, sideGoalProgress, type GameState } from '../../../engine';
-import { Badge, Meter } from '../../components';
+import { useMemo, useState } from 'react';
+import { ffpStatus, financialRating, GIVER_LABEL, pickSideGoals, scenarioSummary, sideGoalProgress, sideGoalsPending, type GameState, type SideGoal, type SideGoalKind } from '../../../engine';
+import { Badge, Meter, Notice } from '../../components';
 import { money } from '../../format';
 
-/** Vedlejší cíle sezóny (Přehled). */
-export function SideGoalsCard({ game }: { game: GameState }) {
+const isoDate = (iso: string) => iso.split('-').reverse().map((x, i) => (i < 2 ? String(Number(x)) : x)).join('. ');
+
+/**
+ * Upozornění, že majitel má vybrat vedlejší cíle sezóny (pro Přehled nebo hlavičku).
+ * Vrací null, když není co vybírat. `onOpen` má přepnout na Finance → Přehled.
+ */
+export function SideGoalsNotice({ game, onOpen }: { game: GameState; onOpen?: () => void }) {
+  const pending = sideGoalsPending(game);
+  if (!pending) return null;
+  return (
+    <p className="notice side-goals-notice">
+      Vyberte {pending.min} až {pending.max} vedlejší cíle sezóny{pending.pickBy ? ` (do ${isoDate(pending.pickBy)}, jinak se vyberou doporučené)` : ''}.
+      {onOpen && <> <button className="linkbtn" onClick={onOpen}>Vybrat ve Financích ›</button></>}
+    </p>
+  );
+}
+
+/** Výběr vedlejších cílů z nabídky na začátku sezóny. */
+function SideGoalsPicker({ game, offer, min, max, pickBy, onChange }: { game: GameState; offer: SideGoal[]; min: number; max: number; pickBy?: string; onChange: (g: GameState) => void }) {
+  const [chosen, setChosen] = useState<SideGoalKind[]>(() => offer.filter((g) => g.recommended).map((g) => g.kind).slice(0, max));
+  const [message, setMessage] = useState<string | null>(null);
+  const toggle = (k: SideGoalKind) => setChosen((c) => (c.includes(k) ? c.filter((x) => x !== k) : c.length >= max ? c : [...c, k]));
+  const confirm = () => {
+    const r = pickSideGoals(game, chosen);
+    if (r.ok) onChange(r.state);
+    else setMessage(r.message);
+  };
+  return (
+    <>
+      <p className="small">
+        Vyberte {min} až {max} cíle. Splněný cíl přinese odměnu, nesplněný mírně zhorší vztah s tím, kdo ho zadal.
+        {pickBy && <> Když do {isoDate(pickBy)} nevyberete, vyberou se doporučené.</>}
+      </p>
+      <ul className="plain side-goal-pick">
+        {offer.map((g) => {
+          const on = chosen.includes(g.kind);
+          const full = !on && chosen.length >= max;
+          return (
+            <li key={g.kind}>
+              <label className={`side-goal-option${on ? ' on' : ''}${full ? ' off' : ''}`}>
+                <input type="checkbox" checked={on} disabled={full} onChange={() => toggle(g.kind)} />
+                <span>
+                  <strong>{GIVER_LABEL[g.giver]}:</strong> {g.label}
+                  {g.recommended && <> <Badge tone="good">doporučeno</Badge></>}
+                  <span className="muted small side-goal-effect">
+                    {g.effect ?? ''}
+                    {g.reward ? ` · odměna ${money(g.reward)}` : ''}
+                  </span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <Notice message={message} ok={false} />
+      <div className="row-between">
+        <span className="muted small">Vybráno {chosen.length} z {max}</span>
+        <button className="primary" disabled={chosen.length < min || chosen.length > max} onClick={confirm}>Potvrdit cíle</button>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Vedlejší cíle sezóny. S `onChange` umí vybrat cíle z nabídky (Finance);
+ * bez něj při čekajícím výběru jen upozorní (a s `onOpen` nabídne odkaz do Financí).
+ */
+export function SideGoalsCard({ game, onChange, onOpen }: { game: GameState; onChange?: (g: GameState) => void; onOpen?: () => void }) {
   const sg = game.sideGoals;
   if (!sg || sg.season !== game.season) return null;
+  const pending = sideGoalsPending(game);
+  if (pending) {
+    return (
+      <section className="card">
+        <h2>Vedlejší cíle sezóny</h2>
+        {onChange ? (
+          <SideGoalsPicker key={game.season} game={game} offer={pending.offer} min={pending.min} max={pending.max} pickBy={pending.pickBy} onChange={onChange} />
+        ) : (
+          <SideGoalsNotice game={game} onOpen={onOpen} />
+        )}
+      </section>
+    );
+  }
+  if (!sg.goals.length) return null;
   return (
     <section className="card">
       <h2>Vedlejší cíle sezóny</h2>
@@ -27,7 +107,7 @@ export function SideGoalsCard({ game }: { game: GameState }) {
           );
         })}
       </ul>
-      <p className="muted small">Vyhodnotí se na konci sezóny. Sponzor přidá bonus a zlepší vztah (lepší nabídky), město přispěje na mládež, akcionáři ocení zisk.</p>
+      <p className="muted small">Vyhodnotí se na konci sezóny. {sg.goals.map((g) => g.effect).filter(Boolean).length ? `Za splnění: ${[...new Set(sg.goals.map((g) => g.effect).filter(Boolean))].join('; ')}.` : ''}</p>
     </section>
   );
 }
@@ -48,7 +128,7 @@ export function RatingCard({ game }: { game: GameState }) {
         Odhad ke konci sezóny: <Badge tone={GRADE_TONE[now.grade]}>{now.grade}</Badge>
         {game.rating && <> · loni {game.rating.grade}</>}
       </p>
-      <p className="muted small">{now.reasons.join(', ')}. Rating určuje úrok bank (A o 1,5 bodu levněji, E o 2,5 dráž, s F banka provozní úvěr nedá) a spokojenost akcionářů.</p>
+      <p className="muted small">{now.reasons.join(', ')}. Rating určuje úrok bank (A o 1,5 bodu levněji, E o 2,5 dráž, s F banka provozní úvěr nedá){game.shareholders.length > 0 ? ' a spokojenost akcionářů' : ''}.</p>
       <h3>Finanční fair play svazu</h3>
       <dl className="kv">
         <dt>Výsledek za 3 sezóny (s výhledem)</dt>

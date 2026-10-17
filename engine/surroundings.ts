@@ -27,6 +27,12 @@ export function businessOf(state: GameState) {
   return state.business ?? { mood: 'normal' as BusinessMood, safe: 0, risky: 0, ownSponsor: 0 };
 }
 
+/** Osobní majetek majitele: peněženka + peníze uložené v investicích (bezpečné i rizikové). */
+export function personalWealth(state: GameState): number {
+  const b = businessOf(state);
+  return state.owner.wallet + b.safe + b.risky;
+}
+
 /** Měsíční příjem majitele z firem (podle roku v oboru, minus sponzoring vlastní firmou). */
 export function businessIncome(state: GameState, base: number): number {
   const b = businessOf(state);
@@ -46,6 +52,12 @@ export function monthlyBusiness(state: GameState, rng: Rng): void {
   const b = (state.business ??= businessOf(state));
   if (b.safe > 0) b.safe = Math.round(b.safe * (1 + 0.03 / 12));
   if (b.risky > 0) b.risky = Math.max(0, Math.round(b.risky * (1 + 0.08 / 12 + (rng.next() - 0.5) * 0.12)));
+  // Peněženka v minusu: firma sponzoring ukončí, majitel nemá z čeho platit.
+  if (b.ownSponsor > 0 && state.owner.wallet <= 0) {
+    b.ownSponsor = 0;
+    addNews(state, { kind: 'varovani', title: 'Sponzoring vaší firmou skončil', text: 'Na osobním účtu nemáte peníze, firma proto přestala klub sponzorovat. Obnovit ho můžete, až budete mít z čeho.' });
+    return;
+  }
   // Sponzoring vlastní firmou: peníze jdou do klubu jako komerční příjem.
   if (b.ownSponsor > 0) book(state, state.owner.clubId, 'komercni', b.ownSponsor / 12, 'Sponzoring firmou majitele');
 }
@@ -73,6 +85,8 @@ export function withdraw(prev: GameState, kind: 'safe' | 'risky'): ActionResult 
 
 /** Sponzoring klubu vlastní firmou: rychlé peníze, ale střet zájmů. */
 export function setOwnSponsor(prev: GameState, annual: number): ActionResult {
+  if (!Number.isFinite(annual)) return { state: prev, ok: false, message: 'Zadejte platnou částku.' };
+  if (annual > businessOf(prev).ownSponsor && prev.owner.wallet <= annual / 12) return { state: prev, ok: false, message: 'Na takový sponzoring nemáte na osobním účtu dost peněz (aspoň na měsíc dopředu).' };
   const state = structuredClone(prev);
   const b = (state.business ??= businessOf(state));
   const before = b.ownSponsor;
@@ -112,7 +126,7 @@ export function takeoverTemplate() {
       if (o === 'prodat' || o === 'vyjednat') {
         const gain = Math.round(price * s.owner.share);
         s.owner.wallet += gain;
-        s.gameOver = { date: s.date, kind: 'prodej', reason: `Prodal jste ${own(s).name} za ${mil(price)}. Váš podíl vynesl ${mil(gain)}, odcházíte s osobním majetkem ${mil(s.owner.wallet)}. Odkaz vaší éry: ${legacyScore(s)} bodů.` };
+        s.gameOver = { date: s.date, kind: 'prodej', reason: `${own(s).name} má nového majitele, prodej za ${mil(price)}. Váš podíl vynesl ${mil(gain)}, odcházíte s osobním majetkem ${mil(personalWealth(s))}. Odkaz vaší éry: ${legacyScore(s)} bodů.` };
         return s.gameOver.reason;
       }
       satisfy(s, -4, ['spekulant']);
@@ -163,7 +177,14 @@ export function lobbyMayor(prev: GameState): ActionResult {
 /** Měsíčně: vztah s městem podle komunity a skandálů; volby každé čtyři roky. */
 export function monthlyCity(state: GameState, rng: Rng, communityEffect: number): void {
   const c = (state.city ??= cityOf(state));
-  changeCity(state, communityEffect * 0.8 + (50 - c.relation) * 0.02 + (state.grey.scandalUntil && state.grey.scandalUntil > state.date ? -1.5 : 0));
+  // Výsledky a nálada fanoušků: úspěšný klub, na který se chodí, má u radnice lepší pozici.
+  const club = own(state);
+  const comp = competitionOf(state, club.id);
+  const table = comp ? computeTable(comp, state) : [];
+  const i = table.findIndex((r) => r.clubId === club.id);
+  const results = i >= 0 && table[i].played >= 4 ? clamp((table.length / 2 - i) * 0.06, -0.4, 0.4) : 0;
+  const mood = ((club.fanMood ?? 50) - 50) * 0.008;
+  changeCity(state, communityEffect * 0.8 + (50 - c.relation) * 0.02 + results + mood + (state.grey.scandalUntil && state.grey.scandalUntil > state.date ? -1.5 : 0));
   if (state.date >= c.nextElection) {
     const x = rng.next();
     const stance: CityStance = x < 0.35 ? 'sport' : x < 0.75 ? 'neutral' : 'skeptik';
@@ -196,7 +217,7 @@ export function monthlyUltras(state: GameState): void {
   const comp = competitionOf(state, club.id);
   const form = comp ? computeTable(comp, state).find((r) => r.clubId === club.id)?.form ?? [] : [];
   const wins = form.filter((f) => f === 'V').length - form.filter((f) => f === 'P').length;
-  let d = (55 - ultrasOf(state).relation) * 0.05 + wins * 0.8 - Math.max(0, ratio - 1.1) * 15;
+  let d = (55 - ultrasOf(state).relation) * 0.05 + wins * 0.5 - Math.max(0, ratio - 1.1) * 15;
   if (club.policy.security === 'vysoka') d -= 1;
   changeUltras(state, d);
 }
@@ -263,14 +284,19 @@ export interface Trophy {
   kind: 'titul' | 'pohar' | 'postup' | 'evropa' | 'stadion' | 'rekord' | 'odchovanec' | 'scenar';
   text: string;
   points: number;
+  /** Klub, ve kterém trofej vznikla (kariéra napříč kluby). Starší záznamy ji nemají. */
+  clubId?: string;
+  clubName?: string;
 }
 
 export const TROPHY_POINTS: Record<Trophy['kind'], number> = { titul: 30, pohar: 15, postup: 15, evropa: 20, stadion: 10, rekord: 5, odchovanec: 5, scenar: 20 };
 
 export function addTrophy(state: GameState, kind: Trophy['kind'], text: string): void {
   const list = state.trophies ?? [];
-  if (list.some((t) => t.season === state.season && t.kind === kind && kind !== 'rekord')) return;
-  state.trophies = [...list, { season: state.season, kind, text, points: TROPHY_POINTS[kind] }];
+  // Duplicita jen v rámci stejného klubu: trofeje z minulých klubů kariéry nové neblokují.
+  const sameClub = (t: Trophy) => (t.clubId ? t.clubId === state.owner.clubId : !state.career);
+  if (list.some((t) => sameClub(t) && t.season === state.season && t.kind === kind && kind !== 'rekord')) return;
+  state.trophies = [...list, { season: state.season, kind, text, points: TROPHY_POINTS[kind], clubId: state.owner.clubId, clubName: own(state).name }];
   addNews(state, { kind: 'sezona', title: `Do síně slávy: ${text}`, text: `Odkaz vaší éry +${TROPHY_POINTS[kind]} bodů.` });
 }
 
@@ -298,6 +324,6 @@ export function seasonTrophies(state: GameState, position: number, promoted: boo
 
 /** Rekordní prodej klubu (volá se při prodeji). */
 export function checkRecordSale(state: GameState, name: string, fee: number): void {
-  const record = Math.max(0, ...(state.trophies ?? []).filter((t) => t.kind === 'rekord').map((t) => Number(t.text.match(/(\d[\d\s]*) mil/)?.[1]?.replace(/\s/g, '') ?? 0) * 1e6));
+  const record = Math.max(0, ...(state.trophies ?? []).filter((t) => t.kind === 'rekord' && (t.clubId ? t.clubId === state.owner.clubId : !state.career)).map((t) => Number(t.text.match(/(\d[\d\s]*) mil/)?.[1]?.replace(/\s/g, '') ?? 0) * 1e6));
   if (fee >= 20_000_000 && fee > record) addTrophy(state, 'rekord', `Rekordní prodej: ${name} za ${Math.round(fee / 1e6)} mil. Kč`);
 }

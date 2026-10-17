@@ -92,7 +92,7 @@ export function LineChart({
   const future = split < points.length ? line(split - 1, points.length) : '';
   const isForecast = (i: number) => i >= split;
   const last = points.length - 1;
-  const xLabels = [0, Math.floor(last / 2), last];
+  const xLabels = [...new Set([0, Math.floor(last / 2), last])];
   const active = hover ?? null;
 
   const pick = (clientX: number) => {
@@ -115,7 +115,8 @@ export function LineChart({
           aria-labelledby={`${id}-t`}
           tabIndex={0}
           onPointerMove={(e) => pick(e.clientX)}
-          onPointerLeave={() => setHover(null)}
+          onPointerDown={(e) => pick(e.clientX)}
+          onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHover(null); }}
           onFocus={() => setHover(last)}
           onBlur={() => setHover(null)}
           onKeyDown={(e) => {

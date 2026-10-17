@@ -51,7 +51,7 @@ export function BusinessCard({ game, onResult }: { game: GameState; onResult: (r
         {b.risky > 0 && <button className="linkbtn" onClick={() => onResult(withdraw(game, 'risky'))}>Vybrat rizikové</button>}
       </div>
       <h3>Sponzoring klubu vlastní firmou</h3>
-      <p className="muted small">Rychlé peníze pro klub z příjmů vašich firem. Spolumajitelé a svaz to berou jako střet zájmů (šedá zóna, spokojenost investorů klesne).</p>
+      <p className="muted small">Rychlé peníze pro klub z příjmů vašich firem. {game.shareholders.length > 0 ? 'Spolumajitelé a svaz to berou jako střet zájmů (šedá zóna, spokojenost investorů klesne).' : 'Svaz to bere jako střet zájmů (šedá zóna).'}</p>
       <div className="buttons">
         {[0, sponsorStep, sponsorStep * 2, sponsorStep * 4].map((v) => (
           <button key={v} className={b.ownSponsor === v ? 'primary' : ''} onClick={() => onResult(setOwnSponsor(game, v))}>{v ? `${money(v)} ročně` : 'nesponzorovat'}</button>

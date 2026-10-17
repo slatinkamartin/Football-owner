@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { competitionOf, cupPath, formatShortDate, workload, type Cup, type Fixture, type GameState } from '../../engine';
+import { competitionOf, cupPath, EUROPE_LABEL, europeStrength, formatShortDate, leaguePhaseChance, workload, type Cup, type Fixture, type GameState } from '../../engine';
 import { Badge, Meter } from '../components';
 import { money } from '../format';
 import { num } from '../format';
@@ -54,7 +54,7 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
           <dt>Zranění</dt>
           <dd>{w.injured}</dd>
         </dl>
-        <p className="muted small">{w.advice} Rotaci doporučíte trenérovi v Přípravě na zápas (Přehled). Šíře kádru a medicína rozhodují, jak zátěž tým unese.</p>
+        <p className="muted small">{w.advice} Rotaci doporučíte trenérovi v přípravě před zápasem. Šíře kádru a medicína rozhodují, jak zátěž tým unese.</p>
       </section>
       {path.length > 0 && (
         <section className="card">
@@ -73,6 +73,7 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
         </section>
       )}
     </div>
+    <EuropeRow game={game} />
     <div className="grid two">
       <section className="card">
         <h2>Zápasy klubu</h2>
@@ -193,14 +194,15 @@ function CupSection({ game, cup, onOpenMatch }: { game: GameState; cup: Cup; onO
         </p>
       )}
       <div className="cup-rounds">
-        {[...rounds].reverse().map((r) => (
-          <div key={r} className="cup-round">
-            <h3>{cup.kind === 'baraz' ? `${r}. zápas` : cup.rounds[r - 1].name}</h3>
+        {[...rounds].reverse().map((r) => {
+          const all = cup.fixtures.filter((f) => f.round === r);
+          const mine = all.filter((f) => [f.homeId, f.awayId].includes(own));
+          // Váš klub: jen jeho cesta, ostatní zápasy kola sbalené (finále se ukáže vždy).
+          const others = all.filter((f) => ![f.homeId, f.awayId].includes(own));
+          const showAll = cup.kind === 'baraz' || all.length <= 1;
+          const list = (items: Fixture[]) => (
             <ul className="fixtures">
-              {cup.fixtures
-                .filter((f) => f.round === r)
-                .sort((a, b) => Number([b.homeId, b.awayId].includes(own)) - Number([a.homeId, a.awayId].includes(own)))
-                .map((f) => (
+              {items.map((f) => (
                   <li key={f.id} className={[f.homeId, f.awayId].includes(own) ? 'own-row' : ''}>
                     <button className="fixture-btn" disabled={!f.result} onClick={() => onOpenMatch(f.id)}>
                       <div className="fixture-line">
@@ -215,9 +217,53 @@ function CupSection({ game, cup, onOpenMatch }: { game: GameState; cup: Cup; onO
                   </li>
                 ))}
             </ul>
-          </div>
-        ))}
+          );
+          return (
+            <div key={r} className="cup-round">
+              <h3>{cup.kind === 'baraz' ? `${r}. zápas` : cup.rounds[r - 1].name}</h3>
+              {showAll ? list(all) : (
+                <>
+                  {mine.length > 0 && list(mine)}
+                  {others.length > 0 && (
+                    <details className="cup-others">
+                      <summary className="muted small">{mine.length ? 'Ostatní zápasy kola' : 'Zápasy kola'} ({others.length})</summary>
+                      {list(others)}
+                    </details>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
+    </section>
+  );
+}
+
+/** Evropské poháry: předkola se nehrají jako zápasy, výsledek se rozhodne na konci srpna. */
+function EuropeRow({ game }: { game: GameState }) {
+  const eu = game.europe;
+  const own = game.owner.clubId;
+  const e = eu?.season === game.season ? eu.entries.find((x) => x.clubId === own) : undefined;
+  if (!eu || !e) return null;
+  const chance = Math.round(leaguePhaseChance(europeStrength(game, own), e.entry) * 100);
+  return (
+    <section className="card europe-row">
+      <div className="row-between">
+        <h2>Evropské poháry: předkola {EUROPE_LABEL[e.entry]}</h2>
+        {eu.resolved ? (
+          <Badge tone={e.result === 'predkola' ? 'bad' : 'good'}>{e.result === 'predkola' ? EUROPE_LABEL.predkola : `ligová fáze: ${EUROPE_LABEL[e.result]}`}</Badge>
+        ) : (
+          <Badge tone="warn">rozhodne se do konce srpna</Badge>
+        )}
+      </div>
+      <p className="muted small">
+        {eu.resolved
+          ? e.result === 'predkola'
+            ? `Klub vypadl v předkolech. Za účast dostal ${money(e.revenue)}.`
+            : `Postup do ligové fáze. Peníze ${money(e.revenue)} chodí od října do ledna po částech.`
+          : `Předkola se nehrají jako jednotlivé zápasy: o postupu rozhodne síla kádru (průměr 14 nejlepších hráčů). Šance na ligovou fázi teď asi ${chance} %. Posily do konce srpna ji zvednou.`}
+      </p>
     </section>
   );
 }

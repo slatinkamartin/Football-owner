@@ -1,4 +1,4 @@
-import { budgetApproved, forecastSeason } from './budget';
+import { forecastSeason } from './budget';
 import { addDays } from './calendar';
 import { prizeMoney } from './finance';
 import { licenceProblems } from './financing';
@@ -46,7 +46,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
     title: `Začíná sezóna ${y}/${String(y + 1).slice(2)}`,
     text: [
       'Finanční ředitel (nebo účetní) připravil rozpočet. Schvalte ho do 15. 7., při schválení se prodají permanentky.',
-      `Přestupní okno je otevřené do 31. 8. Vedení navrhuje cíl sezóny: ${comp ? goalLabel(state.owner.seasonGoal, comp) : 'udržet se'}. Změnit ho můžete ve Vedení; podle něj vás budou hodnotit fanoušci, média i spolumajitelé.`,
+      `Přestupní okno je otevřené do 31. 8. Vedení navrhuje cíl sezóny: ${comp ? goalLabel(state.owner.seasonGoal, comp) : 'udržet se'}. Změnit ho můžete ve Vedení; podle něj vás budou hodnotit fanoušci, média${state.shareholders.length ? ' i spolumajitelé' : ' i vedení'}.`,
     ],
     todo: [
       { label: 'Rozpočet sezóny', tab: 'finance', sub: 'rozpocet' },
@@ -55,16 +55,7 @@ export function seasonMilestones(state: GameState): Milestone[] {
     ],
   });
 
-  if (!budgetApproved(state)) {
-    add({
-      id: `rozpocet-${y}`,
-      date: `${y}-07-14`,
-      short: 'termínu rozpočtu',
-      title: 'Zítra končí termín pro schválení rozpočtu',
-      text: ['Pokud rozpočet neschválíte, platí od zítřka návrh vedení. Když s ním nesouhlasí spolumajitelé, prosadí úspornou variantu.', 'Při schválení se prodají permanentky za cenu, kterou nastavíte.'],
-      todo: [{ label: 'Schválit rozpočet', tab: 'finance', sub: 'rozpocet' }],
-    });
-  }
+  // Termín rozpočtu není milník: když ho majitel neschválí, návrh vedení platí sám (jen zpráva).
 
   const league = comp?.fixtures.filter((f) => f.homeId === own || f.awayId === own).sort((a, b) => (a.date < b.date ? -1 : 1)) ?? [];
   const autumn = league.filter((f) => f.date < `${y + 1}-01-01`);
@@ -168,25 +159,26 @@ export function seasonMilestones(state: GameState): Milestone[] {
     });
   }
 
+  // Licence je milník, jen když by neprošla (jinak není co řešit).
   const problems = licenceProblems(state);
-  add({
+  if (problems.length) add({
     id: `licence-${y}`,
     date: `${y + 1}-03-30`,
     short: 'licence',
     title: 'Zítra licenční řízení svazu',
     text: [
       'Svaz kontroluje vlastní kapitál (půjčka majitele se počítá jako vlastní zdroje) a neuhrazené závazky.',
-      problems.length ? `Teď by licence neprošla: ${problems.join(', ')}. Na nápravu bude čas do 31. 5.` : 'Teď by licence prošla.',
+      `Teď by licence neprošla: ${problems.join(', ')}. Na nápravu bude čas do 31. 5.`,
     ],
     todo: [{ label: 'Financování', tab: 'finance', sub: 'financovani' }],
   });
-  if (state.licence?.season === y && state.licence.status === 'podminka') {
+  if (state.licence?.season === y && state.licence.status === 'podminka' && problems.length) {
     add({
       id: `licence-naprava-${y}`,
       date: `${y + 1}-05-30`,
       short: 'termínu licence',
       title: 'Zítra končí termín na nápravu licence',
-      text: [problems.length ? `Pořád chybí: ${problems.join(', ')}. Hrozí pokuta a odečet 5 bodů v příští sezóně.` : 'Podmínky jsou teď splněné.'],
+      text: [`Pořád chybí: ${problems.join(', ')}. Hrozí pokuta a odečet 5 bodů v příští sezóně.`],
       todo: [{ label: 'Financování', tab: 'finance', sub: 'financovani' }],
     });
   }

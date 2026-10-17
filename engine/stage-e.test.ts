@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
 import { createEvent, resolveEvent } from './events';
 import { loanOffers, loanRate } from './finance';
-import { ffpBlocksSigning, ffpStatus, financialRating, scenarioSummary, seasonFfp, sideGoalProgress } from './finplus';
+import { ffpBlocksSigning, ffpStatus, financialRating, pickSideGoals, scenarioSummary, seasonFfp, sideGoalProgress, sideGoalsPending } from './finplus';
 import { advanceDays, newGame } from './game';
 import { createRng } from './rng';
 import { startNegotiation } from './transfers';
@@ -12,9 +12,28 @@ const start = newGame(pack as DataPack, { clubId: 'bohemians', ownerName: 'T', d
 
 describe('etapa E: finance', () => {
   it('vedlejší cíle vzniknou na začátku a na konci sezóny se vyhodnotí', () => {
-    expect(start.sideGoals?.goals.length).toBe(3);
-    const p = sideGoalProgress(start, start.sideGoals!.goals[1]);
+    // Na začátku je nabídka 5–6 cílů, vybrané zatím žádné.
+    const pending = sideGoalsPending(start)!;
+    expect(pending.offer.length).toBeGreaterThanOrEqual(5);
+    expect(pending.offer.length).toBeLessThanOrEqual(6);
+    expect(start.sideGoals?.goals.length).toBe(0);
+    // Bez spolumajitelů se cíl akcionářů nenabízí.
+    if (!start.shareholders.length) expect(pending.offer.some((g) => g.giver === 'akcionari')).toBe(false);
+    const p = sideGoalProgress(start, pending.offer[1]);
     expect(p.value).toBeGreaterThanOrEqual(0);
+    // Výběr: 1 je málo, 4 moc, 2 je v pořádku.
+    expect(pickSideGoals(start, [pending.offer[0].kind]).ok).toBe(false);
+    expect(pickSideGoals(start, pending.offer.slice(0, 4).map((g) => g.kind)).ok).toBe(false);
+    const picked = pickSideGoals(start, [pending.offer[0].kind, pending.offer[2].kind]);
+    expect(picked.ok).toBe(true);
+    expect(picked.state.sideGoals!.goals.map((g) => g.kind)).toEqual([pending.offer[0].kind, pending.offer[2].kind]);
+    expect(sideGoalsPending(picked.state)).toBeUndefined();
+    // Když majitel nevybere, po třech týdnech se vyberou doporučené (se zprávou).
+    const auto = advanceDays(start, 25).state;
+    expect(sideGoalsPending(auto)).toBeUndefined();
+    expect(auto.sideGoals!.goals.length).toBeGreaterThanOrEqual(2);
+    expect(auto.sideGoals!.goals.every((g) => g.recommended)).toBe(true);
+    expect(auto.news.some((n) => n.title.startsWith('Vedlejší cíle sezóny vybrány'))).toBe(true);
     const end = advanceDays(start, 355).state;
     const prev = end.sideGoals!.season === end.season ? end.sideGoals! : undefined;
     // Po přelomu sezóny jsou nové cíle, staré se vyhodnotily ve zprávách.

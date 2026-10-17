@@ -1,7 +1,7 @@
 import { annualCosts } from './finance';
 import { newGame, type NewGameOptions } from './game';
 import { squadOf } from './players';
-import { addTrophy, legacyScore, type Trophy } from './surroundings';
+import { addTrophy, legacyScore, personalWealth, type Trophy } from './surroundings';
 import type { DataPack, GameState } from './types';
 import { addNews, competitionOf, tierOf } from './world';
 
@@ -35,9 +35,21 @@ export interface SeasonReport {
   seen?: boolean;
 }
 
+/** Zlomové okamžiky bez opakování (stejný příběh dvakrát za sezónu se liší jen koncem v závorce). */
+function dedupeMoments(list: string[]): string[] {
+  const seen = new Set<string>();
+  return list.filter((m) => {
+    const key = m.replace(/^\d+\. kolo: /, '').replace(/ \((dobrý konec|špatný konec|uzavřeno)\)$/, '').trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Konec sezóny (po vyhodnocení financí): výroční zpráva. */
-export function buildSeasonReport(state: GameState, position: number, goalText: string, goalMet: boolean): void {
+export function buildSeasonReport(state: GameState, position: number, goalText: string, goalMet: boolean, competitionName?: string): void {
   const club = state.clubs[state.owner.clubId];
+  // Soutěž, ve které se sezóna hrála (po postupu/sestupu už je klub jinde).
   const comp = competitionOf(state, club.id);
   const squad = squadOf(state, club.id);
   const rated = squad.filter((p) => p.ratingCount >= 10).sort((a, b) => b.ratingSum / b.ratingCount - a.ratingSum / a.ratingCount)[0];
@@ -54,20 +66,20 @@ export function buildSeasonReport(state: GameState, position: number, goalText: 
     season: state.season,
     date: state.date,
     clubName: club.name,
-    competition: comp?.name ?? '',
+    competition: competitionName ?? comp?.name ?? '',
     position,
     goalText,
     goalMet,
     bestPlayer: rated ? { name: `${rated.firstName} ${rated.lastName}`, rating: rated.ratingSum / rated.ratingCount } : undefined,
     topScorer: scorer && scorer.goals > 0 ? { name: `${scorer.firstName} ${scorer.lastName}`, goals: scorer.goals } : undefined,
-    moments: [...notes, ...stories.map((s) => `${s.title}${s.outcome ? ` (${s.outcome === 'dobre' ? 'dobrý konec' : s.outcome === 'spatne' ? 'špatný konec' : 'uzavřeno'})` : ''}`)].slice(0, 8),
+    moments: dedupeMoments([...notes, ...stories.map((s) => `${s.title}${s.outcome ? ` (${s.outcome === 'dobre' ? 'dobrý konec' : s.outcome === 'spatne' ? 'špatný konec' : 'uzavřeno'})` : ''}`)]).slice(0, 8),
     best,
     worst,
     operating: Object.entries(club.finance.season).filter(([k]) => !['prestupy', 'investice', 'dane', 'uver', 'vklad'].includes(k)).reduce((a, [, v]) => a + v, 0),
     balance: club.finance.balance,
     grade: state.rating?.season === state.season ? state.rating.grade : undefined,
     sideGoals: (state.sideGoals?.season === state.season ? state.sideGoals.goals : []).map((g) => `${g.label}: ${g.done === 'splneno' ? 'splněno' : 'nesplněno'}`),
-    trophies: (state.trophies ?? []).filter((t) => t.season === state.season).map((t) => t.text),
+    trophies: (state.trophies ?? []).filter((t) => t.season === state.season && (!t.clubId || t.clubId === club.id)).map((t) => t.text),
   };
   state.seasonReports = [report, ...(state.seasonReports ?? [])].slice(0, 12);
 }
@@ -92,10 +104,10 @@ export interface ScenarioDef {
 }
 
 export const SCENARIOS: ScenarioDef[] = [
-  { id: 'zachrana', title: 'Zachraňte krachující klub', description: 'Zlín je v minusu a splácí úvěr. Do dvou sezón vyrovnejte účet (zůstatek aspoň nula) a udržte 1. ligu.', clubId: 'zlin', seasons: 2 },
-  { id: 'vzestup', title: 'Z ČFL do 1. ligy', description: 'Kolín hraje třetí ligu. Do pěti sezón ho doveďte do 1. ligy.', clubId: 'kolin', seasons: 5 },
+  { id: 'zachrana', title: 'Zachraňte krachující klub', description: 'Zlín je v minusu a splácí úvěr. Za dvě sezóny udržte 1. ligu a dostaňte účet z hluboké díry. Hvězdy podle zdraví financí (zůstatek po odečtení vaší půjčky klubu): ★ ztráta do 10 % ročních nákladů, ★★ aspoň nula, ★★★ rezerva 10 % nákladů.', clubId: 'zlin', seasons: 2 },
+  { id: 'vzestup', title: 'Z ČFL do 1. ligy', description: 'Kolín hraje třetí ligu. Do sedmi sezón ho doveďte do 1. ligy. ★ za postup do 2. ligy, ★★ za 1. ligu, ★★★ za 1. ligu do pěti sezón.', clubId: 'kolin', seasons: 7 },
   { id: 'evropa', title: 'Evropa s městem jako spolumajitelem', description: 'Hradec vlastníte z 51 %, město a patrioti zbytek. Do tří sezón skončete do 4. místa 1. ligy (Evropa).', clubId: 'hradec', seasons: 3, ownerShare: 0.51 },
-  { id: 'prodejni', title: 'Prodejní klub', description: 'Jablonec žije z prodejů. Za čtyři sezóny vydělejte na přestupech čistých 500 mil. Kč a zůstaňte v 1. lize.', clubId: 'jablonec', seasons: 4 },
+  { id: 'prodejni', title: 'Prodejní klub', description: 'Jablonec žije z prodejů. Za čtyři sezóny vydělejte na přestupech čistých 400 mil. Kč a zůstaňte v 1. lize. Čím víc navíc, tím víc hvězd.', clubId: 'jablonec', seasons: 4 },
 ];
 
 export function scenarioDef(id: ScenarioId): ScenarioDef {
@@ -144,18 +156,43 @@ export function scenarioStatus(state: GameState): ScenarioCheck | undefined {
   const tier = tierOf(state, club.id);
   const prev = state.history[state.history.length - 1];
   if (sc.id === 'zachrana') {
-    const ok = played >= 1 && club.finance.balance >= 0 && tier === 1;
-    return { done: ok, failed: !ok && (last || tier > 1), text: `Zůstatek ${mil(club.finance.balance)}, ${tier === 1 ? '1. liga' : 'mimo 1. ligu'}.` };
+    // Hodnotí se až po obou sezónách; peníze půjčené majitelem se od zůstatku odečítají.
+    const net = club.finance.balance - (state.ownerLoan?.remaining ?? 0);
+    const costs = annualCosts(club, tier);
+    const ok = played >= def.seasons && net >= -costs * 0.1 && tier === 1;
+    return { done: ok, failed: !ok && (last || tier > 1), text: `Zůstatek ${mil(club.finance.balance)}${state.ownerLoan?.remaining ? `, po odečtení vaší půjčky ${mil(net)}` : ''}, ${tier === 1 ? '1. liga' : 'mimo 1. ligu'}.` };
   }
   if (sc.id === 'vzestup') {
-    return { done: tier === 1, failed: tier > 1 && last, text: `Klub hraje ${competitionOf(state, club.id)?.name ?? ''}.` };
+    // Na konci stačí i 2. liga (jedna hvězda).
+    return { done: tier === 1 || (last && tier === 2), failed: tier > 2 && last, text: `Klub hraje ${competitionOf(state, club.id)?.name ?? ''}.` };
   }
   if (sc.id === 'evropa') {
     const top = prev && state.competitions[prev.ownerClub.competitionId]?.tier === 1 && prev.ownerClub.position <= 4;
     return { done: !!top, failed: !top && last, text: prev ? `Loni ${prev.ownerClub.position}. místo.` : 'Sezóna běží.' };
   }
-  const ok = sc.progress >= 500_000_000 && tier === 1;
-  return { done: ok, failed: !ok && (last || tier > 1), text: `Na přestupech zatím ${mil(sc.progress)} čistého.` };
+  const ok = sc.progress >= PRODEJNI_TARGET && tier === 1 && played >= def.seasons;
+  const failed = tier > 1 || (last && sc.progress < PRODEJNI_TARGET);
+  return { done: ok, failed: !ok && failed, text: `Na přestupech zatím ${mil(sc.progress)} čistého (cíl ${mil(PRODEJNI_TARGET)}).` };
+}
+
+/** Cíl prodejního klubu: čistý zisk z přestupů za čtyři sezóny. */
+export const PRODEJNI_TARGET = 400_000_000;
+
+/** Hvězdy za splněný scénář: rychlost, u prodejního klubu o kolik se cíl překročil, u záchrany jak zdravé finance jsou. */
+function scenarioStars(state: GameState, def: ScenarioDef, used: number): number {
+  const sc = state.scenario!;
+  if (sc.id === 'prodejni') return sc.progress >= PRODEJNI_TARGET * 1.5 ? 3 : sc.progress >= PRODEJNI_TARGET * 1.2 ? 2 : 1;
+  if (sc.id === 'zachrana') {
+    const club = state.clubs[state.owner.clubId];
+    const net = club.finance.balance - (state.ownerLoan?.remaining ?? 0);
+    const costs = annualCosts(club, tierOf(state, club.id));
+    return net >= costs * 0.1 ? 3 : net >= 0 ? 2 : 1;
+  }
+  if (sc.id === 'vzestup') {
+    if (tierOf(state, state.owner.clubId) > 1) return 1;
+    return used <= 5 ? 3 : 2;
+  }
+  return used <= Math.ceil(def.seasons / 2) ? 3 : used < def.seasons ? 2 : 1;
 }
 
 /** Konec sezóny: průběh scénáře (prodejní klub sčítá čistý zisk z přestupů). */
@@ -173,7 +210,7 @@ export function evaluateScenario(state: GameState): void {
   if (!st || (!st.done && !st.failed)) return;
   const def = scenarioDef(sc.id);
   const used = state.season - sc.startSeason;
-  const stars = st.done ? (used <= Math.ceil(def.seasons / 2) ? 3 : used < def.seasons ? 2 : 1) : 0;
+  const stars = st.done ? scenarioStars(state, def, used) : 0;
   sc.result = { stars, date: state.date, text: st.done ? `Splněno za ${used} ${used === 1 ? 'sezónu' : used < 5 ? 'sezóny' : 'sezón'}: ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}. ${st.text}` : `Nesplněno. ${st.text}` };
   if (stars) addTrophy(state, 'scenar', `Scénář „${def.title}“: ${'★'.repeat(stars)}`);
   addNews(state, { kind: 'sezona', title: `Scénář ${def.title}: ${st.done ? 'splněno' : 'nesplněno'}`, text: `${sc.result.text} Hra pokračuje jako volná hra.` });
@@ -204,10 +241,16 @@ export function careerFrom(state: GameState, previous?: Career): Career {
   const result = state.gameOver?.kind === 'prodej' ? 'prodal klub' : state.gameOver?.kind === 'krach' ? 'klub zkrachoval' : state.gameOver?.kind === 'trest' ? 'zákaz činnosti' : 'odešel';
   return {
     name: state.owner.name,
-    wallet: state.owner.wallet,
+    // Do další kariéry jdou i peníze uložené v investicích.
+    wallet: personalWealth(state),
     media: state.gameOver?.kind === 'krach' ? Math.max(0, state.owner.media - 20) : state.owner.media,
     league: state.owner.league,
-    trophies: [...(previous?.trophies ?? []), ...(state.trophies ?? []).filter((t) => !(previous?.trophies ?? []).some((p) => p.text === t.text && p.season === t.season))],
+    trophies: [
+      ...(previous?.trophies ?? []),
+      ...(state.trophies ?? [])
+        .filter((t) => (t.clubId ? t.clubId === club.id : !(previous?.trophies ?? []).some((p) => p.text === t.text && p.season === t.season)))
+        .map((t) => ({ ...t, clubId: t.clubId ?? club.id, clubName: t.clubName ?? club.name })),
+    ],
     clubs: [...(previous?.clubs ?? []), { name: club.name, seasons: `${first}/${String(first + 1).slice(2)}–${state.season}/${String(state.season + 1).slice(2)}`, result }],
   };
 }
@@ -227,7 +270,8 @@ export function newCareerGame(pack: DataPack, career: Career, opts: Omit<NewGame
   state.owner.wallet = career.wallet;
   state.owner.media = career.media;
   state.owner.league = career.league;
-  state.trophies = career.trophies;
+  // Trofeje z minulých klubů zůstávají v síni slávy, označené klubem (nové trofeje neblokují).
+  state.trophies = career.trophies.map((t) => ({ ...t, clubId: t.clubId ?? 'kariera' }));
   state.career = career;
   addNews(state, { kind: 'sezona', title: `Nová kapitola kariéry: ${state.clubs[opts.clubId].name}`, text: `Předchozí kluby: ${career.clubs.map((c) => `${c.name} (${c.seasons}, ${c.result})`).join(', ')}. Odkaz kariéry ${legacyScore(state)} bodů.` });
   return state;

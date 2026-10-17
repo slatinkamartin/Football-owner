@@ -7,9 +7,9 @@ import { money, num } from '../format';
 const czPack = pack as DataPack;
 
 const SHARES = [
-  { share: 1, label: '100 % klubu', text: 'Rozhoduješ o všem sám a nikomu se nezodpovídáš.' },
-  { share: 0.6, label: 'Většina (60 %)', text: 'Vedení ti nikdo nevezme, ale velké stavby a navýšení kapitálu musí schválit i spolumajitelé.' },
-  { share: 0.35, label: 'Menšinový podíl (35 %)', text: 'Spolumajitelé hlasují o úvěrech i stavbách a nespokojení tě můžou na valné hromadě odvolat.' },
+  { share: 1, label: '100 % klubu', text: 'O všem rozhodujete sami a nikomu se nezodpovídáte.' },
+  { share: 0.6, label: 'Většina (60 %)', text: 'Vedení vám nikdo nevezme, ale velké stavby a navýšení kapitálu musí schválit i spolumajitelé.' },
+  { share: 0.35, label: 'Menšinový podíl (35 %)', text: 'Spolumajitelé hlasují o úvěrech i stavbách a nespokojení vás můžou na valné hromadě odvolat.' },
 ];
 
 export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) => void; outdatedSave?: boolean }) {
@@ -40,7 +40,7 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
     <div className="app newgame">
       <header className="hero">
         <h1>Majitel</h1>
-        <p>Kup fotbalový klub a dovedi ho z české pyramidy až do Evropy. Taktiku necháš trenérovi, ty rozhoduješ o penězích, lidech a směřování.</p>
+        <p>Kupte fotbalový klub a doveďte ho z české pyramidy až do Evropy. Taktiku necháte trenérovi, vy rozhodujete o penězích, lidech a směřování.</p>
       </header>
 
       {outdatedSave && (
@@ -88,14 +88,18 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
             {(Object.keys(DIFFICULTY) as Difficulty[]).map((d) => (
               <button key={d} className={`choice ${difficulty === d ? 'selected' : ''}`} onClick={() => setDifficulty(d)}>
                 <strong>{DIFFICULTY[d].label}</strong>
-                <span>Osobní kapitál {money(DIFFICULTY[d].wallet)}</span>
+                {mode === 'kariera' && career ? (
+                  <span>Osobní kapitál {money(career.wallet)} (přenesený z kariéry)</span>
+                ) : (
+                  <span>Osobní kapitál {money(DIFFICULTY[d].wallet)}</span>
+                )}
                 <span>Příjem z jiného podnikání {money(DIFFICULTY[d].monthlyIncome)} měsíčně</span>
               </button>
             ))}
           </div>
         </div>
-        <div className="field">
-          <span>Jaký podíl v klubu kupuješ</span>
+        {mode !== 'scenar' && <div className="field">
+          <span>Jaký podíl v klubu kupujete</span>
           <div className="choices">
             {SHARES.map((o) => (
               <button key={o.share} className={`choice ${ownerShare === o.share ? 'selected' : ''}`} onClick={() => setOwnerShare(o.share)}>
@@ -104,11 +108,15 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
               </button>
             ))}
           </div>
-        </div>
+        </div>}
+        {mode === 'kariera' && career && (
+          <p className="muted small">Do nového klubu si přinášíte osobní peníze {money(career.wallet)}, pověst u médií {Math.round(career.media)} a u svazu {Math.round(career.league)}. Startovní podmínky dál určují příjem z jiného podnikání, peníze klubu a náročnost hry.</p>
+        )}
       </section>
 
       {mode !== 'scenar' && <section className="card">
-        <h2>Vyber klub</h2>
+        <h2>Vyberte klub</h2>
+        {mode === 'kariera' && <p className="muted small">Některé kluby chtějí majitele s úspěchy nebo dobrou pověstí. U zamčených klubů je napsané proč.</p>}
         {czPack.competitions.map((comp) => (
           <div key={comp.id} className="club-group">
             <h3>{comp.fullName ?? comp.name}</h3>
@@ -116,15 +124,19 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
               {czPack.clubs
                 .filter((c) => c.competition === comp.id)
                 .sort((a, b) => b.reputation - a.reputation)
-                .map((c) => (
-                  <button key={c.id} className={`club-card ${clubId === c.id ? 'selected' : ''}`} disabled={!!locked(c.reputation)} title={locked(c.reputation)} onClick={() => setClubId(c.id)}>
-                    <span className="crest" style={{ background: c.colors[0], borderColor: c.colors[1] }} />
-                    <span className="club-card-text">
-                      <strong>{c.name}</strong>
-                      <span>Pověst {c.reputation} · {c.stadium.name}, {num(c.stadium.capacity)} míst</span>
-                    </span>
-                  </button>
-                ))}
+                .map((c) => {
+                  const lock = locked(c.reputation);
+                  return (
+                    <button key={c.id} className={`club-card ${clubId === c.id ? 'selected' : ''}${lock ? ' locked' : ''}`} disabled={!!lock} title={lock} onClick={() => setClubId(c.id)}>
+                      <span className="crest" style={{ background: c.colors[0], borderColor: c.colors[1] }} />
+                      <span className="club-card-text">
+                        <strong>{c.name}</strong>
+                        <span>Pověst {c.reputation} · {c.stadium.name}, {num(c.stadium.capacity)} míst</span>
+                        {lock && <span className="club-lock">Zamčeno: {lock}</span>}
+                      </span>
+                    </button>
+                  );
+                })}
             </div>
           </div>
         ))}
@@ -132,7 +144,7 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
 
       <div className="sticky-actions">
         <button className="primary big" disabled={mode !== 'scenar' && !clubId} onClick={start}>
-          {mode === 'scenar' ? `Začít scénář: ${SCENARIOS.find((s) => s.id === scenario)!.title}` : clubId ? `Koupit ${czPack.clubs.find((c) => c.id === clubId)?.shortName} a začít` : 'Vyber klub'}
+          {mode === 'scenar' ? `Začít scénář: ${SCENARIOS.find((s) => s.id === scenario)!.title}` : clubId ? `Koupit ${czPack.clubs.find((c) => c.id === clubId)?.shortName} a začít` : 'Vyberte klub'}
         </button>
       </div>
       {czPack.note && <p className="muted small center">{czPack.note}</p>}

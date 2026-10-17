@@ -102,7 +102,7 @@ export function startPlayoffs(state: GameState): void {
     const second = `${year}-06-13`;
     const cup: Cup = {
       id: 'baraz',
-      name: `Baráž o ${comp.name}`,
+      name: `Baráž: ${comp.name}`,
       kind: 'baraz',
       fixtures: ties.flatMap((t, i) => [
         { id: `baraz-${state.season}-${i}-1`, round: 1, date: first, homeId: t.lower, awayId: t.upper },

@@ -1,5 +1,10 @@
+import { useState } from 'react';
 import {
   coachOf,
+  scenarioDef,
+  scenarioStatus,
+  tierOf,
+  annualCosts,
   competitionOf,
   computeTable,
   contractExpiring,
@@ -21,9 +26,8 @@ import {
   type MilestoneTab,
 } from '../../engine';
 import { Briefing, PulsePanel, Stories } from './Briefing';
-import { MatchPrepCard } from './MatchPrep';
 import { SideGoalsCard } from './finance/Extras';
-import { Badge } from '../components';
+import { Badge, Meter } from '../components';
 import { findFixture } from './MatchDetail';
 import { Decisions } from './Decisions';
 import { LineChart } from '../chart';
@@ -37,14 +41,15 @@ export function Overview({
   onChange,
   onNavigate,
   onOpenMatch,
-  onLive,
 }: {
   game: GameState;
   onChange: (g: GameState) => void;
   onNavigate: (tab: Target, sub?: BriefingTask['sub']) => void;
   onOpenMatch: (id: string) => void;
-  onLive: () => void;
+  /** Živý přenos spouští dialog před zápasem (App); Přehled ho už nepoužívá. */
+  onLive?: () => void;
 }) {
+  const [newsLimit, setNewsLimit] = useState(10);
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
   const table = comp ? computeTable(comp, game) : [];
@@ -61,9 +66,8 @@ export function Overview({
     <div className="grid">
       <Briefing game={game} onNavigate={onNavigate} />
       <Decisions game={game} onChange={onChange} />
-      <Stories game={game} />
-      <MatchPrepCard game={game} onChange={onChange} onLive={onLive} />
-      <SideGoalsCard game={game} />
+      <ScenarioCard game={game} />
+      <SideGoalsCard game={game} onOpen={() => onNavigate('finance')} />
       <section className="card">
         <h2>Další zápas</h2>
         {next ? (
@@ -180,7 +184,7 @@ export function Overview({
       <section className="card wide">
         <h2>Zprávy</h2>
         <ul className="news">
-          {game.news.slice(0, 25).map((n, i) => (
+          {game.news.slice(0, newsLimit).map((n, i) => (
             <li key={i} className={`news-${n.kind}`}>
               <span className="news-date">{formatShortDate(n.date)}</span>
               <div>
@@ -198,6 +202,11 @@ export function Overview({
             </li>
           ))}
         </ul>
+        {game.news.length > newsLimit && (
+          <button className="linkbtn news-more" onClick={() => setNewsLimit(newsLimit + 15)}>
+            Další zprávy ({game.news.length - newsLimit}) ›
+          </button>
+        )}
       </section>
 
       {game.history.length > 0 && (
@@ -220,6 +229,8 @@ export function Overview({
           </table>
         </section>
       )}
+
+      <Stories game={game} onNavigate={onNavigate} />
     </div>
   );
 }
@@ -282,4 +293,72 @@ function ToDo({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target)
       )}
     </section>
   );
+}
+
+/** Scénář: cíl, kolik sezón zbývá a jak si klub vede. */
+function ScenarioCard({ game }: { game: GameState }) {
+  const sc = game.scenario;
+  if (!sc) return null;
+  const def = scenarioDef(sc.id);
+  const st = scenarioStatus(game);
+  const club = game.clubs[game.owner.clubId];
+  const tier = tierOf(game, club.id);
+  const comp = competitionOf(game, club.id);
+  const seasonNo = Math.min(def.seasons, game.season - sc.startSeason + 1);
+  const finished = !!sc.result;
+  let goal: { label: string; value: string; pct: number; ok: boolean } | undefined;
+  if (sc.id === 'zachrana') {
+    const debt = game.ownerLoan?.remaining ?? 0;
+    const net = club.finance.balance - debt;
+    goal = { label: `Zůstatek klubu${debt ? ' po odečtení půjčky majitele' : ''} (cíl aspoň 0) a 1. liga`, value: `${money(net)} · ${tier === 1 ? '1. liga ✓' : 'mimo 1. ligu ✕'}`, pct: net >= 0 ? 100 : Math.max(5, 100 - (Math.abs(net) / Math.max(1, annualCosts(club, tier) * 0.3)) * 100), ok: net >= 0 && tier === 1 };
+  } else if (sc.id === 'vzestup') {
+    goal = { label: 'Soutěž (cíl 1. liga)', value: `${comp?.name ?? '–'}${tier === 1 ? ' ✓' : ` · zbývá ${tier - 1} ${tier - 1 === 1 ? 'postup' : 'postupy'}`}`, pct: tier === 1 ? 100 : tier === 2 ? 50 : 10, ok: tier === 1 };
+  } else if (sc.id === 'evropa') {
+    const table = comp ? computeTable(comp, game) : [];
+    const pos = table.findIndex((r) => r.clubId === club.id) + 1;
+    const played = table.find((r) => r.clubId === club.id)?.played ?? 0;
+    goal = { label: 'Umístění v 1. lize (cíl do 4. místa)', value: tier !== 1 ? 'mimo 1. ligu' : played ? `teď ${pos}. místo` : 'sezóna ještě nezačala', pct: tier === 1 && played ? Math.max(0, Math.min(100, ((table.length - pos + 1) / Math.max(1, table.length - 3)) * 100)) : 0, ok: tier === 1 && played > 0 && pos <= 4 };
+  } else {
+    const target = Number(def.description.match(/(\d+)\s*mil/)?.[1] ?? 500) * 1_000_000;
+    const total = sc.progress + (finished ? 0 : club.finance.season.prestupy ?? 0);
+    goal = { label: `Čistý zisk z přestupů (cíl ${money(target)})`, value: `${money(total)} (${Math.round((total / target) * 100)} %)`, pct: Math.max(0, Math.min(100, (total / target) * 100)), ok: total >= target };
+  }
+  return (
+    <section className="card wide scenario-card">
+      <div className="row-between">
+        <h2>Scénář: {def.title}</h2>
+        {finished ? (
+          <Badge tone={sc.result!.stars ? 'good' : 'bad'}>{sc.result!.stars ? `splněno ${'★'.repeat(sc.result!.stars)}${'☆'.repeat(3 - sc.result!.stars)}` : 'nesplněno'}</Badge>
+        ) : (
+          <Badge tone={st?.done ? 'good' : 'neutral'}>sezóna {seasonNo} z {def.seasons}</Badge>
+        )}
+      </div>
+      <p className="muted small">{def.description}</p>
+      {finished ? (
+        <p>{sc.result!.text}</p>
+      ) : (
+        <>
+          <div className="scenario-progress">
+            <span className="small">Čas</span>
+            <Meter value={seasonNo - 1 + seasonProgressOf(game)} max={def.seasons} tone={seasonNo === def.seasons ? 'warn' : 'good'} />
+            <span className="small muted">{def.seasons - seasonNo === 0 ? 'poslední sezóna' : `po této sezóně zbývá ${def.seasons - seasonNo}`}</span>
+          </div>
+          {goal && (
+            <div className="scenario-progress">
+              <span className="small">{goal.label}</span>
+              <Meter value={goal.pct} tone={goal.ok ? 'good' : goal.pct >= 50 ? 'warn' : 'bad'} />
+              <strong className={`small ${goal.ok ? 'pos' : ''}`}>{goal.value}</strong>
+            </div>
+          )}
+          {st && <p className="muted small">{st.text} Vyhodnocuje se vždy po skončení sezóny{st.done ? ' – teď by scénář byl splněný.' : '.'}</p>}
+        </>
+      )}
+    </section>
+  );
+}
+
+function seasonProgressOf(game: GameState): number {
+  const start = new Date(`${game.season}-07-01T00:00:00Z`).getTime();
+  const now = new Date(`${game.date}T00:00:00Z`).getTime();
+  return Math.max(0, Math.min(1, (now - start) / (365 * 86_400_000)));
 }

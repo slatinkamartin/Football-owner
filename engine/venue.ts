@@ -1,6 +1,7 @@
 import { addDays } from './calendar';
 import { book } from './finance';
 import { league as leagueRep } from './grey';
+import { changeCity } from './surroundings';
 import type { Rng } from './rng';
 import type { ActionResult } from './staff';
 import type { Club, GameState } from './types';
@@ -153,8 +154,8 @@ function nextHomeMatchAfter(state: GameState, date: string): string | undefined 
 /** Dvakrát za měsíc: nová nabídka akce. Přijatá akce se odehraje v daný den. */
 export function eventOfferTick(state: GameState, rng: Rng): void {
   const club = own(state);
-  state.eventOffers = (state.eventOffers ?? []).filter((o) => o.accepted ? o.date >= state.date : o.expires >= state.date);
-  if (state.eventOffers.filter((o) => !o.accepted).length >= 2 || rng.next() > 0.6) return;
+  state.eventOffers = (state.eventOffers ?? []).filter((o) => o.accepted ? o.date >= state.date : o.expires >= state.date && o.date > state.date);
+  if (state.eventOffers.filter((o) => !o.accepted).length >= 2 || rng.next() > 0.3) return;
   const m = Number(state.date.slice(5, 7));
   const pool: (keyof typeof EVENT_KINDS)[] = ['firemni', 'koncert'];
   if ([12, 1].includes(m)) pool.push('kluziste');
@@ -174,10 +175,19 @@ function maintenanceDamage(club: Club): number {
   return club.policy.maintenance === 'vysoka' ? 0.6 : club.policy.maintenance === 'nizka' ? 1.4 : 1;
 }
 
+/** Lze nabídku akce ještě přijmout? (nevypršela a akce je až v budoucnu) */
+export function eventOfferOpen(state: GameState, o: { expires: string; date: string; accepted?: boolean }): boolean {
+  return !o.accepted && o.expires >= state.date && o.date > state.date;
+}
+
 export function answerEventOffer(prev: GameState, id: string, accept: boolean): ActionResult {
   const state = structuredClone(prev);
   const o = (state.eventOffers ?? []).find((x) => x.id === id);
   if (!o) return { state: prev, ok: false, message: 'Nabídka už neplatí.' };
+  if (accept && !o.accepted && !eventOfferOpen(prev, o)) {
+    state.eventOffers = (state.eventOffers ?? []).filter((x) => x.id !== id);
+    return { state, ok: false, message: 'Nabídka už neplatí: vypršel termín nebo akce už měla proběhnout.' };
+  }
   if (!accept) {
     state.eventOffers = (state.eventOffers ?? []).filter((x) => x.id !== id);
     return { state, ok: true, message: 'Nabídka odmítnuta.' };
@@ -192,6 +202,8 @@ export function dailyEvents(state: GameState, rng: Rng): void {
   for (const o of (state.eventOffers ?? []).filter((x) => x.accepted && x.date === state.date)) {
     book(state, club.id, 'akce', o.income, `Akce na stadionu: ${o.label}`);
     if (o.kind === 'reprezentace') leagueRep(state, 3);
+    // Akce pro veřejnost zlepší vztah s městem (koncert ruší sousedy jen málo).
+    changeCity(state, o.kind === 'koncert' ? 0.5 : 1.5);
     if (rng.next() < o.damage && !(club.pitchDamagedUntil && club.pitchDamagedUntil >= state.date)) {
       const days = club.policy.maintenance === 'vysoka' ? 10 : club.policy.maintenance === 'nizka' ? 28 : 18;
       club.pitchDamagedUntil = addDays(state.date, days);

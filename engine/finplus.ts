@@ -1,10 +1,13 @@
 import { forecastSeason, operatingActual } from './budget';
+import { addDays } from './calendar';
 import { annualCosts, balanceSheet, book } from './finance';
 import { startBigProject } from './investments';
 import { satisfy } from './ownership';
 import { playerAge, squadOf } from './players';
 import type { Rng } from './rng';
 import { strictnessFactor } from './settings';
+import type { ActionResult } from './staff';
+import { changeCity } from './surroundings';
 import { contracts } from './sponsors';
 import type { BudgetPlan, GameEvent, GameState, SponsorSlot } from './types';
 import { addNews, clamp, competitionOf, tierOf } from './world';
@@ -20,32 +23,144 @@ const roundM = (v: number, step = 50_000) => Math.max(step, Math.round(v / step)
 
 // ---------- Vedlejší cíle sezóny ----------
 
-export type SideGoalKind = 'navsteva' | 'odchovanci' | 'zisk' | 'domaci';
+export type SideGoalKind = 'navsteva' | 'odchovanci' | 'zisk' | 'domaci' | 'goly' | 'pohar';
+export type SideGoalGiver = 'sponzor' | 'mesto' | 'akcionari' | 'fanousci' | 'media';
 
 export interface SideGoal {
   kind: SideGoalKind;
-  giver: 'sponzor' | 'mesto' | 'akcionari';
+  giver: SideGoalGiver;
   label: string;
   target: number;
   reward: number;
+  /** Co splnění přinese (krátce, pro výběr). */
+  effect?: string;
+  /** Vedení tento cíl doporučuje (vybere se sám, když majitel nevybere). */
+  recommended?: boolean;
   done?: 'splneno' | 'nesplneno';
 }
 
-const GIVER_LABEL = { sponzor: 'Generální partner', mesto: 'Město', akcionari: 'Akcionáři' };
+export interface SideGoalsState {
+  season: number;
+  /** Vybrané cíle (podle nich se na konci sezóny vyhodnocuje). */
+  goals: SideGoal[];
+  /** Nabídka cílů na začátku sezóny; dokud majitel nevybere, nic se nevyhodnocuje. */
+  offer?: SideGoal[];
+  /** Do tohoto data je třeba vybrat, jinak se vyberou doporučené. */
+  pickBy?: string;
+}
+
+const GIVER_LABEL: Record<SideGoalGiver, string> = { sponzor: 'Generální partner', mesto: 'Město', akcionari: 'Akcionáři', fanousci: 'Fanoušci', media: 'Média' };
 export { GIVER_LABEL };
 
-/** Začátek sezóny: tři vedlejší cíle od sponzora, města a akcionářů. */
-export function createSideGoals(state: GameState): void {
+/** Kolik cílů lze vybrat. */
+export const SIDE_GOALS_MIN = 2;
+export const SIDE_GOALS_MAX = 3;
+/** Kolik dní má majitel na výběr. */
+export const SIDE_GOALS_PICK_DAYS = 21;
+
+/** Pořadí klubu podle pověsti v soutěži: 0 = favorit, 1 = outsider. */
+function strengthRank(state: GameState): number {
+  const comp = competitionOf(state, state.owner.clubId);
+  if (!comp || comp.clubIds.length < 2) return 0.5;
+  const sorted = [...comp.clubIds].sort((a, b) => state.clubs[b].reputation - state.clubs[a].reputation);
+  return sorted.indexOf(state.owner.clubId) / (sorted.length - 1);
+}
+
+function leagueFixtures(state: GameState) {
+  const ownId = state.owner.clubId;
+  return competitionOf(state, ownId)?.fixtures.filter((f) => f.homeId === ownId || f.awayId === ownId) ?? [];
+}
+
+const CUP_ROUND_NAME = ['', '1. kolo', '2. kolo', 'osmifinále', 'čtvrtfinále', 'semifinále', 'finále'];
+
+/** Nabídka 5–6 cílů pro aktuální sezónu (doporučené jsou označené). */
+export function sideGoalOffer(state: GameState): SideGoal[] {
   const club = own(state);
   const tier = tierOf(state, club.id);
   const costs = annualCosts(club, tier);
+  const rank = strengthRank(state);
   const homeAvg = Math.round((Math.min(club.stadium.capacity, 150 * Math.pow(1.06, club.reputation) * (tier === 1 ? 1 : tier === 2 ? 0.55 : 0.45)) * 1.05) / 100) * 100;
-  const goals: SideGoal[] = [
-    { kind: 'navsteva', giver: 'sponzor', label: `Průměrná návštěva doma aspoň ${homeAvg.toLocaleString('cs-CZ')} diváků`, target: homeAvg, reward: roundM(costs * 0.012) },
-    { kind: 'odchovanci', giver: 'mesto', label: 'Hráči do 21 let odehrají aspoň 1 500 minut', target: 1500, reward: roundM(costs * 0.008) },
-    { kind: 'zisk', giver: 'akcionari', label: 'Provozní výsledek sezóny aspoň nula', target: 0, reward: 0 },
+  const matches = leagueFixtures(state).length || 30;
+  const homeGames = Math.max(1, Math.round(matches / 2));
+  const homePoints = Math.max(5, Math.round(homeGames * (2.1 - 1.1 * rank)));
+  const goals = Math.max(10, Math.round(matches * (1.85 - 0.8 * rank)));
+  const goals1: SideGoal[] = [
+    { kind: 'navsteva', giver: 'sponzor', label: `Průměrná návštěva doma aspoň ${homeAvg.toLocaleString('cs-CZ')} diváků`, target: homeAvg, reward: roundM(costs * 0.012), effect: 'bonus a lepší vztah s generálním partnerem' },
+    { kind: 'odchovanci', giver: 'mesto', label: 'Hráči do 21 let odehrají aspoň 1 500 minut', target: 1500, reward: roundM(costs * 0.008), effect: 'příspěvek města na mládež a lepší vztah s městem' },
+    { kind: 'domaci', giver: 'fanousci', label: `Doma získat aspoň ${homePoints} bodů v lize`, target: homePoints, reward: 0, effect: 'lepší nálada fanoušků' },
+    { kind: 'goly', giver: 'media', label: `Vstřelit v lize aspoň ${goals} gólů`, target: goals, reward: roundM(costs * 0.005), effect: 'lepší pověst u médií a bonus od televize' },
   ];
-  state.sideGoals = { season: state.season, goals };
+  const cup = state.cups.pohar;
+  if (cup && !cup.winner && cup.alive.includes(club.id)) {
+    const target = tier === 1 && rank < 0.35 ? 5 : tier === 1 ? 4 : tier === 2 ? 3 : 2;
+    goals1.push({ kind: 'pohar', giver: 'sponzor', label: `V poháru dojít aspoň do kola: ${CUP_ROUND_NAME[target]}`, target, reward: roundM(costs * 0.006), effect: 'bonus generálního partnera' });
+  }
+  if (state.shareholders.length > 0) {
+    goals1.push({ kind: 'zisk', giver: 'akcionari', label: 'Provozní výsledek sezóny aspoň nula', target: 0, reward: 0, effect: 'spokojenější spolumajitelé' });
+  }
+  // Doporučené: tři, které se klubu nejvíc hodí (favorit góly a body doma, menší klub mládež a návštěva).
+  const prefer: SideGoalKind[] = state.shareholders.length > 0 ? ['navsteva', 'zisk'] : ['navsteva'];
+  prefer.push(rank < 0.4 ? 'domaci' : 'odchovanci');
+  if (prefer.length < SIDE_GOALS_MAX) prefer.push(rank < 0.4 ? 'goly' : 'domaci');
+  for (const g of goals1) g.recommended = prefer.includes(g.kind);
+  return goals1;
+}
+
+/** Začátek sezóny: nabídka vedlejších cílů, ze které majitel vybere 2–3. */
+export function createSideGoals(state: GameState): void {
+  state.sideGoals = { season: state.season, goals: [], offer: sideGoalOffer(state), pickBy: addDays(state.date, SIDE_GOALS_PICK_DAYS) };
+  addNews(state, {
+    kind: 'info',
+    title: 'Vyberte vedlejší cíle sezóny',
+    text: `Sponzor, město, fanoušci i média nabízejí vedlejší cíle. Ve Financích vyberte ${SIDE_GOALS_MIN} až ${SIDE_GOALS_MAX}. Když do ${formatIso(state.sideGoals.pickBy!)} nevyberete, vyberou se doporučené.`,
+  });
+}
+
+const formatIso = (iso: string) => iso.split('-').reverse().map((x, i) => (i < 2 ? String(Number(x)) : x)).join('. ');
+
+/** Čeká se na výběr vedlejších cílů? */
+export function sideGoalsPending(state: GameState): { offer: SideGoal[]; pickBy?: string; min: number; max: number } | undefined {
+  const sg = state.sideGoals;
+  if (!sg || sg.season !== state.season || !sg.offer?.length || sg.goals.length) return undefined;
+  return { offer: sg.offer, pickBy: sg.pickBy, min: SIDE_GOALS_MIN, max: Math.min(SIDE_GOALS_MAX, sg.offer.length) };
+}
+
+function applyPick(state: GameState, kinds: SideGoalKind[]): void {
+  const sg = state.sideGoals!;
+  sg.goals = sg.offer!.filter((g) => kinds.includes(g.kind)).map((g) => ({ ...g }));
+  sg.offer = undefined;
+  sg.pickBy = undefined;
+}
+
+/** Majitel vybírá vedlejší cíle sezóny (2–3 z nabídky). */
+export function pickSideGoals(prev: GameState, kinds: SideGoalKind[]): ActionResult {
+  const pending = sideGoalsPending(prev);
+  if (!pending) return { state: prev, ok: false, message: 'Vedlejší cíle už jsou pro tuto sezónu vybrané.' };
+  const unique = [...new Set(kinds)].filter((k) => pending.offer.some((g) => g.kind === k));
+  if (unique.length < pending.min || unique.length > pending.max) return { state: prev, ok: false, message: `Vyberte ${pending.min} až ${pending.max} cíle.` };
+  const state = structuredClone(prev);
+  applyPick(state, unique);
+  return { state, ok: true, message: `Vybrané vedlejší cíle: ${state.sideGoals!.goals.map((g) => GIVER_LABEL[g.giver]).join(', ')}.` };
+}
+
+/** Denně: po termínu se vyberou doporučené cíle (se zprávou). */
+export function sideGoalsTick(state: GameState): void {
+  const pending = sideGoalsPending(state);
+  if (!pending || (pending.pickBy && state.date < pending.pickBy)) return;
+  autoPick(state);
+}
+
+function autoPick(state: GameState): void {
+  const pending = sideGoalsPending(state);
+  if (!pending) return;
+  let kinds = pending.offer.filter((g) => g.recommended).map((g) => g.kind).slice(0, pending.max);
+  if (kinds.length < pending.min) kinds = [...kinds, ...pending.offer.filter((g) => !kinds.includes(g.kind)).map((g) => g.kind)].slice(0, pending.min);
+  applyPick(state, kinds);
+  addNews(state, {
+    kind: 'info',
+    title: 'Vedlejší cíle sezóny vybrány podle doporučení',
+    text: `Výběr jste nestihli, vedení vybralo doporučené: ${state.sideGoals!.goals.map((g) => g.label).join(' · ')}.`,
+  });
 }
 
 /** Průběžné plnění (0–1) a text. */
@@ -61,6 +176,23 @@ export function sideGoalProgress(state: GameState, g: SideGoal): { value: number
     const minutes = squadOf(state, ownId).filter((p) => playerAge(p, state.season) <= 21).reduce((a, p) => a + p.minutes, 0);
     return { value: minutes, text: `zatím ${minutes.toLocaleString('cs-CZ')} minut`, ratio: minutes / g.target };
   }
+  if (g.kind === 'domaci') {
+    const home = leagueFixtures(state).filter((f) => f.homeId === ownId && f.result);
+    const pts = home.reduce((a, f) => a + (f.result!.homeGoals > f.result!.awayGoals ? 3 : f.result!.homeGoals === f.result!.awayGoals ? 1 : 0), 0);
+    return { value: pts, text: `zatím ${pts} bodů z ${home.length} zápasů`, ratio: pts / g.target };
+  }
+  if (g.kind === 'goly') {
+    const played = leagueFixtures(state).filter((f) => f.result);
+    const goals = played.reduce((a, f) => a + (f.homeId === ownId ? f.result!.homeGoals : f.result!.awayGoals), 0);
+    return { value: goals, text: `zatím ${goals} gólů z ${played.length} zápasů`, ratio: goals / g.target };
+  }
+  if (g.kind === 'pohar') {
+    const cup = state.cups.pohar;
+    const mine = cup?.fixtures.filter((f) => f.homeId === ownId || f.awayId === ownId) ?? [];
+    const reached = mine.reduce((a, f) => Math.max(a, f.round), 0);
+    const out = !!cup && !cup.alive.includes(ownId);
+    return { value: reached, text: reached ? `${out ? 'vypadli jsme v kole' : 'hrajeme kolo'}: ${CUP_ROUND_NAME[reached] ?? reached}` : 'pohár ještě nezačal', ratio: reached / g.target };
+  }
   const plan = forecastSeason(state);
   return { value: plan.result, text: `výhled ${mil(plan.result)} (zatím ${mil(operatingActual(state))})`, ratio: plan.result >= 0 ? 1 : 0.5 };
 }
@@ -69,18 +201,28 @@ export function sideGoalProgress(state: GameState, g: SideGoal): { value: number
 export function settleSideGoals(state: GameState): void {
   const sg = state.sideGoals;
   if (!sg || sg.season !== state.season) return;
+  if (!sg.goals.length) autoPick(state);
   const ownId = state.owner.clubId;
   const lines: string[] = [];
   for (const g of sg.goals) {
     const ok = g.kind === 'zisk' ? operatingActual(state) >= 0 : sideGoalProgress(state, g).value >= g.target;
     g.done = ok ? 'splneno' : 'nesplneno';
     if (g.giver === 'sponzor') {
-      if (ok) book(state, ownId, 'komercni', g.reward, 'Bonus generálního partnera za návštěvnost');
+      if (ok) book(state, ownId, 'komercni', g.reward, g.kind === 'pohar' ? 'Bonus generálního partnera za pohár' : 'Bonus generálního partnera za návštěvnost');
       changeSponsorRelation(state, 'generalni', ok ? 10 : -6);
     }
     if (g.giver === 'mesto') {
       if (ok) book(state, ownId, 'ostatni', g.reward, 'Příspěvek města na mládež');
       satisfy(state, ok ? 5 : -3, ['mesto', 'patriot']);
+      changeCity(state, ok ? 5 : -2);
+    }
+    if (g.giver === 'fanousci') {
+      const club = own(state);
+      club.fanMood = clamp(club.fanMood + (ok ? 6 : -3), 0, 100);
+    }
+    if (g.giver === 'media') {
+      if (ok && g.reward) book(state, ownId, 'komercni', g.reward, 'Bonus od televize za útočný fotbal');
+      state.owner.media = clamp(state.owner.media + (ok ? 5 : -2), 0, 100);
     }
     if (g.giver === 'akcionari') satisfy(state, ok ? 6 : -5, ['investor', 'spekulant']);
     lines.push(`${GIVER_LABEL[g.giver]}: ${g.label} ${ok ? 'splněno' : 'nesplněno'}${ok && g.reward ? ` (+${mil(g.reward)})` : ''}`);
@@ -205,13 +347,19 @@ export interface FfpStatus {
   restricted: boolean;
 }
 
+/** Čistá půjčka majitele v této sezóně (stejně jako ownerLentThisSeason ve financing.ts; kvůli cyklickým importům zvlášť). */
+function lentThisSeason(state: GameState): number {
+  return state.ownerLent?.season === state.season ? Math.max(0, state.ownerLent.amount) : 0;
+}
+
 export function ffpStatus(state: GameState): FfpStatus {
   const club = own(state);
   const costs = annualCosts(club, tierOf(state, club.id));
   const hist = (state.opHistory ?? []).filter((h) => h.season >= state.season - 2 && h.season < state.season);
   const current = forecastSeason(state).result;
   const total = hist.reduce((a, h) => a + h.result, 0) + current;
-  const deposits = (hist.reduce((a, h) => a + h.deposits, 0) + (club.finance.season.vklad ?? 0)) * 0.5;
+  // Vklady i půjčky majitele se počítají napůl (půjčka je taky peníze majitele v klubu).
+  const deposits = (hist.reduce((a, h) => a + h.deposits, 0) + (club.finance.season.vklad ?? 0) + lentThisSeason(state)) * 0.5;
   const limit = -costs * 0.5 / strictnessFactor(state);
   const applies = tierOf(state, club.id) <= 2;
   return { total, deposits, limit, ok: !applies || total + deposits >= limit, strikes: state.ffp?.strikes ?? 0, restricted: state.ffp?.restrictedSeason === state.season, applies };
@@ -220,7 +368,7 @@ export function ffpStatus(state: GameState): FfpStatus {
 /** Konec sezóny: zápis výsledku a kontrola fair play. */
 export function seasonFfp(state: GameState): void {
   const club = own(state);
-  state.opHistory = [...(state.opHistory ?? []), { season: state.season, result: operatingActual(state), deposits: club.finance.season.vklad ?? 0 }].slice(-5);
+  state.opHistory = [...(state.opHistory ?? []), { season: state.season, result: operatingActual(state), deposits: (club.finance.season.vklad ?? 0) + lentThisSeason(state) }].slice(-5);
   const hist = state.opHistory.filter((h) => h.season > state.season - 3);
   const costs = annualCosts(club, tierOf(state, club.id));
   const total = hist.reduce((a, h) => a + h.result + h.deposits * 0.5, 0);

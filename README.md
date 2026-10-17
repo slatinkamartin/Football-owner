@@ -61,6 +61,42 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.23: ladění (plynulost, vyváženost, opravy)
+
+- **Jedno tlačítko posunu**: hra jde k dalšímu zápasu, milníku nebo o týden. Zastaví se jen na tom, co máte v nastavení.
+- **Zápas jako milník**: v předvečer zápasu tlačítko „Zápas ›“ otevře okno se soupeřem (tabulka, forma, síla, střelci, absence, vzájemné zápasy) a vším, co můžete ovlivnit. Pak zvolíte jen výsledek, nebo přenos.
+- **Méně vyrušování**:
+  - méně náhodných situací, tiskovek a nabídek akcí;
+  - situace bez volby jsou jen zprávy;
+  - konec sezóny je v jednom okně (výroční zpráva, nová sezóna a výsledek scénáře).
+- **Přehlednost**:
+  - podzáložky u Přestupů a Stadionu;
+  - historie přestupů (váš klub 3 roky, liga aktuální sezóna);
+  - srozumitelné příběhy sezóny na konci Přehledu;
+  - karta scénáře;
+  - kompaktní Kádr a Finance;
+  - vedlejší cíle sezóny si vybíráte sami.
+- **Mobil**: jednořádková horní lišta, posuvné záložky, okna se nevejdou pod lištu ani se neuseknou.
+- **Vyváženost**:
+  - krizový výprodej jen do výše dluhu;
+  - vyšší TV peníze v nižších soutěžích, půjčky majitele se počítají do fair play;
+  - vedení si před krachem samo půjčí od majitele;
+  - velké kluby už netisknou peníze;
+  - obtížnost mění i náklady a přísnost;
+  - víc přestupů v lize i ze zahraničí;
+  - vztah s městem se hýbe;
+  - scénáře mají odstupňované hvězdy.
+- **Opravy**:
+  - neplatný plat při prodlužování smlouvy;
+  - příběhy přes konec sezóny;
+  - trofeje v kariéře;
+  - majetek v byznysu při prodeji;
+  - falešné varování „dojdou peníze“;
+  - graf pozice;
+  - skloňování jmen;
+  - obsah pro akcionáře u jediného majitele;
+  - prošlé nabídky akcí.
+
 ### Novinky verze 0.22: celek hry (etapa H)
 
 - **Výroční zpráva sezóny**: po konci sezóny se ukáže umístění, splnění cíle, finanční vysvědčení, hráč sezóny, nejlepší střelec, nejlepší a nejhorší rozhodnutí majitele, zlomové okamžiky a nové trofeje.

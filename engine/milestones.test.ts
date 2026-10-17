@@ -7,9 +7,9 @@ import type { DataPack } from './types';
 const start = newGame(pack as DataPack, { clubId: 'bohemians', ownerName: 'T', difficulty: 'stredni', seed: 5 });
 
 describe('milníky sezóny', () => {
-  it('sezóna má milníky v pořadí a první je termín rozpočtu nebo start ligy', () => {
+  it('sezóna má milníky v pořadí a první je start ligy', () => {
     const list = seasonMilestones(start);
-    expect(list.length).toBeGreaterThan(8);
+    expect(list.length).toBeGreaterThan(6);
     expect([...list].sort((a, b) => (a.date < b.date ? -1 : 1)).map((m) => m.id)).toEqual(list.map((m) => m.id));
     const next = nextMilestone(start)!;
     expect(next.date > start.date).toBe(true);

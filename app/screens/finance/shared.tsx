@@ -44,7 +44,7 @@ export function OwnerNeedActions({ game, need, onResult }: { game: GameState; ne
       <button className="primary" disabled={!enough || !!game.owner.ousted} onClick={() => onResult(lendToClub(game, need))}>
         Půjčit klubu {money(need)}
       </button>
-      <button disabled={!enough || !!game.owner.ousted} onClick={() => onResult({ state: injectCapital(game, need), ok: true, message: `Vložil jste do klubu ${money(need)}.` })}>
+      <button disabled={!enough || !!game.owner.ousted} onClick={() => onResult({ state: injectCapital(game, need), ok: true, message: `Vklad do klubu: ${money(need)}.` })}>
         Vložit {money(need)}
       </button>
       {!enough && <span className="small neg">Na to nemáte dost osobních peněz ({money(game.owner.wallet)}).</span>}
@@ -134,10 +134,10 @@ export function Impact({ game, patch, extra }: { game: GameState; patch: Partial
   const same = (Object.keys(patch) as (keyof Club['policy'])[]).every((k) => JSON.stringify(club.policy[k] ?? DEFAULTS[k]) === JSON.stringify(patch[k]));
   const notes = (extra ?? []).filter(Boolean) as string[];
   return (
-    <p className="impact small">
+    <div className="impact small">
       <span className="impact-label">Dopad:</span> {same ? 'současné nastavení' : `${impactText(game, patch)} (proti současnému)`}
       {notes.length > 0 && <> · {notes.join(' · ')}</>}
-    </p>
+    </div>
   );
 }
 

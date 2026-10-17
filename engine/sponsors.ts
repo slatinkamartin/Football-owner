@@ -143,7 +143,7 @@ function autoSignExpired(state: GameState): void {
     signed.push(`${SLOT_LABEL[slot]}: ${best.name}`);
   }
   state.sponsorOffers = (state.sponsorOffers ?? []).filter((o) => o.expires > state.date);
-  if (signed.length) addNews(state, { kind: 'info', title: 'Obchodní oddělení podepsalo sponzory', text: `${signed.join(', ')}. Na nabídky jste nereagoval, podepsala se nejvyšší.` });
+  if (signed.length) addNews(state, { kind: 'info', title: 'Obchodní oddělení podepsalo sponzory', text: `${signed.join(', ')}. Na nabídky nepřišla odpověď, podepsala se nejvyšší.` });
 }
 
 function round(v: number): number {
@@ -206,14 +206,14 @@ export function sponsorSeasonBonuses(state: GameState, position: number, cupWinn
     const won =
       (c.bonus.kind === 'umisteni' && c.bonus.target !== undefined && position <= c.bonus.target) ||
       (c.bonus.kind === 'pohar' && cupWinner === state.owner.clubId);
-    if (won) book(state, state.owner.clubId, 'komercni', c.bonus.amount, `Bonus sponzora ${c.name}`);
+    if (won) book(state, state.owner.clubId, 'komercni', c.bonus.amount, `Bonus sponzora: ${c.name}`);
   }
 }
 
 /** Ligová fáze Evropy: bonusy sponzorů. */
 export function sponsorEuropeBonus(state: GameState): void {
   for (const c of contracts(state)) {
-    if (c.bonus?.kind === 'evropa') book(state, state.owner.clubId, 'komercni', c.bonus.amount, `Bonus sponzora ${c.name} za Evropu`);
+    if (c.bonus?.kind === 'evropa') book(state, state.owner.clubId, 'komercni', c.bonus.amount, `Bonus sponzora za Evropu: ${c.name}`);
   }
 }
 

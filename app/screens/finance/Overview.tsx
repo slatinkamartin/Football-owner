@@ -1,4 +1,4 @@
-import { RatingCard, ScenariosCard } from './Extras';
+import { RatingCard, ScenariosCard, SideGoalsCard } from './Extras';
 import { useState } from 'react';
 import {
   activeOverdraft,
@@ -24,6 +24,7 @@ import {
 } from '../../../engine';
 import { Notice } from '../../components';
 import { money } from '../../format';
+import { useStoredState } from '../../table';
 import type { FinanceTab } from '../Finance';
 import { Composition, LeagueRanks, Waterfall } from './OverviewCharts';
 import { CashChart, OwnerNeedActions } from './shared';
@@ -58,14 +59,19 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
   const wages = -totals.platy;
   const wageShare = income > 0 ? wages / income : 0;
 
+  const worstNeed = (plan.ownerNeed ?? 0) > 0 ? 0 : plan.worstNeed ?? 0;
   const status: Status =
-    game.crisis || club.finance.monthsNegative > 0 || (plan.ownerNeed ?? 0) > 0 ? 'bad' : warnings.length || plan.cashMin < 0 ? 'warn' : 'good';
+    game.crisis || club.finance.monthsNegative > 0 || (plan.ownerNeed ?? 0) > 0 ? 'bad' : warnings.length || plan.cashMin < 0 || worstNeed > 0 ? 'warn' : 'good';
   const verdict =
     (plan.ownerNeed ?? 0) > 0
-      ? `Podle výhledu by klubu v ${monthIn(plan.cashMinDate ?? game.date)} chybělo až ${money(-(plan.cashMin + od))}. Potřeba od majitele asi ${money(plan.ownerNeed!)}.`
+      ? `I jen na podepsané závazky by klubu v ${monthIn(plan.cashMinDate ?? game.date)} chybělo až ${money(-(plan.cashMin + od))}. Potřeba od majitele asi ${money(plan.ownerNeed!)}.`
       : plan.cashMin < 0
         ? `Peníze vystačí, ale v ${monthIn(plan.cashMinDate ?? game.date)} klub sáhne do kontokorentu.`
-        : `Peníze do konce sezóny vystačí. Na konci června bude na účtu asi ${money(plan.cashEnd)}.`;
+        : `Na závazky peníze do konce sezóny vystačí. Na konci června bude na účtu asi ${money(plan.cashEnd)}.`;
+  const worstText = worstNeed > 0
+    ? `V nejhorším případě (celý mzdový strop i rozpočet na přestupy utracený) by v ${monthIn(plan.worstMinDate ?? game.date)} chybělo asi ${money(worstNeed)}. Pomůže nižší strop nebo rozpočet na přestupy v Rozpočtu.`
+    : undefined;
+  const [details, setDetails] = useStoredState('fin:prehled', { open: false });
 
   const alerts: { text: string; tone: 'bad' | 'warn'; tab?: FinanceTab }[] = [];
   if (game.crisis) alerts.push({ tone: 'bad', text: 'Klub je v krizovém režimu. Rozhodněte o krizovém plánu v Přehledu hry.' });
@@ -74,7 +80,7 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
   }
   if (!budgetApproved(game)) alerts.push({ tone: 'warn', text: 'Rozpočet sezóny čeká na schválení.', tab: 'rozpocet' });
   if (budgetChanged(game)) alerts.push({ tone: 'warn', text: 'Nastavení rozpočtu se liší od schváleného. Schvalte revizi.', tab: 'rozpocet' });
-  for (const w of warnings) if (!w.text.startsWith('Peníze:')) alerts.push({ tone: w.tone, text: w.text, tab: w.text.startsWith('Licence') ? 'financovani' : 'rozpocet' });
+  for (const w of warnings) if (!w.text.startsWith('Peníze')) alerts.push({ tone: w.tone, text: w.text, tab: w.text.startsWith('Licence') ? 'financovani' : 'rozpocet' });
   const licence = licenceProblems(game);
   const licenceFailed = game.licence?.season === game.season && game.licence.status !== 'ok';
   if (licenceFailed) alerts.push({ tone: 'bad', text: game.licence!.note, tab: 'financovani' });
@@ -100,23 +106,51 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
   return (
     <div className="stack">
       <Notice message={message?.text ?? null} ok={message?.ok} />
-      <section className={`card fin-hero ${status}`}>
+      <section className={`card fin-hero fin-hero-simple ${status}`}>
         <div className="hero-main">
-          <span className="kpi-label">Peníze na účtu</span>
-          <strong className={`hero-value ${club.finance.balance < 0 ? 'neg' : ''}`}>{money(club.finance.balance)}</strong>
           <span className={`status-pill ${status}`}><span aria-hidden="true">{STATUS_TEXT[status].icon}</span> {STATUS_TEXT[status].label}</span>
           <p className="hero-verdict">{verdict}</p>
-          <dl className="hero-facts">
-            <div><dt>Na konci sezóny</dt><dd className={plan.cashEnd < 0 ? 'neg' : ''}>{money(plan.cashEnd)}</dd></div>
-            <div><dt>Nejméně (v {monthIn(plan.cashMinDate ?? game.date)})</dt><dd className={plan.cashMin < -od ? 'neg' : ''}>{money(plan.cashMin)}</dd></div>
-            <div><dt>Kontokorent</dt><dd>{od ? `do ${money(od)}` : 'nemáte'}</dd></div>
+          {worstText && <p className="hero-verdict small warn-text">{worstText}</p>}
+          <dl className="hero-top3">
+            <div><dt>Peníze na účtu</dt><dd className={club.finance.balance < 0 ? 'neg' : ''}>{money(club.finance.balance)}</dd></div>
+            <div><dt>Na konci sezóny (výhled)</dt><dd className={plan.cashEnd < 0 ? 'neg' : ''}>{money(plan.cashEnd)}</dd><span className="kpi-sub">nejméně {money(plan.cashMin)} v {monthIn(plan.cashMinDate ?? game.date)}</span></div>
+            <div><dt>Provozní výsledek sezóny (výhled)</dt><dd className={(plan.committedResult ?? plan.result) < 0 ? 'neg' : 'pos'}>{money(plan.committedResult ?? plan.result)}</dd><span className="kpi-sub">zatím {money(operating)}</span></div>
           </dl>
           <OwnerNeedActions game={game} need={plan.ownerNeed ?? 0} onResult={apply} />
         </div>
-        <div className="hero-chart">
-          <CashChart game={game} plan={plan} title="Skutečnost a výhled do konce sezóny" />
-        </div>
       </section>
+
+      {shown.length > 0 && (
+        <section className="card">
+          <h2>Na co se podívat</h2>
+          <ul className="plain alerts">
+            {shown.map((a, i) => (
+              <li key={i} className={a.tone}>
+                <span>{a.text}</span>
+                {a.tab && <button className="linkbtn" onClick={() => onOpen(a.tab!)}>Otevřít ›</button>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <SideGoalsCard game={game} onChange={onChange} />
+
+      <button className="linkbtn fin-more" aria-expanded={details.open} onClick={() => setDetails({ open: !details.open })}>
+        {details.open ? '▾ Skrýt podrobnosti' : '▸ Podrobnosti: graf peněz, ukazatele, složení sezóny, kalendář'}
+      </button>
+
+      {details.open && (
+        <>
+          <section className="card">
+            <CashChart game={game} plan={plan} title="Skutečnost a výhled do konce sezóny" />
+            <dl className="hero-facts">
+              <div><dt>Na konci sezóny</dt><dd className={plan.cashEnd < 0 ? 'neg' : ''}>{money(plan.cashEnd)}</dd></div>
+              <div><dt>Nejméně (v {monthIn(plan.cashMinDate ?? game.date)})</dt><dd className={plan.cashMin < -od ? 'neg' : ''}>{money(plan.cashMin)}</dd></div>
+              <div><dt>Kontokorent</dt><dd>{od ? `do ${money(od)}` : 'nemáte'}</dd></div>
+            </dl>
+            <p className="muted small">Výhled počítá s podepsanými platy a smlouvami a s reálným očekáváním příjmů. Nevyužitá rezerva ve mzdovém stropu a zbytek rozpočtu na přestupy v něm nejsou{plan.worstMin !== undefined ? ` (kdyby se utratily celé, klesne účet nejníž na ${money(plan.worstMin)})` : ''}.</p>
+          </section>
 
       <div className="kpis">
         <Kpi
@@ -143,20 +177,6 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
         <Kpi label="Vlastní kapitál" value={money(sheet.equity)} tone={sheet.equity < 0 ? 'neg' : ''} sub={`dluhy ${money(sheet.debt)}`} />
         <Kpi label="Vaše osobní peníze" value={money(game.owner.wallet)} sub={game.ownerLoan ? `klub vám dluží ${money(game.ownerLoan.remaining)}` : 'klub vám nic nedluží'} />
       </div>
-
-      {shown.length > 0 && (
-        <section className="card">
-          <h2>Na co se podívat</h2>
-          <ul className="plain alerts">
-            {shown.map((a, i) => (
-              <li key={i} className={a.tone}>
-                <span>{a.text}</span>
-                {a.tab && <button className="linkbtn" onClick={() => onOpen(a.tab!)}>Otevřít ›</button>}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       <div className="grid two">
         <section className="card wide">
@@ -244,6 +264,8 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
         <RatingCard game={game} />
         <ScenariosCard game={game} />
       </div>
+        </>
+      )}
     </div>
   );
 }

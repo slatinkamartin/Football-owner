@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { careerFrom, markReportSeen, markScenarioSeen, scenarioDef, toggleWatch, deadlineDay, deadlineStart, clubLabel, dismissMatchPlan, pendingPrematch, advanceDays, advanceToNextMatch, advanceUntil, PLAY_TARGET_LABEL, pulseAfterAction, type PlayTarget, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
+import { useEffect, useRef, useState } from 'react';
+import { careerFrom, clubLabel, markReportSeen, markScenarioSeen, scenarioDef, toggleWatch, advanceDays, advanceStep, nextStep, ownMatchTomorrow, settingsOf, pulseAfterAction, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveCareer, saveGame } from './storage';
 import { SeasonReportView } from './screens/Report';
@@ -12,7 +12,7 @@ import { NavContext, Sheet, type ModalRef } from './nav';
 import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
-import { LiveMatch, MatchPrep } from './screens/MatchPrep';
+import { LiveMatch, MatchDialog } from './screens/MatchPrep';
 import { Owner } from './screens/Owner';
 import { CalendarStrip } from './SeasonCalendar';
 import { People } from './screens/People';
@@ -47,6 +47,7 @@ export function App() {
   const [financeTab, setFinanceTab] = useState<{ tab: FinanceTab; n: number }>({ tab: 'prehled', n: 0 });
   const [stopReason, setStopReason] = useState<string | null>(null);
   const [live, setLive] = useState(false);
+  const [matchOpen, setMatchOpen] = useState(false);
   const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
   const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
@@ -61,13 +62,40 @@ export function App() {
     window.scrollTo(0, 0);
   }, [tab, game === null]);
 
+  // Výška horní lišty: okna s kartami začínají pod ní, takže při posunu zajíždějí pod lištu.
+  const headRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = headRef.current;
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty('--head-h', `${Math.round(el.getBoundingClientRect().bottom)}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    window.addEventListener('scroll', set, { passive: true });
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('scroll', set);
+    };
+  }, [game === null || game === undefined]);
+
   const update = (next: GameState) => {
     setGame(next);
     void saveGame(next);
   };
 
+  // Při nové nebo nahrané hře zavřít všechna okna, ať se nic nepřenese do jiné hry.
+  const resetView = () => {
+    setLive(false);
+    setMatchOpen(false);
+    setModals([]);
+    setMilestone(null);
+    setStopReason(null);
+    setNotice(null);
+  };
+
   const startOver = async () => {
     await deleteGame();
+    resetView();
     setTab('prehled');
     setGame(null);
   };
@@ -95,21 +123,43 @@ export function App() {
   const phase = currentPhase(game);
   const nm = nextMilestone(game);
   const nmDays = nm ? daysUntil(game, nm.date) : 99;
-  const dd = deadlineDay(game);
-  const ddStart = deadlineStart(game);
-  const ddDays = ddStart ? daysUntil(game, ddStart) : 99;
-  const step = dd
-    ? { label: 'Další den ›', days: 1, milestone: undefined }
-    : ddDays <= 7 && ddDays <= nmDays
-      ? { label: 'Do deadline day ›', days: ddDays, milestone: undefined }
-      : nm && nmDays <= 7
-        ? { label: `Do ${nm.short} ›`, days: nmDays, milestone: nm }
-        : { label: 'Týden ›', days: 7, milestone: undefined };
-  const advance = (next: GameState) => {
-    setStopReason(null);
+  const match = ownMatchTomorrow(game);
+  const step = nextStep(game);
+  const showMilestones = settingsOf(game).stops.milestone;
+  const advance = (next: GameState, reason?: string) => {
+    setStopReason(reason ?? null);
     update(next);
     const m = milestoneToday(next);
-    if (m && next.date !== game.date && !next.gameOver) setMilestone(m);
+    if (showMilestones && m && next.date !== game.date && !next.gameOver) setMilestone(m);
+  };
+  // Jedno tlačítko: v předvečer zápasu otevře zápas, jinak posune hru k dalšímu zápasu, milníku nebo o týden.
+  const onStep = () => {
+    if (match) {
+      setMatchOpen(true);
+      return;
+    }
+    const r = advanceStep(game);
+    advance(r.state, r.reason);
+  };
+  const stepLabel = match ? 'Zápas ›' : `${step.label} ›`;
+  const stepTitle = match
+    ? `Zítra: ${clubLabel(game, match.fixture.homeId)} – ${clubLabel(game, match.fixture.awayId)} (${match.name})`
+    : step.kind === 'zapas'
+      ? 'Posunout hru na předvečer dalšího zápasu'
+      : step.kind === 'milnik'
+        ? `Posunout hru k milníku: ${nm?.title ?? ''}`
+        : step.kind === 'deadline'
+          ? 'Deadline day: hra jde po dnech'
+          : 'Posunout hru o týden';
+  // Výroční zpráva se ukáže na začátku nové sezóny spolu s milníkem a výsledkem scénáře v jednom okně.
+  const latest = game.seasonReports?.[0];
+  const report = latest && !latest.seen && game.season > latest.season ? latest : undefined;
+  const closeReport = () => {
+    if (!report) return;
+    let next = markReportSeen(game, report.season);
+    if (next.scenario?.result && !next.scenario.result.seen) next = markScenarioSeen(next);
+    update(next);
+    setMilestone(null);
   };
   const blocked = ownerBlocked(game);
   // Odvolaný majitel klub neřídí: změny v ostatních záložkách se neuloží.
@@ -124,7 +174,7 @@ export function App() {
   return (
     <NavContext.Provider value={nav}>
     <div className="app">
-      <div className="sticky-head">
+      <div className="sticky-head" ref={headRef}>
         <header className="topbar">
           <div className="topbar-club">
             <span className="crest" style={{ background: club.colors[0], borderColor: club.colors[1] }} />
@@ -150,48 +200,9 @@ export function App() {
               <strong>{money(club.finance.balance)}</strong>
             </div>
             <div className="advance">
-              <button
-                className={step.milestone ? 'milestone-btn' : ''}
-                disabled={!!game.gameOver}
-                title={step.milestone ? step.milestone.title : 'Posunout o týden'}
-                onClick={() => advance(advanceDays(game, step.days).state)}
-              >
-                {step.label}
+              <button className={match ? 'primary match-btn' : 'primary'} disabled={!!game.gameOver} title={stepTitle} onClick={onStep}>
+                {stepLabel}
               </button>
-              <button
-                className="primary"
-                disabled={!!game.gameOver}
-                title={nm && nmDays < 60 ? `Hrát do příštího zápasu, nejdál ale do milníku: ${nm.title}` : 'Hrát do příštího zápasu vašeho klubu a ukázat jeho souhrn'}
-                onClick={() => {
-                  const r = advanceToNextMatch(game, nm ? nmDays : 60);
-                  advance(r.state);
-                  if (r.fixtureId && !r.state.gameOver) setModals([{ type: 'match', id: r.fixtureId }]);
-                }}
-              >
-                Do zápasu ›
-              </button>
-              {dd && (
-                <button title="Přeskočit zbytek deadline day" onClick={() => advance(advanceDays(game, dd.daysLeft + 1).state)}>
-                  Na konec okna ›
-                </button>
-              )}
-              <select
-                className="play-until"
-                aria-label="Hrát do…"
-                value=""
-                disabled={!!game.gameOver}
-                onChange={(e) => {
-                  const target = e.target.value as PlayTarget;
-                  if (!target) return;
-                  const r = advanceUntil(game, target);
-                  advance(r.state);
-                  setStopReason(r.reason ?? null);
-                  if (target === 'zapas' && r.fixtureId && !r.reason && !r.state.gameOver) setModals([{ type: 'match', id: r.fixtureId }]);
-                }}
-              >
-                <option value="">Hrát do…</option>
-                {(Object.keys(PLAY_TARGET_LABEL) as PlayTarget[]).map((t) => <option key={t} value={t}>{PLAY_TARGET_LABEL[t]}</option>)}
-              </select>
             </div>
           </div>
         </header>
@@ -233,7 +244,7 @@ export function App() {
         {tab === 'majitel' && <Owner game={game} onChange={update} />}
         {tab === 'stadion' && <Stadium game={game} onChange={managed} />}
         {tab === 'finance' && <Finance key={financeTab.n} game={game} onChange={managed} initialTab={financeTab.tab} />}
-        {tab === 'hra' && <GameMenu game={game} onLoad={update} onNewGame={startOver} />}
+        {tab === 'hra' && <GameMenu game={game} onLoad={(g) => { resetView(); update(g); }} onNewGame={startOver} />}
       </main>
 
       {stopReason && !milestone && (
@@ -272,26 +283,49 @@ export function App() {
         />
       )}
 
-      {!live && !milestone && !game.gameOver && modals.length === 0 && (() => {
-        const p = pendingPrematch(game);
-        if (!p) return null;
-        return (
-          <div className="overlay">
-            <div className="card dialog prematch-dialog" role="dialog" aria-modal="true" aria-label="Zápas se sázkou">
-              <span className="muted small">{formatDate(p.fixture.date, true)} · {p.name}</span>
-              <h2>{p.home ? 'Doma' : 'Venku'} s {clubLabel(game, p.opponentId)}: zápas, o který jde</h2>
-              <MatchPrep game={game} onChange={managed} onLive={() => setLive(true)} compact />
-              <button onClick={() => update(dismissMatchPlan(game, p.fixture.id))}>Hotovo, pokračovat</button>
-            </div>
-          </div>
-        );
-      })()}
-
-      {!live && !milestone && !game.gameOver && modals.length === 0 && game.seasonReports?.[0] && !game.seasonReports[0].seen && (
-        <SeasonReportView report={game.seasonReports[0]} onClose={() => update(markReportSeen(game, game.seasonReports![0].season))} />
+      {matchOpen && match && !live && !game.gameOver && (
+        <MatchDialog
+          game={game}
+          onChange={managed}
+          onClose={() => setMatchOpen(false)}
+          onResult={() => {
+            setMatchOpen(false);
+            const r = advanceDays(game, 1, true);
+            advance(r.state);
+            if (r.fixtureId && !r.state.gameOver) setModals([{ type: 'match', id: r.fixtureId }]);
+          }}
+          onLive={() => {
+            setMatchOpen(false);
+            setLive(true);
+          }}
+        />
       )}
 
-      {!live && !milestone && !game.gameOver && game.scenario?.result && !game.scenario.result.seen && !(game.seasonReports?.[0] && !game.seasonReports[0].seen) && (
+      {!live && !game.gameOver && modals.length === 0 && report && (
+        <SeasonReportView report={report} onClose={closeReport}>
+          {game.scenario?.result && !game.scenario.result.seen && (
+            <>
+              <h3>Scénář: {scenarioDef(game.scenario.id).title} <span className="scenario-stars">{'★'.repeat(game.scenario.result.stars)}{'☆'.repeat(3 - game.scenario.result.stars)}</span></h3>
+              <p className="small">{game.scenario.result.text} Hra pokračuje jako volná hra se stejným klubem.</p>
+            </>
+          )}
+          {milestone && (
+            <>
+              <h3>{milestone.title}</h3>
+              {milestone.text.map((x, i) => <p key={i} className="small">{x}</p>)}
+              {milestone.todo.length > 0 && (
+                <div className="milestone-todo">
+                  {milestone.todo.map((x) => (
+                    <button key={x.label} onClick={() => { if (x.sub) setFinanceTab({ tab: x.sub, n: financeTab.n + 1 }); setTab(x.tab); closeReport(); }}>{x.label} ›</button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </SeasonReportView>
+      )}
+
+      {!live && !milestone && !game.gameOver && !report && game.scenario?.result && !game.scenario.result.seen && (
         <div className="overlay">
           <div className="card dialog" role="dialog" aria-modal="true" aria-label="Výsledek scénáře">
             <h2>Scénář: {scenarioDef(game.scenario.id).title}</h2>
@@ -303,7 +337,7 @@ export function App() {
         </div>
       )}
 
-      {milestone && !game.gameOver && (
+      {milestone && !report && !game.gameOver && (
         <div className="overlay" onClick={() => setMilestone(null)}>
           <div className="card dialog milestone-dialog" role="dialog" aria-modal="true" aria-label={milestone.title} onClick={(e) => e.stopPropagation()}>
             <span className="muted small">{formatDate(game.date, true)}</span>

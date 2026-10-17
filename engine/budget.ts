@@ -177,11 +177,16 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const months = remainingMonthStarts(state);
   const soon = addDays(state.date, 1);
   const flows = new Map<string, Map<string, number>>();
-  const add = (key: string, date: string, amount: number) => {
+  // Peníze, které klub utratit může, ale nemusí (nevyužitý mzdový strop, zbytek rozpočtu na přestupy),
+  // se ve výhledu hotovosti nepočítají (jen závazky a reálné očekávání, Evropa vážená šancí);
+  // nejhorší případ je počítá celé.
+  const flexByDate = new Map<string, number>();
+  const add = (key: string, date: string, amount: number, tag?: 'flex') => {
     if (!amount || date <= state.date || date > seasonEnd) return;
     const m = flows.get(key) ?? new Map<string, number>();
     m.set(date, (m.get(date) ?? 0) + amount);
     flows.set(key, m);
+    if (tag === 'flex') flexByDate.set(date, (flexByDate.get(date) ?? 0) + amount);
   };
   const monthly = (key: string, amount: number) => months.forEach((d) => add(key, d, amount));
 
@@ -236,7 +241,7 @@ export function forecastSeason(state: GameState): BudgetPlan {
   for (const f of leftLeague) add('platy', f.date, -perMatch);
   if (comp?.format === 'nadstavba' && !comp.groups) for (let i = 0; i < 5; i++) add('platy', `${state.season + 1}-05-${String(3 + i * 5).padStart(2, '0')}`, -perMatch);
   add('platy', endDay, -wp.goal);
-  monthly('rezerva', -Math.max(0, wp.cap / 12 - bill));
+  months.forEach((d) => add('rezerva', d, -Math.max(0, wp.cap / 12 - bill), 'flex'));
   monthly('vedeni', -staffWages(state));
   monthly('oddeleni', -departmentsMonthly(club, tier));
   const ff = financeFactor(state);
@@ -265,10 +270,10 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const room = budgetRemaining(state);
   const winter = `${state.season + 1}-01-20`;
   if (state.date < `${state.season}-08-31`) {
-    add('prestupy', soon, -room * 0.7);
-    add('prestupy', winter, -room * 0.3);
+    add('prestupy', soon, -room * 0.7, 'flex');
+    add('prestupy', winter, -room * 0.3, 'flex');
   } else if (state.date < `${state.season + 1}-02-14`) {
-    add('prestupy', state.date < winter ? winter : soon, -room);
+    add('prestupy', state.date < winter ? winter : soon, -room, 'flex');
   }
 
   // Financování: splátky úvěrů, záloha na TV, úroky z půjčky majitele a poplatek za kontokorent.
@@ -326,10 +331,23 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const result = lines.filter((l) => l.group === 'provoz').reduce((a, l) => a + l.amount, 0);
   const cashFlow = lines.reduce((a, l) => a + l.amount, 0);
 
-  // Hotovost den po dni do konce sezóny.
+  // Hotovost den po dni do konce sezóny: závazky a reálné očekávání (bez nevyužitého stropu a rozpočtu na přestupy).
+  const allByDate = new Map<string, number>();
+  for (const m of flows.values()) for (const [d, v] of m) allByDate.set(d, (allByDate.get(d) ?? 0) + v);
   const byDate = new Map<string, number>();
-  for (const m of flows.values()) for (const [d, v] of m) byDate.set(d, (byDate.get(d) ?? 0) + v);
+  for (const [d, v] of allByDate) byDate.set(d, v - (flexByDate.get(d) ?? 0));
   const dates = [...byDate.keys()].sort();
+  // Nejhorší případ: utratí se celý mzdový strop i rozpočet na přestupy.
+  let worst = club.finance.balance;
+  let worstMin = worst;
+  let worstMinDate = state.date;
+  for (const d of dates) {
+    worst += allByDate.get(d)!;
+    if (worst < worstMin) {
+      worstMin = worst;
+      worstMinDate = d;
+    }
+  }
   let balance = club.finance.balance;
   let cashMin = balance;
   let cashMinDate = state.date;
@@ -350,7 +368,9 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const od = club.policy.overdraft ? overdraftLimit(state) : 0;
   const tolerance = annualCosts(club, tier) * 0.01;
   // Potřeba od majitele s rezervou 3 % nákladů na výkyvy (pokuty, horší výsledky, zranění).
-  const ownerNeed = cashMin < -od - tolerance ? Math.ceil((-(cashMin + od) + annualCosts(club, tier) * 0.03) / 500_000) * 500_000 : 0;
+  const needFor = (min: number) => (min < -od - tolerance ? Math.ceil((-(min + od) + annualCosts(club, tier) * 0.03) / 500_000) * 500_000 : 0);
+  const ownerNeed = needFor(cashMin);
+  const worstNeed = needFor(worstMin);
   return {
     lines,
     result: Math.round(result),
@@ -362,6 +382,10 @@ export function forecastSeason(state: GameState): BudgetPlan {
     from: state.date,
     licenceBalance: Math.round(balanceOn(`${state.season + 1}-03-31`)),
     ownerNeed,
+    worstMin: Math.round(worstMin),
+    worstMinDate,
+    worstNeed,
+    committedResult: Math.round(result - (lines.find((l) => l.key === 'rezerva')?.amount ?? 0)),
     europeRange: eu && !state.europe!.resolved ? europeRange(eu.entry) : undefined,
   };
 }
@@ -383,6 +407,9 @@ export function budgetWarnings(state: GameState, plan = forecastSeason(state)): 
     out.push({ tone: 'bad', text: `Peníze: ${when ? `v ${when} ` : ''}by klubu chybělo až ${mil(-(plan.cashMin + od))}${od ? ' i po vyčerpání kontokorentu' : ''}. Potřeba od majitele asi ${mil(plan.ownerNeed)} (vklad nebo půjčka), jinak prodeje hráčů nebo škrty.` });
   } else if (plan.cashMin < -tolerance) {
     out.push({ tone: 'warn', text: `Peníze: ${when ? `v ${when} ` : ''}klub sáhne do kontokorentu. Počítejte s úroky 12 %.` });
+  } else if (plan.worstNeed) {
+    const worstWhen = plan.worstMinDate ? monthName(plan.worstMinDate) : '';
+    out.push({ tone: 'warn', text: `Peníze v nejhorším případě: pokud se využije celý mzdový strop i rozpočet na přestupy, ${worstWhen ? `v ${worstWhen} ` : ''}by chybělo asi ${mil(plan.worstNeed)}. Na podepsané závazky peníze jsou.` });
   }
   // Licence: svaz 31. 3. kontroluje vlastní kapitál a neuhrazené závazky.
   const check = `${state.season + 1}-03-31`;
@@ -400,7 +427,7 @@ export function budgetWarnings(state: GameState, plan = forecastSeason(state)): 
     if (rank > target + 3) out.push({ tone: 'warn', text: `Mzdovým stropem patříte až na ${rank}. místo ligy, cíl sezóny je ale do ${target}. místa. Trenér i ředitel budou rozpočet považovat za nedostatečný.` });
   }
   const costs = annualCosts(club, tier);
-  if (plan.result < -costs * 0.25) out.push({ tone: 'warn', text: 'Provozní ztráta je přes čtvrtinu běžných nákladů. Bez prodejů hráčů nebo vkladu to klub dlouho nevydrží.' });
+  if ((plan.committedResult ?? plan.result) < -costs * 0.25) out.push({ tone: 'warn', text: 'Provozní ztráta je přes čtvrtinu běžných nákladů. Bez prodejů hráčů nebo vkladu to klub dlouho nevydrží.' });
   const ratio = club.policy.ticketPrice / defaultTicketPrice(tier);
   if (ratio > TICKET_ANGER) out.push({ tone: 'warn', text: `Vstupenky jsou o ${Math.round((ratio - 1) * 100)} % dražší než obvykle. Nálada fanoušků každý měsíc klesá a přijde jich méně.` });
   const ref = departmentReference(club, tier);
@@ -519,8 +546,10 @@ export function prepareBudget(state: GameState): void {
   club.policy.transferBudget = defaultTransferBudget(club);
   const plan = forecastSeason(state);
   const reserve = Math.max(annualCosts(club, tier) * (cfo !== undefined ? 0.05 : 0.01), club.policy.cashReserve ?? 0);
-  if (plan.cashMin < reserve) {
-    club.policy.transferBudget = Math.max(0, Math.round((club.policy.transferBudget - (reserve - plan.cashMin)) / 100_000) * 100_000);
+  // Návrh počítá s nejhorším případem (celý strop i rozpočet na přestupy utracený), aby sám nevyvolal varování.
+  const worstMin = plan.worstMin ?? plan.cashMin;
+  if (worstMin < reserve) {
+    club.policy.transferBudget = Math.max(0, Math.round((club.policy.transferBudget - (reserve - worstMin)) / 100_000) * 100_000);
   }
   // Velká plánovaná ztráta: návrh sníží mzdový strop pod současné platy, aby ředitel neprodlužoval drahé smlouvy.
   const after = forecastSeason(state);
@@ -533,6 +562,14 @@ export function prepareBudget(state: GameState): void {
   const contracted = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
   const baseCap = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
   if (wageBudgetMonthly(club) < contracted) club.policy.wageMultiplier = Math.min(2, Math.ceil((contracted / Math.max(1, baseCap)) * 20) / 20);
+  // Ani bez přestupů nejhorší případ nevychází: návrh sníží nevyužitou rezervu ve mzdovém stropu (ne pod podepsané platy).
+  const worstAfter = forecastSeason(state);
+  const gap = reserve - (worstAfter.worstMin ?? worstAfter.cashMin);
+  if (gap > 0 && club.policy.transferBudget === 0 && (worstAfter.ownerNeed ?? 0) === 0) {
+    const left = Math.max(1, worstAfter.months.length - 1);
+    const cap = Math.max(contracted * 1.02, wageBudgetMonthly(club) - gap / left);
+    club.policy.wageMultiplier = Math.max(0.5, Math.min(club.policy.wageMultiplier, Math.ceil((cap / Math.max(1, baseCap)) * 100) / 100));
+  }
   // Velká nevyužitá hotovost: návrh zvedne mzdový strop (o 10 %) a rozpočet na přestupy, aby peníze pracovaly.
   const idle = club.finance.balance - annualCosts(club, tier) * 1.2;
   let idleNote = '';

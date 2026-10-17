@@ -925,3 +925,112 @@ table.sections td .muted.small { display: block; }
 .scenario-stars { font-size: 34px; color: #e0a030; margin: 0; letter-spacing: 4px; }
 .career-box { margin-top: 10px; padding: 10px 12px; background: var(--bg); border-radius: 8px; }
 .club-card:disabled { opacity: 0.4; }
+
+/* --- LEAD: jedno tlačítko posunu, zápasový dialog, mobilní hlavička --- */
+.advance .match-btn { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.match-dialog { max-width: 560px; width: 100%; }
+.match-dialog h2 { margin-bottom: 4px; }
+.scout-grid { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scout-grid .pc-big { display: flex; flex-direction: column; gap: 2px; }
+.match-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.match-choice button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; text-align: left; }
+.match-choice button span { font-size: 12px; font-weight: 400; opacity: 0.85; }
+@media (max-width: 640px) {
+  .scout-grid { grid-template-columns: 1fr 1fr; }
+  .match-choice { grid-template-columns: 1fr; }
+  /* Hlavička na mobilu v jednom řádku: klub a datum vlevo, peníze a tlačítko vpravo. */
+  .sticky-head { margin-bottom: 10px; }
+  .topbar { flex-wrap: nowrap; padding: 8px 0; gap: 8px; }
+  .topbar-club { flex: 1 1 auto; }
+  .topbar-club > div { min-width: 0; }
+  .topbar-name { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-sub { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar .phase-chip { display: none; }
+  .topbar-right { width: auto; flex: none; gap: 8px; }
+  .topbar-balance span { display: none; }
+  .topbar-balance strong { font-size: 13px; white-space: nowrap; }
+  .advance button { padding: 8px 10px; white-space: nowrap; }
+  .sticky-head .cal-strip { display: none; }
+  /* Záložky se posouvají do strany, okraj napoví, že pokračují. */
+  .tabs { scrollbar-width: none; mask-image: linear-gradient(90deg, #000 85%, transparent); -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { padding: 8px 10px; }
+}
+/* Karty (hráč, klub, zápas) se otevírají pod horní lištou a při posunu zajíždějí pod ni. */
+.sheet-overlay { top: var(--head-h, 0px); padding-top: 12px; }
+.form-row { display: flex; gap: 3px; flex-wrap: nowrap; }
+
+/* --- UI-B: ladění (stadion, nastavení, okna, vedlejší cíle, nová hra) --- */
+/* Zaškrtávátka se v řádku nesmí smrsknout na tečku (input má jinak padding a min-width: 0). */
+input[type='checkbox'], input[type='radio'] { flex: none; width: auto; padding: 0; margin-top: 3px; accent-color: var(--accent); }
+.settings-card label.check { flex-wrap: wrap; align-items: flex-start; }
+.settings-card label.check > span { flex: 1 1 220px; min-width: 0; }
+.settings-card label.check select { flex-basis: auto; margin-left: 26px; }
+/* Okna na mobilu: nic se neusekne, obsah se posouvá uvnitř okna. */
+.overlay:not(.sheet-overlay) > * { max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; }
+.dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+@media (max-width: 640px) {
+  .overlay:not(.sheet-overlay) { padding: 8px; }
+  .overlay:not(.sheet-overlay) > * { max-height: calc(100dvh - 16px); width: 100%; }
+}
+/* Podzáložky stadionu: počet běžících staveb. */
+.subtab-count { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; line-height: 18px; }
+.subtabs button.active .subtab-count { background: rgba(255, 255, 255, 0.25); color: #fff; }
+/* Výběr vedlejších cílů. */
+.side-goal-pick li { padding: 4px 0; }
+.side-goal-option { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.side-goal-option.on { border-color: var(--accent); background: var(--accent-soft); }
+.side-goal-option.off { opacity: 0.55; cursor: default; }
+.side-goal-effect { display: block; margin-top: 2px; }
+.side-goals-notice .linkbtn { margin-left: 4px; }
+/* Nová hra: důvod zámku klubu v kariéře. */
+.club-card.locked { opacity: 0.7; }
+.club-card .club-lock { color: var(--neg); font-size: 12px; }
+/* Jak hrát. */
+.how-to ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+/* Vedení: povaha (ambice, ego, loajalita) není dobrá ani špatná, jednotná barva. */
+.meter-fill.neutral { background: #6b8ccf; }
+
+/* --- UI-A: přehled financí, přestupy, příběhy, scénář, kádr, pohár --- */
+/* Finance: nahoře tři hlavní čísla, zbytek sbalený. */
+.fin-hero.fin-hero-simple { grid-template-columns: 1fr; }
+.hero-top3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 8px 0 0; }
+.hero-top3 > div { background: var(--bg); border-radius: 8px; padding: 10px 12px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hero-top3 dt { font-size: 12px; color: var(--muted); }
+.hero-top3 dd { margin: 0; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; }
+.hero-top3 .kpi-sub { font-size: 12px; color: var(--muted); }
+.warn-text { color: var(--warn); }
+.fin-more { align-self: flex-start; font-size: 14px; padding: 4px 0; }
+@media (max-width: 640px) {
+  .hero-top3 { grid-template-columns: 1fr; }
+  .hero-top3 dd { font-size: 20px; }
+}
+/* Rozhodnutí: doporučená volba zvýrazněná. */
+.decision-options button.recommended { border-width: 2px; background: var(--accent-soft); }
+.decision-options button .rec-badge { align-self: flex-start; color: var(--pos); font-size: 11px; padding: 1px 8px; margin-bottom: 2px; }
+/* Zprávy: tlačítko Další. */
+.news-more { margin-top: 8px; }
+/* Příběhy sezóny. */
+.story-list { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 0; }
+.story { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.story-list.done .story { padding: 8px 12px; }
+.story p { margin: 0; }
+.story-facts { display: grid; grid-template-columns: minmax(110px, auto) 1fr; gap: 4px 12px; margin: 0; }
+.story-facts dt { color: var(--muted); }
+.story-facts dd { margin: 0; }
+.story-done-head { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 14px 0 6px; }
+.story details summary { cursor: pointer; }
+@media (max-width: 520px) {
+  .story-facts { grid-template-columns: 1fr; }
+  .story-facts dd { margin-bottom: 4px; }
+}
+/* Scénář na Přehledu. */
+.scenario-card .scenario-progress { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(100px, 2fr) auto; gap: 10px; align-items: center; margin: 6px 0; }
+@media (max-width: 520px) {
+  .scenario-card .scenario-progress { grid-template-columns: 1fr auto; }
+  .scenario-card .scenario-progress .meter { grid-column: 1 / -1; grid-row: 2; }
+}
+/* Kádr: přepínač sloupců. */
+.cols-toggle { align-self: center; margin-left: auto; }
+/* Pohár: ostatní zápasy kola sbalené. */
+.cup-others summary { cursor: pointer; padding: 4px 0; }

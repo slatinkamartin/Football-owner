@@ -9,7 +9,7 @@ import { coachOf, goalTarget, ownPosition, type ActionResult } from './staff';
 import { computeTable } from './standings';
 import type { Club, GameEvent, GameState, Player, Position } from './types';
 import { addNews, clamp, competitionOf, FOREIGN_PREFIX, tierOf } from './world';
-import { dramaFactor, maxOpenEvents } from './settings';
+import { difficultyCostFactor, dramaFactor, maxOpenEvents } from './settings';
 import { resolveStoryEvent } from './stories';
 import { resolvePress } from './matchday';
 import { PEOPLE_COOLDOWN, peopleTemplates } from './people';
@@ -23,7 +23,7 @@ import { takeoverTemplate, ultrasTemplates } from './surroundings';
 
 const MAX_OPEN = 3;
 /** Kolik dní musí uplynout, než se stejná situace může zopakovat. */
-const COOLDOWN: Record<string, number> = { sazkovka: 330, partner: 300, soustredeni: 300, dotace: 300, asistent: 300, pyro: 75, noc: 50, serie: 40, regenerace: 150, travnik: 120, talent: 90, specialista: 45, odchod: 60, protest: 60, 'obrazova-prava': 400, tapping: 150, 'spriznena-firma': 300, 'kontroverzni-sponzor': 365, navstevnost: 200, 'mladez-odkup': 200, lobbing: 300, naming: 1100, 'trener-nabidka': 300, charita: 120, vyjezd: 90, 'investor-nabidka': 365, 'svaz-bezpecnost': 365, 'novinar-investigace': 60, tiskovka: 45, rozhovor: 90, 'kauza-hrac': 90, 'svaz-spor': 60, valna: 300, navrat: 60 };
+const COOLDOWN: Record<string, number> = { sazkovka: 330, soustredeni: 300, dotace: 300, asistent: 300, pyro: 75, noc: 50, serie: 40, regenerace: 150, travnik: 120, talent: 90, specialista: 45, odchod: 60, protest: 60, 'obrazova-prava': 400, tapping: 150, 'spriznena-firma': 300, 'kontroverzni-sponzor': 365, navstevnost: 200, 'mladez-odkup': 200, lobbing: 300, 'trener-nabidka': 300, charita: 120, vyjezd: 90, 'investor-nabidka': 365, 'svaz-bezpecnost': 365, 'novinar-investigace': 60, tiskovka: 45, rozhovor: 90, 'kauza-hrac': 90, 'svaz-spor': 60, valna: 300, navrat: 60 };
 /** Situace, které přicházejí i odvolanému majiteli. */
 const OUSTED_TEMPLATES = new Set(['navrat', 'krize']);
 const EXPIRES_DAYS = 14;
@@ -38,11 +38,9 @@ function teamMorale(state: GameState, delta: number): void {
   for (const p of squadOf(state, state.owner.clubId)) p.morale = clamp(p.morale + delta, 0, 100);
 }
 
-/** Když majitel nerozhodne a situaci vyřeší vedení samo, vztahy utrpí jen málo. */
-let resolvingAutomatically = false;
-
 function trust(state: GameState, role: 'trener' | 'reditel', delta: number): void {
-  const d = delta < 0 && resolvingAutomatically ? delta * 0.3 : delta;
+  // Když majitel nerozhodne, platí dopad výchozí volby naplno (dřív se tlumil a pasivita se vyplácela).
+  const d = delta;
   state.owner.trust[role] = clamp(state.owner.trust[role] + d, 0, 100);
 }
 
@@ -53,6 +51,11 @@ function fans(state: GameState, delta: number): void {
 
 function pay(state: GameState, amount: number, note: string): void {
   book(state, state.owner.clubId, 'ostatni', -amount, note);
+}
+
+/** Měřítko výdajů v situacích: velikost klubu × obtížnost (těžká hra = dražší situace). */
+function costScale(state: GameState): number {
+  return scale(state) * difficultyCostFactor(state);
 }
 
 /** Měřítko částek podle velikosti klubu (aby situace dávaly smysl v 1. lize i v MSFL). */
@@ -108,7 +111,7 @@ export const TEMPLATES: Record<string, Template> = {
   soustredeni: {
     weight: (s) => (month(s) === 12 || (month(s) === 1 && s.date.slice(8) < '10') ? 3 : 0),
     create: (s) => {
-      const amount = round(1_500_000 * scale(s), 100_000);
+      const amount = round(1_500_000 * costScale(s), 100_000);
       return {
         title: 'Trenér chce zimní soustředění v Turecku',
         text: `Dva týdny v teple, kvalitní hřiště a přípravné zápasy se silnými soupeři. Stojí to ${mil(amount)}.`,
@@ -153,7 +156,7 @@ export const TEMPLATES: Record<string, Template> = {
       const p = s.players[e.playerId!];
       if (!p) return 'Hráč už v klubu není.';
       if (o === 'pokuta') {
-        book(s, s.owner.clubId, 'ostatni', p.wage * 0.5, `Pokuta hráči ${pName(p)}`);
+        book(s, s.owner.clubId, 'ostatni', p.wage * 0.5, `Pokuta: ${pName(p)}`);
         p.morale = clamp(p.morale - 10, 0, 100);
         trust(s, 'trener', 3);
         return `${pName(p)} dostal pokutu.`;
@@ -204,7 +207,7 @@ export const TEMPLATES: Record<string, Template> = {
   regenerace: {
     weight: (s) => (ownClub(s).facilities.medical <= 2 ? 1 : 0.2),
     create: (s) => {
-      const amount = round(2_000_000 * scale(s), 100_000);
+      const amount = round(2_000_000 * costScale(s), 100_000);
       return {
         title: 'Hráči si stěžují na zastaralou regeneraci',
         text: 'Fyzioterapeut upozorňuje, že bez nového vybavení se hráči budou zraňovat častěji.',
@@ -284,22 +287,20 @@ export const TEMPLATES: Record<string, Template> = {
     weight: () => 0.6,
     create: (s, rng) => {
       const amount = round(rng.int(100_000, 400_000), 10_000);
-      const security = round(400_000 * scale(s), 50_000);
+      const security = round(400_000 * costScale(s), 50_000);
       return {
         title: `Disciplinární komise: pokuta ${fmt(amount)} za pyrotechniku`,
-        text: 'Fanoušci odpálili světlice na posledním domácím zápase.',
+        text: `Fanoušci odpálili světlice na posledním domácím zápase. Přísnější pořadatelskou službu (asi ${fmt(security)} za sezónu navíc) nastavíte u stadionu.`,
         amount,
         defaultOption: 'zaplatit',
-        options: [
-          { id: 'zaplatit', label: 'Zaplatit pokutu', hint: `−${fmt(amount)}` },
-          { id: 'bezpecnost', label: 'Zaplatit a posílit pořadatelskou službu', hint: `−${fmt(amount + security)}, nálada fanoušků −3, menší riziko dalších pokut` },
-        ],
+        // Pokuta není volba: zaplatí se rovnou a přijde jen zpráva.
+        options: [{ id: 'zaplatit', label: 'Zaplatit pokutu', hint: `−${fmt(amount)}` }],
       };
     },
     resolve: (s, e, o) => {
       pay(s, e.amount!, 'Pokuta za pyrotechniku');
       if (o === 'bezpecnost') {
-        pay(s, round(400_000 * scale(s), 50_000), 'Posílení pořadatelské služby');
+        pay(s, round(400_000 * costScale(s), 50_000), 'Posílení pořadatelské služby');
         fans(s, -3);
         return 'Pokuta zaplacena a pořadatelů je víc.';
       }
@@ -347,9 +348,9 @@ export const TEMPLATES: Record<string, Template> = {
     create: (s) => {
       const p = keyPlayers(s).find((x) => x.injuredUntil && x.injuredUntil > addDays(s.date, 30));
       if (!p) return null;
-      const amount = round(800_000 * Math.max(0.5, scale(s)), 50_000);
+      const amount = round(800_000 * Math.max(0.5, costScale(s)), 50_000);
       return {
-        title: `Specialista v Německu nabízí léčbu pro ${pName(p)}`,
+        title: `Specialista v Německu nabízí léčbu: ${pName(p)}`,
         text: `Hráč je zraněný do ${p.injuredUntil!.split('-').reverse().join('. ')}. Zahraniční klinika slibuje rychlejší návrat.`,
         playerId: p.id,
         amount,
@@ -439,7 +440,7 @@ export const TEMPLATES: Record<string, Template> = {
   travnik: {
     weight: (s) => ([11, 12, 2, 3].includes(month(s)) && !ownClub(s).pitchDamagedUntil ? 0.7 : 0),
     create: (s) => {
-      const amount = round(1_200_000 * Math.max(0.4, scale(s)), 50_000);
+      const amount = round(1_200_000 * Math.max(0.4, costScale(s)), 50_000);
       return {
         title: 'Mráz poškodil trávník',
         text: 'Bez opravy se bude hrát na nerovném povrchu: víc zranění a menší zájem diváků.',
@@ -464,7 +465,7 @@ export const TEMPLATES: Record<string, Template> = {
   asistent: {
     weight: (s) => (coachOf(s, s.owner.clubId) ? 0.5 : 0),
     create: (s) => {
-      const amount = round(1_000_000 * Math.max(0.4, scale(s)), 50_000);
+      const amount = round(1_000_000 * Math.max(0.4, costScale(s)), 50_000);
       return {
         title: 'Trenér chce dalšího asistenta',
         text: 'Specialista na standardní situace by podle něj přinesl body navíc.',
@@ -486,32 +487,6 @@ export const TEMPLATES: Record<string, Template> = {
       }
       trust(s, 'trener', -4);
       return 'Trenér zůstává bez dalšího asistenta.';
-    },
-  },
-
-  partner: {
-    weight: () => 0,
-    create: (s) => {
-      const base = commercialMonthly({ ...ownClub(s), sponsorDeal: undefined }, tierOf(s, s.owner.clubId));
-      const winBonus = round(base * 0.5, 10_000);
-      return {
-        title: 'Výběr generálního partnera na sezónu',
-        text: 'Obchodní oddělení má dvě nabídky. Rozhodněte, zda chcete jistotu, nebo sázku na výsledky.',
-        amount: winBonus,
-        defaultOption: 'jistota',
-        options: [
-          { id: 'jistota', label: 'Pevná smlouva', hint: 'Komerční příjmy +8 % po celou sezónu' },
-          { id: 'vykon', label: 'Smlouva s bonusy za výsledky', hint: `Komerční příjmy −10 %, ale bonus ${fmt(winBonus)} za každou ligovou výhru` },
-        ],
-      };
-    },
-    resolve: (s, e, o) => {
-      const club = ownClub(s);
-      club.sponsorDeal =
-        o === 'vykon'
-          ? { name: 'Partner s bonusy za výsledky', factor: 0.9, winBonus: e.amount!, season: s.season }
-          : { name: 'Partner s pevnou smlouvou', factor: 1.08, winBonus: 0, season: s.season };
-      return o === 'vykon' ? 'Smlouva s bonusy podepsána.' : 'Pevná smlouva podepsána.';
     },
   },
 
@@ -560,7 +535,7 @@ export const TEMPLATES: Record<string, Template> = {
       const p = s.players[e.playerId!];
       if (o !== 'schuzka' || !p) return 'Agent dostal odpověď, že se ozvete v okně.';
       s.grey.tapped = [...(s.grey.tapped ?? []), p.id];
-      greyAction(s, { label: `Neoficiální jednání s hráčem ${pName(p)}`, severity: 8 }, 10);
+      greyAction(s, { label: `Neoficiální jednání s hráčem: ${pName(p)}`, severity: 8 }, 10);
       return `${pName(p)} o přestup stojí. Najdete ho v Přestupech.`;
     },
   },
@@ -649,7 +624,7 @@ export const TEMPLATES: Record<string, Template> = {
       p.potential = Math.min(95, p.potential + 12);
       p.wage = round(12_000 * (club.reputation / 60), 1_000);
       s.players[p.id] = p;
-      const fee = round(1_000_000 * Math.max(0.5, scale(s)), 100_000);
+      const fee = round(1_000_000 * Math.max(0.5, costScale(s)), 100_000);
       return {
         title: `Talent z malého klubu: ${pName(p)}`,
         text: `Šestnáctiletý talent (potenciál kolem ${p.potential}) z vesnického oddílu. Jeho klub chce výchovné ${mil(fee)}. Agent tvrdí, že když hráč nejdřív „přestoupí“ jako amatér přes spřátelený klub, výchovné se platit nemusí.`,
@@ -706,36 +681,6 @@ export const TEMPLATES: Record<string, Template> = {
 
   // ---------- Další rozhodnutí majitele ----------
 
-  naming: {
-    weight: () => 0,
-    create: (s) => {
-      const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.06, 100_000);
-      const brand = ['Fortuna', 'Epet', 'Tipsport', 'Moneta', 'Malina', 'Raiffeisen', 'Kaufland'][s.nextId % 7];
-      return {
-        title: `${brand} chce koupit jméno stadionu`,
-        text: `Za ${mil(amount)} by se stadion na tři roky jmenoval ${brand} Arena. Tradicionalisté v kotli budou zuřit.`,
-        amount,
-        defaultOption: 'odmitnout',
-        options: [
-          { id: 'prodat', label: `Přejmenovat na ${brand} Arena`, hint: `+${mil(amount)}, fanoušci −8` },
-          { id: 'odmitnout', label: 'Zachovat tradiční jméno', hint: 'Fanoušci +2' },
-        ],
-      };
-    },
-    resolve: (s, e, o) => {
-      const club = ownClub(s);
-      if (o !== 'prodat') {
-        fans(s, 2);
-        return 'Stadion si nechává své jméno.';
-      }
-      const brand = e.options[0].label.replace('Přejmenovat na ', '');
-      club.stadium.name = brand;
-      book(s, club.id, 'komercni', e.amount!, 'Prodej názvu stadionu');
-      fans(s, -8);
-      return `Stadion se teď jmenuje ${brand}.`;
-    },
-  },
-
   'trener-nabidka': {
     weight: (s) => {
       const c = coachOf(s, s.owner.clubId);
@@ -744,7 +689,7 @@ export const TEMPLATES: Record<string, Template> = {
     create: (s) => {
       const c = coachOf(s, s.owner.clubId)!;
       return {
-        title: `O trenéra ${c.firstName} ${c.lastName} má zájem jiný klub`,
+        title: `Trenér ${c.firstName} ${c.lastName}: zájem jiného klubu`,
         text: 'Přišla nabídka z ciziny. Trenér by zůstal, kdyby dostal lepší smlouvu.',
         amount: c.wage,
         defaultOption: 'odmitnout',
@@ -764,7 +709,7 @@ export const TEMPLATES: Record<string, Template> = {
         return 'Trenér podepsal lepší smlouvu a zůstává.';
       }
       if (o === 'pustit') {
-        book(s, s.owner.clubId, 'ostatni', c.wage * 8, `Odstupné za trenéra ${c.firstName} ${c.lastName}`);
+        book(s, s.owner.clubId, 'ostatni', c.wage * 8, `Odstupné za trenéra: ${c.firstName} ${c.lastName}`);
         delete s.staff[c.id];
         ownClub(s).staff.coachId = '';
         return 'Trenér odešel. Tým zatím vede asistent, najděte nového ve Vedení.';
@@ -812,7 +757,7 @@ export const TEMPLATES: Record<string, Template> = {
   vyjezd: {
     weight: (s) => ([8, 9, 10, 3, 4, 5].includes(month(s)) ? 0.4 : 0),
     create: (s) => {
-      const amount = round(200_000 * Math.max(0.4, scale(s)), 10_000);
+      const amount = round(200_000 * Math.max(0.4, costScale(s)), 10_000);
       return {
         title: 'Fanklub chce dotovat autobusy na derby',
         text: `Na venkovní derby by jelo pět autobusů fanoušků, kdyby klub přispěl ${mil(amount)}.`,
@@ -892,7 +837,7 @@ export const TEMPLATES: Record<string, Template> = {
   'novinar-investigace': {
     weight: (s) => (s.grey.exposure > 30 && s.grey.actions.some((a) => !a.discovered) ? 1.5 + s.grey.exposure / 25 : 0),
     create: (s) => {
-      const amount = round(1_000_000 * scale(s));
+      const amount = round(1_000_000 * costScale(s));
       return {
         title: 'Investigativní novinář se vyptává',
         text: 'Ptá se na podivné platby a poradenské smlouvy klubu. Zatím nic nepublikoval.',
@@ -987,7 +932,7 @@ export const TEMPLATES: Record<string, Template> = {
       const p = rng.pick(keyPlayers(s));
       if (!p) return null;
       return {
-        title: `Bulvár rozebírá soukromí hráče ${pName(p)}`,
+        title: `Bulvár rozebírá soukromí: ${pName(p)}`,
         text: 'Fotky a spekulace o jeho soukromém životě jsou na titulních stranách.',
         playerId: p.id,
         defaultOption: 'mlcet',
@@ -1056,7 +1001,7 @@ export const TEMPLATES: Record<string, Template> = {
       const club = ownClub(s);
       const limit = club.policy.overdraft ? Math.round((annualCosts(club, tierOf(s, club.id)) * 0.1) / 1_000_000) * 1_000_000 : 0;
       const amount = round(Math.max(0, -club.finance.balance - limit) + annualCosts(club, tierOf(s, club.id)) * 0.05, 100_000);
-      const top = [...squad(s)].sort((a, b) => playerValueOf(s, b) - playerValueOf(s, a)).slice(0, 2);
+      const sale = crisisSale(s, amount);
       return {
         title: 'Krizový plán: klub nemá na závazky',
         text: `Účet je druhý měsíc v minusu. Když se to nezlepší, po čtvrtém měsíci přijde insolvence. Na stabilizaci je potřeba asi ${mil(amount)}.`,
@@ -1064,7 +1009,7 @@ export const TEMPLATES: Record<string, Template> = {
         defaultOption: 'vyprodej',
         options: [
           { id: 'vklad', label: 'Záchranný vklad majitele', hint: `−${mil(amount)} z vašich peněz (máte ${mil(s.owner.wallet)})` },
-          { id: 'vyprodej', label: 'Výprodej nejdražších hráčů', hint: `${top.map(pName).join(' a ')} odejdou do ciziny za 80 % hodnoty, trenér −10` },
+          { id: 'vyprodej', label: 'Výprodej hráčů', hint: sale.players.length ? `Odejdou jen ti, kteří pokryjí potřebnou částku, od nejlevnějších (${sale.players.map(pName).join(', ')}), za 60 % hodnoty, celkem asi ${mil(sale.total)}. Trenér ${sale.core ? '−10' : '−4'}` : 'Není koho prodat.' },
           { id: 'platy', label: 'Snížit všem platy o 20 %', hint: 'Morálka týmu −15, důvěra trenéra −10, média −5' },
         ],
       };
@@ -1083,15 +1028,11 @@ export const TEMPLATES: Record<string, Template> = {
         media(s, -5);
         text = 'Hráči neradi přijali snížení platů.';
       } else {
-        const top = [...squad(s)].sort((a, b) => playerValueOf(s, b) - playerValueOf(s, a)).slice(0, 2);
-        let total = 0;
-        for (const p of top) {
-          const fee = Math.round((playerValueOf(s, p) * 0.8) / 100_000) * 100_000;
-          total += fee;
-          executeTransfer(s, p, `${FOREIGN_PREFIX}krize`, fee, p.wage, 3);
-        }
-        trust(s, 'trener', -10);
-        text = `Klub prodal ${top.length} hráče za ${mil(total)}.`;
+        // Prodej jen tolik hráčů (od nejlevnějších), aby se pokryla potřebná částka, za 60 % hodnoty.
+        const sale = crisisSale(s, e.amount ?? 0);
+        for (const p of sale.players) executeTransfer(s, p, `${FOREIGN_PREFIX}krize`, sale.fees.get(p.id)!, p.wage, 3);
+        trust(s, 'trener', sale.core ? -10 : -4);
+        text = sale.players.length ? `Klub v krizovém výprodeji prodal ${sale.players.length === 1 ? 'jednoho hráče' : `${sale.players.length} hráčů`} za ${mil(sale.total)} (${sale.players.map(pName).join(', ')}).` : 'Nebylo koho prodat.';
       }
       const limit = club.policy.overdraft ? Math.round((annualCosts(club, tierOf(s, club.id)) * 0.1) / 1_000_000) * 1_000_000 : 0;
       if (club.finance.balance >= -limit) {
@@ -1112,12 +1053,14 @@ export const TEMPLATES: Record<string, Template> = {
       const club = ownClub(s);
       const reserve = round(Math.max(0, club.finance.balance) * 0.03);
       const partners = s.shareholders.length > 0;
+      // Jediný vlastník bez zisku nemá o čem rozhodovat: situace se nevytvoří.
+      if (!partners && profit <= 0) return null;
       const options =
         profit > 0
           ? [
-              { id: 'nic', label: 'Bez dividendy', hint: 'Zisk zůstane v klubu. Patrioti +3, investor a spekulant nespokojení' },
-              { id: 'ctvrt', label: `Dividenda 25 % zisku (${mil(profit * 0.25)})`, hint: `Vám ${mil(profit * 0.25 * s.owner.share)}${partners ? ', investor a spekulant spokojenější' : ''}` },
-              { id: 'pul', label: `Dividenda 50 % zisku (${mil(profit * 0.5)})`, hint: `Vám ${mil(profit * 0.5 * s.owner.share)}${partners ? ', investor velmi spokojený, patrioti ne' : ''}` },
+              { id: 'nic', label: partners ? 'Bez dividendy' : 'Nechat zisk v klubu', hint: partners ? 'Zisk zůstane v klubu. Patrioti +3, investor a spekulant nespokojení' : 'Zisk zůstane v klubu.' },
+              { id: 'ctvrt', label: `${partners ? 'Dividenda' : 'Vybrat'} 25 % zisku (${mil(profit * 0.25)})`, hint: `Vám ${mil(profit * 0.25 * s.owner.share)}${partners ? ', investor a spekulant spokojenější' : ''}` },
+              { id: 'pul', label: `${partners ? 'Dividenda' : 'Vybrat'} 50 % zisku (${mil(profit * 0.5)})`, hint: `Vám ${mil(profit * 0.5 * s.owner.share)}${partners ? ', investor velmi spokojený, patrioti ne' : ''}` },
             ]
           : [
               { id: 'nic', label: 'Bez dividendy', hint: 'Klub zisk nemá. Investor a spekulant nespokojení' },
@@ -1147,6 +1090,7 @@ export const TEMPLATES: Record<string, Template> = {
         if (o === 'pul') satisfy(s, -3, ['patriot', 'mesto']);
       }
       confidenceVote(s, total);
+      if (!s.shareholders.length) return total > 0 ? `Vybráno ${mil(total)} ze zisku do vašich osobních peněz.` : 'Zisk zůstává v klubu.';
       return total > 0 ? `Vyplaceno ${mil(total)} na dividendách, vám ${mil(total * s.owner.share)}.` : 'Dividenda se nevyplácí.';
     },
   },
@@ -1184,6 +1128,27 @@ export const TEMPLATES: Record<string, Template> = {
   },
 };
 
+/** Krizový výprodej: od nejlevnějších hráčů (s nějakou hodnotou) jen tolik, aby se pokryla částka; kádr neklesne pod 16. */
+function crisisSale(s: GameState, amount: number): { players: Player[]; fees: Map<string, number>; total: number; core: boolean } {
+  const all = squad(s).filter((p) => !p.loan);
+  const core = new Set([...all].sort((a, b) => b.overall - a.overall).slice(0, 5).map((p) => p.id));
+  const fees = new Map<string, number>();
+  const players: Player[] = [];
+  let total = 0;
+  for (const p of all.map((p) => ({ p, fee: Math.round((playerValueOf(s, p) * 0.6) / 100_000) * 100_000 })).filter((x) => x.fee > 0).sort((a, b) => a.fee - b.fee)) {
+    if (total >= amount || all.length - players.length <= 16) break;
+    players.push(p.p);
+    fees.set(p.p.id, p.fee);
+    total += p.fee;
+  }
+  // Když drobní hráči nestačí, nahradí je jeden dražší, který částku pokryje sám (méně odchodů).
+  if (total < amount || players.length > 3) {
+    const one = all.map((p) => ({ p, fee: Math.round((playerValueOf(s, p) * 0.6) / 100_000) * 100_000 })).filter((x) => x.fee >= amount).sort((a, b) => a.fee - b.fee)[0];
+    if (one && (total < amount || players.length > 3)) return { players: [one.p], fees: new Map([[one.p.id, one.fee]]), total: one.fee, core: core.has(one.p.id) };
+  }
+  return { players, fees, total, core: players.some((p) => core.has(p.id)) };
+}
+
 /** Jednou týdně: možná nová situace (nejvýš tři otevřené najednou). */
 export function maybeCreateEvent(state: GameState, rng: Rng): void {
   if (state.events.length >= Math.min(MAX_OPEN + 1, maxOpenEvents(state)) || state.gameOver) return;
@@ -1198,9 +1163,9 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
     .map(([id, t]) => ({ id, w: t.weight(state) }))
     .filter((x) => x.w > 0);
   const total = weighted.reduce((a, x) => a + x.w, 0);
-  // Výběr partnera přijde vždy, ostatní situace zhruba jednou za dva týdny.
+  // Naléhavé situace (w ≥ 50) přijdou vždy, ostatní zhruba jednou za tři týdny (asi 16 za sezónu).
   const urgent = weighted.find((x) => x.w >= 50);
-  if (!urgent && !rng.chance(Math.min(0.6, total * 0.05 * dramaFactor(state)))) return;
+  if (!urgent && !rng.chance(Math.min(0.4, total * 0.035 * dramaFactor(state)))) return;
   let pick = urgent?.id;
   if (!pick) {
     let r = rng.next() * total;
@@ -1218,11 +1183,18 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
 
 /** Vytvoří konkrétní situaci (i mimo náhodný výběr, např. valnou hromadu). */
 export function createEvent(state: GameState, rng: Rng, template: string, expires?: string): void {
-  const body = TEMPLATES[template].create(state, rng);
+  const body = TEMPLATES[template]?.create(state, rng);
   if (!body) return;
-  state.events.push({ ...body, id: `e${++state.nextId}`, template, date: state.date, expires: expires ?? addDays(state.date, EXPIRES_DAYS) });
   state.eventLog ??= {};
   state.eventLog[template] = state.date;
+  const event: GameEvent = { ...body, id: `e${++state.nextId}`, template, date: state.date, expires: expires ?? addDays(state.date, EXPIRES_DAYS) };
+  // Situace bez volby (jediná možnost) není rozhodnutí: rovnou se provede a přijde jen zpráva.
+  if (body.options.length === 1) {
+    const message = TEMPLATES[template]!.resolve(state, event, body.options[0].id);
+    addNews(state, { kind: 'info', title: body.title, text: [body.text, message].filter(Boolean).join(' '), playerId: body.playerId && state.players[body.playerId] ? body.playerId : undefined });
+    return;
+  }
+  state.events.push(event);
 }
 
 export function resolveEvent(prev: GameState, eventId: string, optionId: string, auto = false): ActionResult {
@@ -1234,18 +1206,12 @@ export function resolveEvent(prev: GameState, eventId: string, optionId: string,
 }
 
 function applyResolution(state: GameState, event: GameEvent, optionId: string, auto: boolean): string {
-  resolvingAutomatically = auto;
-  let message = '';
-  try {
-    message = event.storyId ? resolveStoryEvent(state, event, optionId) : TEMPLATES[event.template]?.resolve(state, event, optionId) ?? '';
-  } finally {
-    resolvingAutomatically = false;
-  }
+  const message = event.storyId ? resolveStoryEvent(state, event, optionId) : TEMPLATES[event.template]?.resolve(state, event, optionId) ?? '';
   state.events = state.events.filter((e) => e.id !== event.id);
   const option = event.options.find((o) => o.id === optionId);
   addNews(state, {
     kind: 'info',
-    title: `${event.title}: ${auto ? 'nerozhodl jste, platí' : 'rozhodnuto'} „${option?.label ?? optionId}“`,
+    title: `${event.title}: ${auto ? 'bez rozhodnutí platí' : 'rozhodnuto'} „${option?.label ?? optionId}“`,
     text: message,
     playerId: event.playerId && state.players[event.playerId] ? event.playerId : undefined,
   });

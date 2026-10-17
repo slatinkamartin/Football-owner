@@ -37,6 +37,15 @@ import { Delegation, Interview } from './PeopleExtras';
 
 type Props = { game: GameState; onChange: (g: GameState) => void };
 
+/** Povaha je v enginu 1–20; v rozhraní jako ostatní hodnoty na škále 0–100. */
+const trait = (v: number) => Math.round(v * 5);
+const traitWord = (v: number) => (v >= 14 ? 'vysoká' : v >= 8 ? 'střední' : 'nízká');
+const TRAIT_HINT = {
+  ambition: 'chce vyhrávat a růst, s malým klubem se ale nespokojí',
+  ego: 'vysoké ego hůř snáší rady a kritiku, nízké nevadí',
+  loyalty: 'věrný člověk méně často odchází k jinému klubu',
+};
+
 export function People({ game, onChange }: Props) {
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const apply = (r: ActionResult) => {
@@ -174,7 +183,7 @@ function StaffCard({
           Pozice je neobsazená.{' '}
           {role === 'trener'
             ? 'Tým vede asistent a hraje slaběji.'
-            : 'Přestupy vyjednáváte sám, hůř a bez návrhů. Skauting je nepřesný.'}
+            : 'Přestupy vyjednáváte sami, hůř a bez návrhů. Skauting je nepřesný.'}
         </p>
         <p className="muted">Vyberte si z kandidátů níže.</p>
       </section>
@@ -193,12 +202,12 @@ function StaffCard({
       <dl className="kv meters">
         <dt>{role === 'trener' ? 'Trenérské schopnosti' : 'Skauting a vyjednávání'}</dt>
         <dd><Meter value={person.ability} /> {person.ability}</dd>
-        <dt>Ambice</dt>
-        <dd><Meter value={person.ambition} max={20} tone="good" /> {person.ambition}</dd>
-        <dt>Ego</dt>
-        <dd><Meter value={person.ego} max={20} tone="warn" /> {person.ego}</dd>
-        <dt>Loajalita</dt>
-        <dd><Meter value={person.loyalty} max={20} tone="good" /> {person.loyalty}</dd>
+        <dt title={TRAIT_HINT.ambition}>Ambice</dt>
+        <dd title={`${traitWord(person.ambition)}: ${TRAIT_HINT.ambition}`}><Meter value={trait(person.ambition)} tone="neutral" /> {trait(person.ambition)}</dd>
+        <dt title={TRAIT_HINT.ego}>Ego</dt>
+        <dd title={`${traitWord(person.ego)}: ${TRAIT_HINT.ego}`}><Meter value={trait(person.ego)} tone="neutral" /> {trait(person.ego)}</dd>
+        <dt title={TRAIT_HINT.loyalty}>Loajalita</dt>
+        <dd title={`${traitWord(person.loyalty)}: ${TRAIT_HINT.loyalty}`}><Meter value={trait(person.loyalty)} tone="neutral" /> {trait(person.loyalty)}</dd>
         <dt>Důvěra ve vás</dt>
         <dd><Meter value={trust} /> {Math.round(trust)}</dd>
       </dl>
@@ -221,6 +230,9 @@ function StaffCard({
         <dt>Smlouva do</dt>
         <dd>30. 6. {person.contractUntil}</dd>
       </dl>
+      <p className="muted small">
+        Schopnosti a důvěra: čím víc, tím lépe. Povaha (ambice, ego, loajalita, 0–100) není dobrá ani špatná: ambice {traitWord(person.ambition)}, ego {traitWord(person.ego)}, loajalita {traitWord(person.loyalty)}.
+      </p>
       {trust < 25 && <p className="warning">Vztah je na bodu mrazu. Hrozí rezignace na konci sezóny.</p>}
       {confirming ? (
         <div className="confirm">
@@ -274,8 +286,8 @@ function Candidates({ game, role, setRole, onResult }: { game: GameState; role: 
             : role === 'reditel'
               ? []
               : [{ key: 'effect', label: 'Přínos', hideSm: true, value: (s: Staff) => s.ability, render: (s: Staff) => <span className="small muted">{roleEffect(role, s.ability)}</span> }]),
-          { key: 'ego', label: 'Ego', num: true, hideSm: true, value: (s) => s.ego },
-          { key: 'loyalty', label: 'Loajalita', num: true, hideSm: true, value: (s) => s.loyalty },
+          { key: 'ego', label: 'Ego', num: true, hideSm: true, value: (s) => s.ego, render: (s) => trait(s.ego) },
+          { key: 'loyalty', label: 'Loajalita', num: true, hideSm: true, value: (s) => s.loyalty, render: (s) => trait(s.loyalty) },
           { key: 'wage', label: 'Plat', num: true, value: (s) => s.wage, render: (s) => money(s.wage) },
           {
             key: 'act',

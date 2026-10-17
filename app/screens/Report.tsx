@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react';
 import { ratingText, type SeasonReport } from '../../engine';
 import { Badge } from '../components';
 import { money } from '../format';
 
 /** Výroční zpráva sezóny. */
-export function SeasonReportView({ report, onClose }: { report: SeasonReport; onClose: () => void }) {
+export function SeasonReportView({ report, onClose, children }: { report: SeasonReport; onClose: () => void; children?: ReactNode }) {
   const label = `${report.season}/${String(report.season + 1).slice(2)}`;
   return (
     <div className="overlay sheet-overlay" onClick={onClose}>
@@ -59,6 +60,7 @@ export function SeasonReportView({ report, onClose }: { report: SeasonReport; on
             <ul className="plain small">{report.trophies.map((m, i) => <li key={i}>🏆 {m}</li>)}</ul>
           </>
         )}
+        {children}
         <button className="primary" autoFocus onClick={onClose}>Pokračovat do nové sezóny</button>
       </div>
     </div>

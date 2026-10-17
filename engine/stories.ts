@@ -155,7 +155,7 @@ function tryStart(state: GameState, kind: StoryKind, roll: number): boolean {
     const autumn = mine.filter((f) => f.date < `${state.season + 1}-01-01`);
     if (!autumn.length || autumn.some((f) => !f.result) || state.date >= `${state.season + 1}-01-01` || state.date < `${state.season}-10-01`) return false;
     const pos = ownPositionNow(state)!;
-    const story = startStory(state, 'hodnoceni', `Hodnocení trenéra ${coach.firstName} ${coach.lastName} po podzimu`);
+    const story = startStory(state, 'hodnoceni', `Trenér ${coach.firstName} ${coach.lastName}: hodnocení po podzimu`);
     story.log.push(`Po podzimu je klub na ${pos.position}. místě, cíl je do ${pos.target}. místa.`);
     const good = pos.position <= pos.target;
     ask(state, story, {
@@ -209,6 +209,7 @@ export function resolveStoryEvent(state: GameState, event: GameEvent, option: st
     story.data.choice = option;
     story.data.points = row?.points ?? 0;
     story.data.played = row?.played ?? 0;
+    story.data.season = state.season;
     story.step = 1;
     story.waiting = 'zapasy';
     story.matchesLeft = 3;
@@ -260,6 +261,7 @@ export function resolveStoryEvent(state: GameState, event: GameEvent, option: st
     story.data.played = row?.played ?? 0;
     story.data.need = 5;
     story.data.min = 8;
+    story.data.season = state.season;
     story.step = 1;
     story.waiting = 'zapasy';
     story.matchesLeft = 5;
@@ -301,6 +303,7 @@ export function resolveStoryEvent(state: GameState, event: GameEvent, option: st
       story.until = addDays(state.date, 28);
       story.data.points = row?.points ?? 0;
       story.data.played = row?.played ?? 0;
+      story.data.season = state.season;
       return 'Za čtyři týdny se ukáže, jestli jste slibovali oprávněně.';
     }
     if (option === 'rozhovor') {
@@ -351,7 +354,18 @@ export function weeklyStories(state: GameState, rng: { next(): number }): void {
   }
 }
 
+/** Sezóna, ve které příběh začal (sezóna začíná 1. 7.). */
+function storySeason(story: Story): number {
+  const y = Number(story.started.slice(0, 4));
+  return story.started.slice(5) >= '07-01' ? y : y - 1;
+}
+
 function advance(state: GameState, story: Story): void {
+  // Příběhy měřené body v tabulce nepřežijí přelom sezóny (tabulka se vynuluje): uzavřít neutrálně.
+  if (story.waiting && story.waiting !== 'rozhodnuti' && (story.kind === 'krize' || story.kind === 'hodnoceni' || story.kind === 'media') && Number(story.data.season ?? storySeason(story)) !== state.season) {
+    finish(state, story, 'neutralni', 'Sezóna skončila dřív, než se příběh rozhodl. Nová sezóna začíná s čistým štítem.');
+    return;
+  }
   if (story.waiting === 'rozhodnuti') {
     // Situace propadla bez otevřené události (např. smazaná): uzavřít.
     if (!state.events.some((e) => e.storyId === story.id)) finish(state, story, 'neutralni', 'Příběh vyšuměl.');
@@ -400,8 +414,8 @@ function advance(state: GameState, story: Story): void {
       const fee = Math.round((playerValue(state, p) * 1.15) / 100_000) * 100_000;
       state.market.offers = state.market.offers.filter((o) => o.playerId !== p.id);
       state.market.offers.push({ id: `o${++state.nextId}`, playerId: p.id, buyerId: FOREIGN_PREFIX + buyer.id, fee, expires: addDays(state.date, 14), advice: 'prijmout', note: 'Hráči jste odchod slíbil. Odmítnutí ho rozladí.' });
-      addNews(state, { kind: 'info', title: `${buyer.name} nabízí za ${playerName(p)} ${(fee / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč`, text: 'Hráči jste odchod slíbil. Nabídku najdete v Přestupech.', playerId: p.id });
-      story.log.push(`Přišla nabídka z ${buyer.name}.`);
+      addNews(state, { kind: 'info', title: `${playerName(p)}: ${buyer.name} nabízí ${(fee / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč`, text: 'Hráči jste odchod slíbil. Nabídku najdete v Přestupech.', playerId: p.id });
+      story.log.push(`Nabídku poslal klub ${buyer.name}.`);
       story.step = 2;
       story.waiting = 'nabidka';
       story.until = addDays(state.date, 15);

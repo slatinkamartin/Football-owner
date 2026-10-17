@@ -50,7 +50,7 @@ export function weeklyBriefing(state: GameState, limit = 5): BriefingTask[] {
   if (offers.length) {
     const o = offers[0];
     const left = days(state.date, o.expires);
-    out.push({ id: `o-${o.id}`, urgency: left <= 2 ? 1 : 2, text: `Nabídka ${mil(o.fee)} za ${playerName(state.players[o.playerId])}`, detail: `${offers.length > 1 ? `Celkem ${offers.length} nabídky. ` : ''}Platí do ${formatDate(o.expires)}, ředitel doporučuje ${o.advice === 'prijmout' ? 'přijmout' : 'odmítnout'}.`, tab: 'prestupy', action: 'Rozhodnout' });
+    out.push({ id: `o-${o.id}`, urgency: left <= 2 ? 1 : 2, text: `Nabídka ${mil(o.fee)}: ${playerName(state.players[o.playerId])}`, detail: `${offers.length > 1 ? `Celkem ${offers.length} nabídky. ` : ''}Platí do ${formatDate(o.expires)}, ředitel doporučuje ${o.advice === 'prijmout' ? 'přijmout' : 'odmítnout'}.`, tab: 'prestupy', action: 'Rozhodnout' });
   }
 
   // Rozpočet sezóny.

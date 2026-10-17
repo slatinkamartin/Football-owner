@@ -30,13 +30,14 @@ export function Decisions({ game, onChange }: { game: GameState; onChange: (g: G
               {e.options.map((o) => (
                 <button
                   key={o.id}
-                  className={o.id === e.defaultOption ? '' : 'primary-outline'}
+                  className={o.id === e.defaultOption ? 'primary-outline recommended' : ''}
                   onClick={() => {
                     const r = resolveEvent(game, e.id, o.id);
                     onChange(r.state);
                     setMessage(r.message);
                   }}
                 >
+                  {o.id === e.defaultOption && <span className="badge badge-good rec-badge">doporučeno</span>}
                   <strong>{o.label}</strong>
                   <span>{o.hint}</span>
                 </button>

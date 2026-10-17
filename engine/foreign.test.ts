@@ -99,7 +99,9 @@ describe('zahraniční trh', () => {
   });
 
   it('ředitel nakupuje v cizině, když to politika dovolí', () => {
-    let s = rich(setNetwork(setNetwork(start, 'balkan', true).state, 'sever', true).state);
+    // Skautská síť ve více regionech, ať je v nabídce dost hráčů na nejslabší místo sestavy.
+    let s = rich(start);
+    for (const r of ['okoli', 'balkan', 'sever', 'afrika', 'amerika'] as const) s = setNetwork(s, r, true).state;
     s = updatePolicy(s, { directorMarket: 'zahranici' });
     const spent = budgetRemaining(s);
     const after = advanceDays(s, 50).state;

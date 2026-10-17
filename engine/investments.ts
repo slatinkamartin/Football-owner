@@ -8,7 +8,7 @@ import type { ActionResult } from './staff';
 import { CATERING_SPEND, vipRate } from './stadium';
 import type { BigProject, BigProjectKind, GameState, ProgramKind, ScoutRegion } from './types';
 import { addNews, clamp, FOREIGN_PREFIX, hash01, tierOf } from './world';
-import { addTrophy, cityFactor, cityPermit } from './surroundings';
+import { addTrophy, changeCity, cityFactor, cityPermit } from './surroundings';
 
 /**
  * Velké investice: víceleté stavby (nový stadion, tréninkový areál, komerční areál) placené měsíčně
@@ -374,6 +374,8 @@ export function completeBigProjects(state: GameState): void {
   const club = own(state);
   for (const p of (state.bigProjects ?? []).filter((x) => x.end <= state.date)) {
     payInto(state, p, bigRemaining(p));
+    // Velká investice ve městě zlepší vztah s radnicí.
+    changeCity(state, p.kind === 'stadion' || p.kind === 'velkystadion' ? 8 : 4);
     const f = club.facilities;
     if (p.kind === 'stadion' || p.kind === 'velkystadion') {
       club.stadium.capacity = Math.max(club.stadium.capacity, p.capacity ?? club.stadium.capacity);

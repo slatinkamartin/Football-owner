@@ -26,7 +26,7 @@ import { ratingText, homeEdgeScore, strengthDelta,
   type Position,
 } from '../../engine';
 import { Badge, Meter, Notice } from '../components';
-import { Chips, DataTable, useStoredState } from '../table';
+import { Chips, DataTable, useStoredState, type Column } from '../table';
 import { PlayerLink, useNav } from '../nav';
 import { money } from '../format';
 
@@ -61,6 +61,8 @@ export function Squad({ game, onChange }: Props) {
       (!filter.unavailable || isInjured(p) || p.suspension > 0) &&
       (!filter.text || playerName(p).toLowerCase().includes(filter.text.toLowerCase())),
   );
+  const [cols, setCols] = useStoredState('kadr:sloupce', { more: false });
+  const more = cols.more;
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (open) panel.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -133,6 +135,9 @@ export function Squad({ game, onChange }: Props) {
             <span>Hledat jméno</span>
             <input id="sq-name" value={filter.text} placeholder="příjmení" onChange={(e) => setFilter({ ...filter, text: e.target.value })} />
           </label>
+          <button className="linkbtn cols-toggle" aria-expanded={more} onClick={() => setCols({ more: !more })}>
+            {more ? 'Méně sloupců' : 'Více sloupců'}
+          </button>
         </div>
         <DataTable
           id="kadr"
@@ -143,6 +148,7 @@ export function Squad({ game, onChange }: Props) {
           rowClassName={(p) => (open === p.id ? 'open-row' : '')}
           empty="Filtrům neodpovídá žádný hráč."
           columns={[
+            ...([
             {
               key: 'name',
               label: 'Hráč',
@@ -158,7 +164,7 @@ export function Squad({ game, onChange }: Props) {
             { key: 'age', label: 'Věk', num: true, value: (p) => playerAge(p, game.season) },
             { key: 'ovr', label: 'Hodn.', num: true, value: (p) => p.overall, render: (p) => <span className="rating">{p.overall}</span> },
             { key: 'pot', label: 'Pot.', num: true, value: (p) => p.potential, className: () => 'muted' },
-            { key: 'wage', label: 'Plat/měs.', num: true, hideSm: true, value: (p) => p.wage, render: (p) => money(p.wage) },
+            { key: 'wage', label: 'Plat/měs.', num: true, hideSm: true, more: true, value: (p) => p.wage, render: (p) => money(p.wage) },
             { key: 'contract', label: 'Smlouva', num: true, value: (p) => p.contractUntil, className: (p) => (contractExpiring(game, p) ? 'neg' : '') },
             {
               key: 'status',
@@ -176,18 +182,20 @@ export function Squad({ game, onChange }: Props) {
             {
               key: 'morale',
               label: 'Mor.',
+              more: true,
               num: true,
               hideSm: true,
               title: 'Morálka (0–100)',
               value: (p) => p.morale,
               render: (p) => <span className={p.morale < 30 ? 'neg' : p.morale >= 75 ? 'pos' : ''}>{Math.round(p.morale)}</span>,
             },
-            { key: 'minutes', label: 'Min.', num: true, hideSm: true, value: (p) => p.minutes, title: 'Odehrané minuty v sezóně' },
-            { key: 'goals', label: 'G/A', num: true, value: (p) => p.goals * 100 + p.assists, render: (p) => `${p.goals}/${p.assists}`, title: 'Góly / asistence' },
-            { key: 'cards', label: 'ŽK/ČK', num: true, hideSm: true, value: (p) => p.yellows + p.reds * 3, render: (p) => `${p.yellows}/${p.reds}` },
+            { key: 'minutes', label: 'Min.', num: true, hideSm: true, more: true, value: (p) => p.minutes, title: 'Odehrané minuty v sezóně' },
+            { key: 'goals', label: 'G/A', num: true, more: true, value: (p) => p.goals * 100 + p.assists, render: (p) => `${p.goals}/${p.assists}`, title: 'Góly / asistence' },
+            { key: 'cards', label: 'ŽK/ČK', num: true, hideSm: true, more: true, value: (p) => p.yellows + p.reds * 3, render: (p) => `${p.yellows}/${p.reds}` },
             {
               key: 'avg',
               label: 'Ø zn.',
+              more: true,
               num: true,
               title: 'Průměrná známka v zápasech (1–10)',
               value: (p) => averageRating(p) ?? 0,
@@ -196,7 +204,8 @@ export function Squad({ game, onChange }: Props) {
                 return avg ? <span className={avg >= 7.2 ? 'pos' : avg < 6.2 ? 'neg' : ''}>{ratingText(avg, 2)}</span> : <span className="muted">–</span>;
               },
             },
-            { key: 'value', label: 'Hodnota', num: true, value: (p) => playerValue(game, p), render: (p) => money(playerValue(game, p)) },
+            { key: 'value', label: 'Hodnota', num: true, more: true, value: (p) => playerValue(game, p), render: (p) => money(playerValue(game, p)) },
+            ] as (Column<Player> & { more?: boolean })[]).filter((c) => more || !c.more),
           ]}
         />
       </section>
@@ -232,7 +241,13 @@ function PlayerActions({
           <select value={years} onChange={(e) => setYears(Number(e.target.value))}>
             {[1, 2, 3, 4].map((y) => <option key={y} value={y}>do {game.season + y}</option>)}
           </select>
-          <button className="primary" onClick={() => onResult(renewContract(game, p.id, Number(wage.replace(/\s/g, '')), years))}>
+          <button
+            className="primary"
+            onClick={() => {
+              const w = Number(wage.replace(/\s/g, '').replace(',', '.'));
+              onResult(Number.isFinite(w) && w > 0 ? renewContract(game, p.id, Math.round(w), years) : { state: game, ok: false, message: 'Zadejte plat číslem (Kč měsíčně).' });
+            }}
+          >
             Nabídnout
           </button>
         </div>

@@ -37,6 +37,7 @@ import {
   type GameState,
   type Player,
   type Position,
+  type TransferLogEntry,
 } from '../../engine';
 import { Badge, Notice } from '../components';
 import { money } from '../format';
@@ -56,6 +57,18 @@ export function Transfers({ game, onChange }: Props) {
   const window = transferWindow(game.date);
   const wages = wageBill(game, own);
   const wageBudget = wageBudgetMonthly(club);
+
+  const [sub, setSub] = useState<TransferTab>('navrhy');
+  const pending = game.market.proposals.length + game.market.offers.length;
+  const watched = game.watchlist?.length ?? 0;
+  const tabs: { id: TransferTab; label: string }[] = [
+    { id: 'navrhy', label: `Návrhy a nabídky${pending ? ` (${pending})` : ''}` },
+    { id: 'hledat', label: 'Hledat' },
+    { id: 'sledovani', label: `Sledovaní${watched ? ` (${watched})` : ''}` },
+    { id: 'agenti', label: 'Agenti' },
+    { id: 'zahranici', label: 'Zahraničí' },
+    { id: 'historie', label: 'Historie' },
+  ];
 
   return (
     <div className="stack">
@@ -81,27 +94,38 @@ export function Transfers({ game, onChange }: Props) {
         <p className="muted small">Rozpočet na odstupné a mzdový rozpočet nastavujete ve Financích. Polovina peněz z prodejů se vrací do rozpočtu.</p>
       </section>
 
+      <nav className="subtabs" aria-label="Části přestupů">
+        {tabs.map((t) => (
+          <button key={t.id} className={sub === t.id ? 'active' : ''} onClick={() => setSub(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
       <Notice message={message?.text ?? null} ok={message?.ok} />
 
-      <DeadlineCard game={game} onResult={apply} />
-      <DominoCard game={game} onResult={apply} />
       {game.market.negotiation && <NegotiationCard game={game} onResult={apply} onClose={() => onChange(cancelNegotiation(game))} />}
 
-      <div className="grid two">
-        <Proposals game={game} onResult={apply} onReject={(id) => onChange(rejectProposal(game, id))} />
-        <Offers game={game} onResult={apply} onReject={(id) => onChange(rejectOffer(game, id))} />
-      </div>
-
-      <Search game={game} onResult={apply} />
-      <div className="grid two">
-        <WatchlistCard game={game} onResult={apply} />
-        <AgentsCard game={game} />
-      </div>
-      <ForeignMarket game={game} onChange={onChange} onResult={apply} />
-      <History game={game} />
+      {sub === 'navrhy' && (
+        <>
+          <DeadlineCard game={game} onResult={apply} />
+          <DominoCard game={game} onResult={apply} />
+          <div className="grid two">
+            <Proposals game={game} onResult={apply} onReject={(id) => onChange(rejectProposal(game, id))} />
+            <Offers game={game} onResult={apply} onReject={(id) => onChange(rejectOffer(game, id))} />
+          </div>
+        </>
+      )}
+      {sub === 'hledat' && <Search game={game} onResult={apply} />}
+      {sub === 'sledovani' && <WatchlistCard game={game} onResult={apply} />}
+      {sub === 'agenti' && <AgentsCard game={game} />}
+      {sub === 'zahranici' && <ForeignMarket game={game} onChange={onChange} onResult={apply} />}
+      {sub === 'historie' && <TransferHistory game={game} />}
     </div>
   );
 }
+
+type TransferTab = 'navrhy' | 'hledat' | 'sledovani' | 'agenti' | 'zahranici' | 'historie';
 
 function PlayerLine({ game, p }: { game: GameState; p: Player }) {
   const view = scouted(game, p);
@@ -397,32 +421,140 @@ function Search({ game, onResult }: { game: GameState; onResult: (r: ActionResul
   );
 }
 
-function History({ game }: { game: GameState }) {
+const KIND_LABEL: Record<TransferLogEntry['kind'], string> = {
+  prestup: 'přestup',
+  hostovani: 'hostování',
+  volny: 'volný hráč',
+  zahranici: 'zahraničí',
+  odchod: 'odchod bez klubu',
+};
+
+/** Historie: záznamy z engine (transferLog), u starších uložených her doplněné ze stručné historie trhu. */
+function historyEntries(game: GameState): TransferLogEntry[] {
+  const log = game.transferLog ?? [];
+  const seen = new Set(log.map((e) => `${e.date}|${e.playerName}|${e.toId}`));
+  const old = game.market.history
+    .filter((h) => !seen.has(`${h.date}|${h.playerName}|${h.toId}`))
+    .map<TransferLogEntry>((h) => ({
+      date: h.date,
+      playerId: '',
+      playerName: h.playerName,
+      fromId: h.fromId,
+      toId: h.toId,
+      fromName: clubLabel(game, h.fromId),
+      toName: clubLabel(game, h.toId),
+      fee: h.fee,
+      kind: h.toId === FREE ? 'odchod' : isForeign(h.fromId) || isForeign(h.toId) ? 'zahranici' : h.fromId === FREE ? 'volny' : 'prestup',
+    }));
+  return [...log, ...old].sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+const seasonOf = (date: string) => (date.slice(5) >= '07-01' ? Number(date.slice(0, 4)) : Number(date.slice(0, 4)) - 1);
+
+function PlayerCell({ game, e }: { game: GameState; e: TransferLogEntry }) {
+  return e.playerId && game.players[e.playerId] ? <PlayerLink id={e.playerId}>{e.playerName}</PlayerLink> : <>{e.playerName}</>;
+}
+
+function TransferHistory({ game }: { game: GameState }) {
   const own = game.owner.clubId;
   const [dir, setDir] = useStoredState('filtr:prestupy-historie', { v: '' as '' | 'in' | 'out' });
-  const all = game.market.history.filter((h) => h.fromId === own || h.toId === own);
-  if (!all.length) return null;
-  const rows = all
-    .map((h, i) => ({ ...h, i, incoming: h.toId === own }))
-    .filter((h) => !dir.v || (dir.v === 'in' ? h.incoming : !h.incoming));
+  const [kind, setKind] = useStoredState('filtr:prestupy-liga', { v: '' as '' | TransferLogEntry['kind'] });
+  const entries = historyEntries(game);
+  const from = `${game.season - 3}-07-01`;
+  const mine = entries
+    .filter((e) => (e.fromId === own || e.toId === own) && e.date >= from)
+    .map((e, i) => ({ e, i, incoming: e.toId === own }));
+  const shownMine = mine.filter((h) => !dir.v || (dir.v === 'in' ? h.incoming : !h.incoming));
+  const seasons = [...new Set(mine.map((h) => seasonOf(h.e.date)))].sort((a, b) => b - a);
+  const comp = Object.values(game.competitions).find((c) => c.clubIds.includes(own));
+  const leagueIds = new Set(comp?.clubIds ?? []);
+  const league = entries
+    .filter((e) => e.date >= `${game.season}-07-01` && (leagueIds.has(e.fromId) || leagueIds.has(e.toId)))
+    .map((e, i) => ({ e, i }));
+  const shownLeague = league.filter((x) => !kind.v || x.e.kind === kind.v);
+  const biggest = [...league].sort((a, b) => b.e.fee - a.e.fee)[0];
+  const arrivals = league.filter((x) => leagueIds.has(x.e.toId)).length;
+  const fromAbroad = league.filter((x) => leagueIds.has(x.e.toId) && isForeign(x.e.fromId)).length;
+
   return (
-    <section className="card">
-      <div className="row-between">
-        <h2>Přestupy klubu</h2>
-        <Chips options={[{ value: 'in', label: 'příchody' }, { value: 'out', label: 'odchody' }]} value={dir.v} onChange={(v) => setDir({ v })} />
-      </div>
-      <DataTable
-        id="prestupy-historie"
-        rows={rows}
-        rowKey={(h) => String(h.i)}
-        initialSort={{ key: 'date', dir: 'desc' }}
-        columns={[
-          { key: 'date', label: 'Datum', value: (h) => h.date, render: (h) => formatShortDate(h.date), className: () => 'muted' },
-          { key: 'name', label: 'Hráč', value: (h) => h.playerName },
-          { key: 'club', label: 'Odkud / kam', value: (h) => clubLabel(game, h.incoming ? h.fromId : h.toId), render: (h) => (h.incoming ? `z ${clubLabel(game, h.fromId)}` : `do ${clubLabel(game, h.toId)}`) },
-          { key: 'fee', label: 'Odstupné', num: true, value: (h) => (h.incoming ? -h.fee : h.fee), render: (h) => (h.fee ? money(h.incoming ? -h.fee : h.fee) : 'zdarma'), className: (h) => (h.incoming ? 'neg' : 'pos') },
-        ]}
-      />
-    </section>
+    <>
+      <section className="card">
+        <div className="row-between">
+          <h2>Přestupy vašeho klubu <span className="muted small">· poslední 3 roky</span></h2>
+          <Chips options={[{ value: 'in', label: 'příchody' }, { value: 'out', label: 'odchody' }]} value={dir.v} onChange={(v) => setDir({ v })} />
+        </div>
+        {seasons.length > 0 && (
+          <dl className="kv inline">
+            {seasons.map((s) => {
+              const rows = mine.filter((h) => seasonOf(h.e.date) === s);
+              const spent = rows.filter((h) => h.incoming).reduce((a, h) => a + h.e.fee, 0);
+              const got = rows.filter((h) => !h.incoming).reduce((a, h) => a + h.e.fee, 0);
+              return (
+                <span key={s} className="kv-row">
+                  <dt>{s}/{String(s + 1).slice(2)}</dt>
+                  <dd>
+                    {rows.filter((h) => h.incoming).length} příchodů, {rows.filter((h) => !h.incoming).length} odchodů ·{' '}
+                    <span className={got - spent < 0 ? 'neg' : 'pos'}>{got - spent >= 0 ? '+' : '−'}{money(Math.abs(got - spent))}</span>
+                  </dd>
+                </span>
+              );
+            })}
+          </dl>
+        )}
+        <DataTable
+          id="prestupy-historie"
+          rows={shownMine}
+          rowKey={(h) => `${h.i}`}
+          initialSort={{ key: 'date', dir: 'desc' }}
+          limit={30}
+          empty="Za poslední 3 roky klub žádný přestup neudělal."
+          columns={[
+            { key: 'date', label: 'Datum', value: (h) => h.e.date, render: (h) => formatShortDate(h.e.date), className: () => 'muted' },
+            { key: 'name', label: 'Hráč', value: (h) => h.e.playerName, render: (h) => <PlayerCell game={game} e={h.e} /> },
+            { key: 'pos', label: 'Poz.', hideSm: true, value: (h) => h.e.position ?? '', render: (h) => (h.e.position ? POSITION_SHORT[h.e.position] : '–'), className: () => 'muted' },
+            { key: 'age', label: 'Věk', num: true, hideSm: true, value: (h) => h.e.age ?? 0, render: (h) => h.e.age ?? '–' },
+            { key: 'club', label: 'Odkud / kam', value: (h) => (h.incoming ? h.e.fromName : h.e.toName), render: (h) => (h.incoming ? `z: ${h.e.fromName}` : `do: ${h.e.toName}`) },
+            { key: 'kind', label: 'Typ', hideSm: true, value: (h) => KIND_LABEL[h.e.kind], className: () => 'muted' },
+            { key: 'fee', label: 'Odstupné', num: true, value: (h) => (h.incoming ? -h.e.fee : h.e.fee), render: (h) => (h.e.fee ? money(h.incoming ? -h.e.fee : h.e.fee) : 'zdarma'), className: (h) => (!h.e.fee ? 'muted' : h.incoming ? 'neg' : 'pos') },
+          ]}
+        />
+      </section>
+
+      <section className="card">
+        <div className="row-between">
+          <h2>Přestupy v lize <span className="muted small">· {comp?.name ?? 'soutěž'}, sezóna {game.season}/{String(game.season + 1).slice(2)}</span></h2>
+        </div>
+        {league.length > 0 && (
+          <p className="muted small">
+            {league.length} přestupů, do klubů soutěže {arrivals} příchodů (z toho {fromAbroad} ze zahraničí).
+            {biggest && biggest.e.fee > 0 && <> Nejdražší: {biggest.e.playerName} ({biggest.e.fromName} → {biggest.e.toName}) za {money(biggest.e.fee)}.</>}
+          </p>
+        )}
+        <div className="filters">
+          <Chips
+            options={(Object.keys(KIND_LABEL) as TransferLogEntry['kind'][]).map((k) => ({ value: k, label: KIND_LABEL[k] }))}
+            value={kind.v}
+            onChange={(v) => setKind({ v })}
+            allLabel="všechny"
+          />
+        </div>
+        <DataTable
+          id="prestupy-liga"
+          rows={shownLeague}
+          rowKey={(x) => `${x.i}`}
+          initialSort={{ key: 'date', dir: 'desc' }}
+          limit={30}
+          empty="V této sezóně zatím žádné přestupy."
+          columns={[
+            { key: 'date', label: 'Datum', value: (x) => x.e.date, render: (x) => formatShortDate(x.e.date), className: () => 'muted' },
+            { key: 'name', label: 'Hráč', value: (x) => x.e.playerName, render: (x) => <PlayerCell game={game} e={x.e} /> },
+            { key: 'from', label: 'Z klubu', value: (x) => x.e.fromName, className: (x) => (x.e.fromId === own ? 'own' : '') },
+            { key: 'to', label: 'Do klubu', value: (x) => x.e.toName, className: (x) => (x.e.toId === own ? 'own' : '') },
+            { key: 'kind', label: 'Typ', hideSm: true, value: (x) => KIND_LABEL[x.e.kind], className: () => 'muted' },
+            { key: 'fee', label: 'Odstupné', num: true, value: (x) => x.e.fee, render: (x) => (x.e.fee ? money(x.e.fee) : 'zdarma') },
+          ]}
+        />
+      </section>
+    </>
   );
 }

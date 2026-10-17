@@ -265,8 +265,8 @@ export function setSeasonGoal(prev: GameState, goal: SeasonGoal): ActionResult {
 export type Advice = 'mladi' | 'zkuseni' | 'utok' | 'obrana' | 'vyvazene';
 
 export const ADVICE_LABEL: Record<Advice, string> = {
-  mladi: 'Dávej víc šancí mladým',
-  zkuseni: 'Spoléhej na zkušené',
+  mladi: 'Dávejte víc šancí mladým',
+  zkuseni: 'Spoléhejte na zkušené',
   utok: 'Hrajte útočněji',
   obrana: 'Hrajte bezpečněji vzadu',
   vyvazene: 'Hrajte vyváženě',
@@ -402,6 +402,8 @@ export function monthlyStaff(state: GameState, rng: Rng): void {
 
   // Důvěra se pomalu vrací k normálu; průběžné plnění cíle ji posouvá, trestá se jen výrazné zaostání.
   for (const role of ['trener', 'reditel'] as const) state.owner.trust[role] = clamp(state.owner.trust[role] + (50 - state.owner.trust[role]) * 0.04, 0, 100);
+  // Pověst u médií se také pomalu vrací ke středu (nezasekne se na 0 ani na 100).
+  state.owner.media = clamp(state.owner.media + (50 - state.owner.media) * 0.04, 0, 100);
   const own = ownPosition(state);
   if (own && own.played >= 4) {
     const diff = goalTarget(state.owner.seasonGoal, own.comp) - own.position;

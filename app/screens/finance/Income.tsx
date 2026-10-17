@@ -135,12 +135,12 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
           disabled={sold}
           onChange={(v) => set({ seasonTicketPrice: v })}
           preview={(v) => (
-            <p className="preview small">
+            <div className="preview small">
               {sold
                 ? `Prodáno ${num(seasonTicketHolders(game))} permanentek za ${money(game.budget?.seasonTicketRevenue ?? 0)}. Další prodej až příští sezónu.`
                 : <>Prodá se asi <strong>{num(seasonTicketDemand(game, v))}</strong> permanentek za <strong>{money(seasonTicketDemand(game, v) * v)}</strong>. Peníze přijdou při schválení rozpočtu, držitelé pak chodí jistě (plnější stadion, silnější kotel).</>}
               {!sold && <Impact game={game} patch={{ seasonTicketPrice: v }} extra={[v > defaultSeasonTicketPrice(tier) * 1.2 && 'méně permanentek = méně jistých diváků na každém zápase']} />}
-            </p>
+            </div>
           )}
         />
         {avgAttendance > 0 && <p className="muted small">Průměrná návštěva zatím {num(avgAttendance)} ({Math.round((avgAttendance / club.stadium.capacity) * 100)} % stadionu).</p>}

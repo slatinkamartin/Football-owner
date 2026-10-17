@@ -18,7 +18,8 @@ export const EUROPE_LABEL: Record<EuropeCompetition | 'predkola', string> = {
 };
 
 /** Peníze za ligovou fázi (základ, k tomu bonus za výsledky až +50 %). */
-const LEAGUE_PHASE: Record<EuropeCompetition, number> = { LM: 400_000_000, EL: 120_000_000, KL: 75_000_000 };
+// O 30 % méně než dřív: velké kluby jinak bohatly i bez péče majitele (stovky milionů ročně).
+const LEAGUE_PHASE: Record<EuropeCompetition, number> = { LM: 280_000_000, EL: 85_000_000, KL: 55_000_000 };
 /** Peníze za účast v předkolech. */
 const QUALIFYING: Record<EuropeCompetition, number> = { LM: 25_000_000, EL: 15_000_000, KL: 10_000_000 };
 /** Podíl evropských peněz, který jde hráčům jako prémie. */

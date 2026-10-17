@@ -20,7 +20,7 @@ export function financeLevel(level: string | undefined, low: number, normal: num
 
 /** Velké kluby platí za stejnou kvalitu víc, nejnižší soutěže jsou poloprofesionální. */
 export function clubPayFactor(reputation: number): number {
-  const pts: [number, number][] = [[30, 0.7], [40, 1], [45, 1.6], [50, 2.3], [55, 3], [62, 3.6], [76, 3.8], [86, 4], [95, 4.4]];
+  const pts: [number, number][] = [[30, 0.7], [40, 1], [45, 1.6], [50, 2.3], [55, 3], [62, 3.6], [76, 3.8], [86, 4.2], [95, 4.8]];
   if (reputation <= pts[0][0]) return pts[0][1];
   for (let i = 1; i < pts.length; i++) {
     const [r1, f1] = pts[i];
@@ -70,7 +70,7 @@ function typicalPlayerCosts(club: Club): number {
 export const HOME_GAMES_PER_SEASON = 15;
 
 export function tvMonthly(tier: number): number {
-  return tier === 1 ? 1_500_000 : tier === 2 ? 300_000 : 40_000;
+  return tier === 1 ? 1_500_000 : tier === 2 ? 700_000 : 90_000;
 }
 
 /** Kapacita stadionu na začátku hry (údržba rozšířeného stadionu se počítá zvlášť). */

@@ -2,7 +2,7 @@ import { addDays } from './calendar';
 import { allFixtures, CUP_FINALIST_PRIZE, CUP_ROUNDS } from './competitions';
 import { annualCosts, bonusPerPoint, book } from './finance';
 import { isRival } from './league';
-import { squadOf } from './players';
+import { squadOf, teamStrength } from './players';
 import type { ActionResult } from './staff';
 import { coachOf } from './staff';
 import { computeTable } from './standings';
@@ -47,11 +47,13 @@ export function matchStakes(state: GameState, f: Fixture, cup?: Cup): Stake[] {
   const own = state.owner.clubId;
   const opp = f.homeId === own ? f.awayId : f.homeId;
   const out: Stake[] = [];
+  // Sázka jen u zápasů, které opravdu rozhodují: derby, čelo tabulky, záchrana, pohár od čtvrtfinále.
   const rival = isRival(state, opp);
-  if (rival) out.push({ key: rival.kind === 'derby' ? 'derby' : 'soupeř', label: rival.kind === 'derby' ? `derby s ${clubLabel(state, opp)}` : `souboj s přímým soupeřem` });
+  if (rival?.kind === 'derby') out.push({ key: 'derby', label: `derby: ${clubLabel(state, opp)}` });
   if (cup) {
-    if (cup.kind === 'pohar') out.push({ key: 'pohar', label: `pohár: ${cup.rounds[f.round - 1]?.name ?? ''}` });
-    else out.push({ key: 'zachrana', label: 'baráž o soutěž' });
+    if (cup.kind === 'pohar') {
+      if (f.round >= 4) out.push({ key: 'pohar', label: `pohár: ${cup.rounds[f.round - 1]?.name ?? ''}` });
+    } else out.push({ key: 'zachrana', label: 'baráž o soutěž' });
     return out;
   }
   const comp = competitionOf(state, own);
@@ -64,9 +66,57 @@ export function matchStakes(state: GameState, f: Fixture, cup?: Cup): Stake[] {
     if (pos(own) <= 3 && pos(opp) <= 3) out.push({ key: 'titul', label: 'souboj o čelo tabulky' });
     if (pos(own) > n - 4 && pos(opp) > n - 4) out.push({ key: 'zachrana', label: 'šestibodový zápas o záchranu' });
   }
-  const rounds = Math.max(...comp.fixtures.map((x) => x.round));
-  if (f.round > rounds - 3) out.push({ key: 'zaver', label: 'závěr sezóny' });
   return out;
+}
+
+// ---------- Informace o soupeři ----------
+
+export interface OpponentScout {
+  position?: number;
+  points?: number;
+  ownPosition?: number;
+  form: ('V' | 'R' | 'P')[];
+  strength: number;
+  ownStrength: number;
+  scorers: { id: string; name: string; goals: number }[];
+  injured: number;
+  meetings: { date: string; text: string }[];
+}
+
+/** Co majitel ví o soupeři: tabulka, forma, síla sestavy, střelci, absence a vzájemné zápasy. */
+export function opponentScout(state: GameState, oppId: string): OpponentScout {
+  const own = state.owner.clubId;
+  const comp = competitionOf(state, own);
+  const table = comp && comp.clubIds.includes(oppId) ? computeTable(comp, state) : [];
+  const row = table.find((r) => r.clubId === oppId);
+  const ownRow = table.find((r) => r.clubId === own);
+  const goals = new Map<string, number>();
+  const meetings: { date: string; text: string }[] = [];
+  for (const { fixture: f } of allFixtures(state)) {
+    if (!f.result) continue;
+    for (const s of f.result.scorers) if (s.clubId === oppId) goals.set(s.playerId, (goals.get(s.playerId) ?? 0) + 1);
+    if ((f.homeId === own && f.awayId === oppId) || (f.homeId === oppId && f.awayId === own)) {
+      meetings.push({ date: f.date, text: `${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result.homeGoals}:${f.result.awayGoals}` });
+    }
+  }
+  const scorers = [...goals.entries()]
+    .filter(([id]) => state.players[id]?.clubId === oppId)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([id, n]) => ({ id, name: `${state.players[id].firstName} ${state.players[id].lastName}`, goals: n }));
+  const squad = squadOf(state, oppId);
+  const fit = (list: typeof squad) => list.filter((p) => !p.injuredUntil || p.injuredUntil < state.date);
+  return {
+    position: row ? table.indexOf(row) + 1 : undefined,
+    points: row?.points,
+    ownPosition: ownRow ? table.indexOf(ownRow) + 1 : undefined,
+    form: row?.form ?? [],
+    strength: Math.round(teamStrength(fit(squad))),
+    ownStrength: Math.round(teamStrength(fit(squadOf(state, own)))),
+    scorers,
+    injured: squad.length - fit(squad).length,
+    meetings: meetings.sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 3),
+  };
 }
 
 // ---------- Příprava na zápas ----------
@@ -216,15 +266,16 @@ export function afterOwnMatch(state: GameState, f: Fixture, cup?: Cup): void {
 
 function maybePressConference(state: GameState, f: Fixture, stakes: Stake[], gf: number, ga: number): void {
   if (state.events.some((e) => e.template === 'tiskovka-zapas') || state.owner.ousted) return;
-  // Nejvýš jedna tisková konference za dva týdny.
+  // Nejvýš jedna tisková konference za tři týdny.
   const last = state.eventLog?.['tiskovka-zapas'];
-  if (last && addDays(last, 14) > state.date) return;
+  if (last && addDays(last, 21) > state.date) return;
   const own = state.owner.clubId;
   const red = f.result?.detail?.events.find((e) => e.clubId === own && (e.type === 'cervena' || e.type === 'druha-zluta'));
   const controversy = gf + 1 === ga && hash01(`${f.id}-sporne`) < 0.2;
   const big = Math.abs(gf - ga) >= 4;
-  const derby = stakes.some((s) => s.key === 'derby');
-  if (!red && !controversy && !big && !derby) return;
+  // Po derby se tisková konference nesvolává (derby má vlastní dopad na fanoušky a média).
+  if (stakes.some((s) => s.key === 'derby')) return;
+  if (!red && !controversy && !big) return;
   const verdict = gf > ga ? 'výhře' : gf < ga ? 'prohře' : 'remíze';
   const score = `${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result!.homeGoals}:${f.result!.awayGoals}`;
   const appeal = red ? Math.max(30_000, Math.round((annualCosts(state.clubs[own], tierOf(state, own)) * 0.0008) / 10_000) * 10_000) : 0;
@@ -241,7 +292,7 @@ function maybePressConference(state: GameState, f: Fixture, stakes: Stake[], gf:
     date: state.date,
     expires: addDays(state.date, 4),
     title: `Tisková konference po ${verdict}: ${score}`,
-    text: controversy ? 'V závěru nebyl uznán gól, který podle záznamu platit měl. Novináři čekají na vaši reakci.' : red ? 'Vyloučení ovlivnilo zápas. Novináři se ptají na disciplínu i na sudí.' : big ? 'Výrazný výsledek, novináři chtějí slyšet majitele.' : 'Zápas, na který se čekalo. Novináři chtějí slyšet majitele.',
+    text: controversy ? 'V závěru nebyl uznán gól, který podle záznamu platit měl. Novináři čekají na vaši reakci.' : red ? 'Vyloučení ovlivnilo zápas. Novináři se ptají na disciplínu i na sudí.' : 'Výrazný výsledek, novináři chtějí slyšet majitele.',
     options,
     defaultOption: gf >= ga ? 'chvala' : 'trener',
     playerId: red?.playerId,
@@ -346,12 +397,11 @@ export function cupPath(state: GameState): CupStep[] {
       const home = f.homeId === own;
       const gf = home ? f.result.homeGoals : f.result.awayGoals;
       const ga = home ? f.result.awayGoals : f.result.homeGoals;
-      const pens = f.result.penalties ? ` (pen. ${home ? f.result.penalties[0] : f.result.penalties[1]}:${home ? f.result.penalties[1] : f.result.penalties[0]})` : '';
       const won = gf > ga || (!!f.result.penalties && (home ? f.result.penalties[0] > f.result.penalties[1] : f.result.penalties[1] > f.result.penalties[0]));
       if (!won) out = true;
-      return { name: r.name, date: r.date, prize, status: 'odehrano' as const, text: `${home ? 'doma' : 'venku'} s ${clubLabel(state, home ? f.awayId : f.homeId)} ${gf}:${ga}${pens}${won ? ', postup' : ', konec'}` };
+      return { name: r.name, date: r.date, prize, status: 'odehrano' as const, text: `${home ? 'doma' : 'venku'}: ${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result.homeGoals}:${f.result.awayGoals}${f.result.penalties ? ` (pen. ${f.result.penalties[0]}:${f.result.penalties[1]})` : ''}${won ? ', postup' : ', konec'}` };
     }
-    if (f) return { name: r.name, date: r.date, prize, status: 'dalsi' as const, text: `${f.homeId === own ? 'doma' : 'venku'} s ${clubLabel(state, f.homeId === own ? f.awayId : f.homeId)}` };
+    if (f) return { name: r.name, date: r.date, prize, status: 'dalsi' as const, text: `${f.homeId === own ? 'doma' : 'venku'}: ${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)}` };
     if (!alive && cup.fixtures.some((x) => x.homeId === own || x.awayId === own)) {
       out = true;
       return { name: r.name, date: r.date, prize, status: 'vypadli' as const, text: '–' };

@@ -370,6 +370,23 @@ export interface TransferRecord {
   fee: number;
 }
 
+/** Záznam přestupu do historie (klub majitele 3 roky, liga aktuální sezóna). */
+export interface TransferLogEntry {
+  date: string;
+  playerId: string;
+  playerName: string;
+  position?: Position;
+  age?: number;
+  overall?: number;
+  fromId: string;
+  toId: string;
+  /** Názvy klubů v době přestupu (zahraniční kluby a bez klubu). */
+  fromName: string;
+  toName: string;
+  fee: number;
+  kind: 'prestup' | 'hostovani' | 'volny' | 'zahranici' | 'odchod';
+}
+
 export interface Market {
   proposals: TransferProposal[];
   offers: IncomingOffer[];
@@ -966,6 +983,13 @@ export interface BudgetPlan {
   licenceBalance?: number;
   /** Kolik musí majitel dodat, aby klub vyšel bez díry (0 = nic). */
   ownerNeed?: number;
+  /** Nejhorší případ: celý mzdový strop i rozpočet na přestupy utracený. */
+  worstMin?: number;
+  worstMinDate?: string;
+  /** Kolik by majitel musel dodat v nejhorším případě (0 = nic). */
+  worstNeed?: number;
+  /** Provozní výsledek bez nevyužité rezervy ve mzdovém stropu (jen závazky a očekávání). */
+  committedResult?: number;
   /** Evropa před předkoly: rozsah příjmů (jen předkola až ligová fáze s nejlepšími výsledky). */
   europeRange?: { low: number; high: number };
 }
@@ -1047,12 +1071,14 @@ export interface GameState {
   /** Kariéra majitele z předchozích klubů. */
   career?: import('./meta').Career;
   /** Vedlejší cíle sezóny (sponzor, město, akcionáři). */
-  sideGoals?: { season: number; goals: import('./finplus').SideGoal[] };
+  sideGoals?: import('./finplus').SideGoalsState;
   /** Finanční vysvědčení poslední sezóny. */
   rating?: { season: number; grade: 'A' | 'B' | 'C' | 'D' | 'E' | 'F'; score: number };
   /** Provozní výsledky a vklady minulých sezón (fair play). */
   opHistory?: { season: number; result: number; deposits: number }[];
   ffp?: { strikes: number; restrictedSeason?: number };
+  /** Čistě půjčeno majitelem klubu za sezónu (fair play ji počítá jako vklad napůl). */
+  ownerLent?: { season: number; amount: number };
   /** Vztahy se sponzory podle místa (0–100). */
   sponsorRelations?: Partial<Record<SponsorSlot, number>>;
   /** Sliby majitele vedení (posila, rozpočet z pohovoru). */
@@ -1115,6 +1141,8 @@ export interface GameState {
   pool: string[];
   news: NewsItem[];
   history: SeasonRecord[];
+  /** Historie přestupů (klub majitele poslední 3 roky, ostatní aktuální sezóna). */
+  transferLog?: TransferLogEntry[];
   nextId: number;
   gameOver?: { date: string; reason: string; kind?: 'krach' | 'prodej' | 'trest' };
 }

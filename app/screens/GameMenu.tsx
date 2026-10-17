@@ -17,6 +17,8 @@ export function GameMenu({
   const [importText, setImportText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  /** Záloha čekající na potvrzení obnovy (přepíše současnou hru). */
+  const [pendingLoad, setPendingLoad] = useState<GameState | null>(null);
 
   const copyBackup = () => {
     const text = serializeGame(game);
@@ -30,18 +32,39 @@ export function GameMenu({
       .catch(() => setBackupText(text));
   };
 
+  const downloadBackup = () => {
+    const blob = new Blob([serializeGame(game)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const club = game.clubs[game.owner.clubId]?.shortName ?? 'hra';
+    a.href = url;
+    a.download = `majitel-${club}-${game.date}.json`.toLowerCase().replace(/[^a-z0-9.\-]+/g, '-');
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  // Načtení zálohy se nejdřív zkontroluje a pak potvrdí (současná hra se přepíše).
   const load = (text: string) => {
     try {
-      onLoad(parseGame(text));
+      setPendingLoad(parseGame(text));
       setError(null);
-      setImportText('');
     } catch (err) {
+      setPendingLoad(null);
       setError(err instanceof Error ? err.message : 'Zálohu se nepodařilo načíst.');
     }
+  };
+  const confirmLoad = () => {
+    if (!pendingLoad) return;
+    onLoad(pendingLoad);
+    setPendingLoad(null);
+    setImportText('');
   };
 
   return (
     <div className="grid two">
+      <HowToPlayCard />
       <GameSettingsCard game={game} onChange={onLoad} />
       <ChapterCard game={game} />
       <section className="card">
@@ -52,10 +75,11 @@ export function GameMenu({
           <dt>Datum ve hře</dt><dd>{formatDate(game.date)}</dd>
         </dl>
         <p className="muted small">
-          Hra se ukládá automaticky po každém tahu do tohoto prohlížeče. Pro přenos na jiné zařízení si zkopírujte zálohu.
+          Hra se ukládá automaticky po každém tahu do tohoto prohlížeče. Pro přenos na jiné zařízení si stáhněte zálohu jako soubor (nebo ji zkopírujte jako text).
         </p>
         <div className="buttons">
-          <button id="copy-backup" onClick={copyBackup}>Zkopírovat zálohu</button>
+          <button id="download-backup" className="primary" onClick={downloadBackup}>Stáhnout zálohu</button>
+          <button id="copy-backup" onClick={copyBackup}>Zkopírovat jako text</button>
         </div>
         {copied && <p className="ok">Záloha je ve schránce. Uložte si ji třeba do poznámek.</p>}
         {backupText && (
@@ -71,7 +95,7 @@ export function GameMenu({
           rows={3}
           placeholder="Sem vložte zkopírovanou zálohu"
           value={importText}
-          onChange={(e) => setImportText(e.target.value)}
+          onChange={(e) => { setImportText(e.target.value); setPendingLoad(null); }}
         />
         <div className="buttons">
           <button id="import-backup" disabled={!importText.trim()} onClick={() => load(importText)}>
@@ -93,11 +117,23 @@ export function GameMenu({
           </label>
         </div>
         {error && <p className="warning">{error}</p>}
+        {pendingLoad && (
+          <div className="confirm">
+            <strong>Obnovit hru ze zálohy?</strong>
+            <span className="small">
+              Záloha: {pendingLoad.owner.name}, {pendingLoad.clubs[pendingLoad.owner.clubId]?.name ?? 'klub'}, {formatDate(pendingLoad.date)}. Současná hra se přepíše.
+            </span>
+            <div className="buttons">
+              <button className="primary" onClick={confirmLoad}>Ano, obnovit</button>
+              <button onClick={() => setPendingLoad(null)}>Zrušit</button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="card">
         <h2>Nová hra</h2>
-        <p className="muted">Současná hra se smaže. Pokud o ni nechcete přijít, nejdřív si zkopírujte zálohu.</p>
+        <p className="muted">Současná hra se smaže. Pokud o ni nechcete přijít, nejdřív si stáhněte zálohu.</p>
         {confirming ? (
           <div className="confirm">
             <strong>Opravdu smazat současnou hru?</strong>
@@ -128,13 +164,13 @@ function Seg<T extends string>({ label, value, options, onChange }: { label: str
   );
 }
 
-/** Nastavení hry: tempo dramat, přísnost svazu, náhoda a kdy se má zastavit „hrát do…“. */
+/** Nastavení hry: tempo dramat, přísnost svazu, náhoda a kdy se má zastavit posun hry. */
 function GameSettingsCard({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
   const s = settingsOf(game);
   const set = (patch: Partial<GameSettings>) => onChange(updateSettings(game, patch).state);
   const stop = (patch: Partial<GameSettings['stops']>) => set({ stops: { ...s.stops, ...patch } });
   return (
-    <section className="card">
+    <section className="card settings-card">
       <h2>Nastavení hry</h2>
       <Seg label="Kolik se toho děje" value={s.drama} onChange={(drama) => set({ drama })} options={[
         { id: 'klid', label: 'Klid', hint: 'Méně situací k rozhodnutí a nejvýš jeden příběh najednou.' },
@@ -151,7 +187,7 @@ function GameSettingsCard({ game, onChange }: { game: GameState; onChange: (g: G
         { id: 'bezna', label: 'Běžná', hint: 'Jako ve skutečné lize.' },
         { id: 'vysoka', label: 'Velká', hint: 'Víc překvapení, i slabší tým má šanci.' },
       ]} />
-      <h3>„Hrát do…“ se zastaví při</h3>
+      <h3>Tlačítko posunu se zastaví při</h3>
       <label className="check"><input type="checkbox" checked={s.stops.decision} onChange={(e) => stop({ decision: e.target.checked })} /><span>nové situaci k rozhodnutí</span></label>
       <label className="check"><input type="checkbox" checked={s.stops.offer} onChange={(e) => stop({ offer: e.target.checked })} /><span>výhodné nabídce na hráče (ředitel doporučuje přijmout)</span>
         {s.stops.offer && (
@@ -162,6 +198,24 @@ function GameSettingsCard({ game, onChange }: { game: GameState; onChange: (g: G
       </label>
       <label className="check"><input type="checkbox" checked={s.stops.injury} onChange={(e) => stop({ injury: e.target.checked })} /><span>zranění opory na víc než dva týdny</span></label>
       <label className="check"><input type="checkbox" checked={s.stops.milestone} onChange={(e) => stop({ milestone: e.target.checked })} /><span>milníku sezóny (start ligy, konec okna, licence…)</span></label>
+    </section>
+  );
+}
+
+/** Krátký návod: jak se hra hraje. */
+function HowToPlayCard() {
+  return (
+    <section className="card how-to">
+      <h2>Jak hrát</h2>
+      <ol className="small">
+        <li><strong>Jste majitel, ne trenér.</strong> Sestavu a taktiku řeší trenér, hráče shání sportovní ředitel. Vy rozhodujete o penězích, lidech a směru klubu.</li>
+        <li><strong>Posouvejte čas</strong> tlačítkem posunu v horní liště: hra jde k dalšímu milníku, nebo o týden. Zastaví se, když je potřeba vaše rozhodnutí (nastavíte níže).</li>
+        <li><strong>Přehled</strong> ukáže, co je právě důležité: rozhodnutí, zprávy a nejbližší zápas.</li>
+        <li><strong>Vedení</strong>: stanovte cíl sezóny, najměte a odvolávejte trenéra a ředitele.</li>
+        <li><strong>Finance</strong>: schvalte rozpočet, hlídejte výhled peněz a vyberte vedlejší cíle sezóny.</li>
+        <li><strong>Stadion</strong>: stavby, velké investice a programy klubu zvedají příjmy i úroveň hráčů.</li>
+      </ol>
+      <p className="muted small">Klubu nesmějí dojít peníze: když hrozí, můžete vložit vlastní peníze nebo si půjčit. Na konci sezóny dostanete výroční zprávu.</p>
     </section>
   );
 }

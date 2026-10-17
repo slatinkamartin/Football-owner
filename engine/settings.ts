@@ -25,9 +25,16 @@ export function maxOpenEvents(state: GameState): number {
   return { klid: 2, bezne: 3, drama: 4 }[settingsOf(state).drama];
 }
 
-/** Násobek pokut a sankcí svazu. */
+/** Obtížnost hry mění i přísnost svazu (pokuty, limit fair play) a ceny situací. */
+const DIFFICULTY_FACTOR: Record<string, number> = { snadna: 0.8, stredni: 1, tezka: 1.25 };
+
+export function difficultyCostFactor(state: GameState): number {
+  return DIFFICULTY_FACTOR[state.owner?.difficulty] ?? 1;
+}
+
+/** Násobek pokut a sankcí svazu (nastavení přísnosti × obtížnost). */
 export function strictnessFactor(state: GameState): number {
-  return { mirna: 0.6, bezna: 1, prisna: 1.4 }[settingsOf(state).strictness];
+  return { mirna: 0.6, bezna: 1, prisna: 1.4 }[settingsOf(state).strictness] * difficultyCostFactor(state);
 }
 
 /** Jak moc rozhoduje rozdíl v síle týmů (víc = méně náhody). */

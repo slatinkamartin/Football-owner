@@ -11,6 +11,7 @@ import {
   matchBonusAmount,
   matchStakes,
   nextOwnFixture,
+  opponentScout,
   setHalftime,
   setMatchPlan,
   workload,
@@ -21,6 +22,7 @@ import {
   type MatchPlan,
 } from '../../engine';
 import { Badge } from '../components';
+import { useNav } from '../nav';
 import { money } from '../format';
 
 const daysBetween = (a: string, b: string) => Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000);
@@ -95,18 +97,74 @@ export function MatchPrep({ game, onChange, onLive, compact }: { game: GameState
   );
 }
 
-/** Karta na Přehledu: příští zápas a příprava, šance na cíl sezóny. */
-export function MatchPrepCard({ game, onChange, onLive }: { game: GameState; onChange: (g: GameState) => void; onLive: () => void }) {
+const FORM_TONE = { V: 'good', R: 'neutral', P: 'bad' } as const;
+
+/**
+ * Zápasový milník: otevře se tlačítkem „Zápas ›“ v předvečer zápasu. Ukáže soupeře, všechno,
+ * co majitel může před zápasem ovlivnit, a nechá vybrat, jestli chce jen výsledek, nebo přenos.
+ */
+export function MatchDialog({ game, onChange, onClose, onResult, onLive }: { game: GameState; onChange: (g: GameState) => void; onClose: () => void; onResult: () => void; onLive: () => void }) {
+  const nav = useNav();
+  const next = nextOwnFixture(game);
+  if (!next) return null;
+  const scout = opponentScout(game, next.opponentId);
   const chance = goalChance(game);
-  if (!nextOwnFixture(game)) return null;
+  const ownName = clubLabel(game, game.owner.clubId);
+  const oppName = clubLabel(game, next.opponentId);
+  const home = next.home ? ownName : oppName;
+  const away = next.home ? oppName : ownName;
+  const edge = scout.ownStrength - scout.strength;
   return (
-    <section className="card">
-      <div className="row-between">
-        <h2>Příprava na zápas</h2>
-        {chance !== undefined && <span className="small" title="Odhad z 300 simulací zbytku sezóny">šance na cíl {Math.round(chance * 100)} %</span>}
+    <div className="overlay" onClick={onClose}>
+      <div className="card dialog match-dialog" role="dialog" aria-modal="true" aria-label="Zápas" onClick={(e) => e.stopPropagation()}>
+        <span className="muted small">Zítra · {next.name} · {next.home ? 'doma' : 'venku'}</span>
+        <h2>{home} – {away}</h2>
+
+        <h3>Soupeř</h3>
+        <div className="scout-grid">
+          <div className="pc-big">
+            <span className="muted small">Tabulka</span>
+            <strong>{scout.position && scout.form.length ? `${scout.position}. místo, ${scout.points} b.` : 'sezóna začíná'}</strong>
+            {scout.ownPosition && scout.form.length > 0 && <span className="muted small">vy: {scout.ownPosition}. místo</span>}
+          </div>
+          <div className="pc-big">
+            <span className="muted small">Síla sestavy</span>
+            <strong>{scout.strength} <span className="muted small">vs. vaše {scout.ownStrength}</span></strong>
+            <span className={`small ${edge >= 3 ? 'pos' : edge <= -3 ? 'neg' : 'muted'}`}>{edge >= 3 ? 'jste favorit' : edge <= -3 ? 'soupeř je favorit' : 'vyrovnaný zápas'}</span>
+          </div>
+          <div className="pc-big">
+            <span className="muted small">Forma (posledních 5)</span>
+            <span className="form-row">{scout.form.length ? scout.form.map((f, i) => <Badge key={i} tone={FORM_TONE[f]}>{f}</Badge>) : <span className="muted small">zatím bez zápasů</span>}</span>
+          </div>
+        </div>
+        <ul className="plain small">
+          {scout.scorers.length > 0 && (
+            <li>
+              Nejlepší střelci:{' '}
+              {scout.scorers.map((s, i) => (
+                <span key={s.id}>{i > 0 && ', '}<button className="linkbtn" onClick={() => nav.open({ type: 'player', id: s.id })}>{s.name}</button> ({s.goals})</span>
+              ))}
+            </li>
+          )}
+          <li>Zranění u soupeře: {scout.injured || 'nikdo'}</li>
+          {scout.meetings.length > 0 && <li>Vzájemné zápasy: {scout.meetings.map((m) => m.text).join(' · ')}</li>}
+          {chance !== undefined && <li className="muted">Šance na splnění cíle sezóny: {Math.round(chance * 100)} %</li>}
+        </ul>
+
+        {!game.owner.ousted && (
+          <>
+            <h3>Co můžete před zápasem ovlivnit</h3>
+            <MatchPrep game={game} onChange={onChange} compact />
+          </>
+        )}
+
+        <div className="match-choice">
+          <button onClick={onResult}>Jen výsledek<span>Zápas se odehraje hned, uvidíte souhrn.</span></button>
+          <button className="primary" onClick={onLive}>Sledovat zápas<span>Přenos s rozhodnutím o poločase.</span></button>
+        </div>
+        <button className="linkbtn" onClick={onClose}>Zatím zavřít</button>
       </div>
-      <MatchPrep game={game} onChange={onChange} onLive={onLive} />
-    </section>
+    </div>
   );
 }
 
@@ -141,12 +199,20 @@ export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameSt
   // Posun na den před zápasem a náhled prvního poločasu.
   useEffect(() => {
     const next = nextOwnFixture(game);
-    if (!next) return;
+    if (!next) {
+      onClose();
+      return;
+    }
     const d = daysBetween(game.date, next.fixture.date);
     const eve = d > 1 ? advanceDays(game, d - 1).state : game;
     if (eve !== game) onChange(eve);
+    const h = liveFirstHalf(eve);
+    if (!h) {
+      onClose();
+      return;
+    }
     setBase(eve);
-    setHalf(liveFirstHalf(eve));
+    setHalf(h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

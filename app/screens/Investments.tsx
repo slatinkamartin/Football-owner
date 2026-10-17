@@ -33,8 +33,17 @@ const years = (v: number) => `${v.toLocaleString('cs-CZ', { maximumFractionDigit
 
 /** Velké víceleté stavby a programy klubu. */
 export function Investments({ game, onResult }: Props) {
+  return (
+    <>
+      <BigInvestments game={game} onResult={onResult} />
+      <Programs game={game} onResult={onResult} />
+    </>
+  );
+}
+
+/** Velké víceleté stavby (v běhu i nabídka). */
+export function BigInvestments({ game, onResult }: Props) {
   const [pending, setPending] = useState<BigProjectKind | null>(null);
-  const [partner, setPartner] = useState<ScoutRegion>('afrika');
   const [supplier, setSupplier] = useState<'levny' | 'spolehlivy'>('spolehlivy');
   const running = game.bigProjects ?? [];
   const income = commercialIncomeMonthly(game);
@@ -108,7 +117,15 @@ export function Investments({ game, onResult }: Props) {
           ))}
         </div>
       </section>
+    </>
+  );
+}
 
+/** Programy klubu (roční náklad, lze kdykoli ukončit). */
+export function Programs({ game, onResult }: Props) {
+  const [partner, setPartner] = useState<ScoutRegion>('afrika');
+  return (
+    <>
       <section className="card">
         <h2>Programy klubu</h2>
         <p className="muted small">Roční náklad se platí měsíčně (řádek Programy klubu ve Výdajích). Program lze kdykoli ukončit.</p>

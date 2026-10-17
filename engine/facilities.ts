@@ -1,4 +1,5 @@
 import { addDays } from './calendar';
+import { changeCity } from './surroundings';
 import { book, ownerAccounting } from './finance';
 import { ownerBlocked, previewVote, voteMessage } from './ownership';
 import type { ActionResult } from './staff';
@@ -111,6 +112,8 @@ export function completeProjects(state: GameState): void {
     if (p.kind === 'medicina') f.medical = Math.min(5, p.value);
     if (p.kind === 'fanzona' || p.kind === 'rodina' || p.kind === 'muzeum' || p.kind === 'obrazovka') f.extras = [...new Set([...(f.extras ?? []), p.kind])];
     addNews(state, { kind: 'sezona', title: `Dokončeno: ${p.label}` });
+    // Nová stavba ve městě: radnice to ráda vidí.
+    changeCity(state, 2);
   }
   state.projects = state.projects.filter((p) => p.end > state.date);
 }

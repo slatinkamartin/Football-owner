@@ -45,9 +45,9 @@ export function Waterfall({ plan }: { plan: BudgetPlan }) {
         <span><i className="neg" /> ubírá</span>
         <span><i className="sub" /> mezisoučet</span>
       </div>
-      <ul className="plain wf-rows" onPointerLeave={() => setHover(null)}>
+      <ul className="plain wf-rows" onPointerLeave={(e) => { if (e.pointerType === 'mouse') setHover(null); }}>
         {rows.map((r, i) => (
-          <li key={r.label} className={`wf-row ${r.kind}`} onPointerEnter={() => setHover(i)} title={`${r.label}: ${money(r.value)} (${r.hint})`}>
+          <li key={r.label} className={`wf-row ${r.kind}`} onPointerEnter={() => setHover(i)} onClick={() => setHover(i)} title={`${r.label}: ${money(r.value)} (${r.hint})`}>
             <span className="wf-label">{r.label}</span>
             <span className="wf-track">
               <i className="wf-zero" style={{ left: `${pos(0)}%` }} />
@@ -60,7 +60,7 @@ export function Waterfall({ plan }: { plan: BudgetPlan }) {
           </li>
         ))}
       </ul>
-      <p className="small muted wf-hint">{hover !== null ? `${rows[hover].label}: ${rows[hover].hint}.` : 'Najeďte na řádek pro vysvětlení.'}</p>
+      <p className="small muted wf-hint">{hover !== null ? `${rows[hover].label}: ${rows[hover].hint}.` : 'Najeďte na řádek (nebo na něj klepněte) pro vysvětlení.'}</p>
     </figure>
   );
 }

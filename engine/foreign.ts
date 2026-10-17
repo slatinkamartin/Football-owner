@@ -8,6 +8,7 @@ import { directorAbility, scoutingError, type ActionResult } from './staff';
 import type { ForeignMarket, ForeignTarget, GameState, Player, Position, ScoutRegion } from './types';
 import { budgetRemaining, executeTransfer, monthsUntilContractEnd, playerName, wageBill, weakestPosition } from './transfers';
 import { sectionRoomFor } from './wages';
+import { logTransfer } from './transferlog';
 import { ffpBlocksSigning } from './finplus';
 import { addNews, clamp, clubLabel, FOREIGN_PREFIX, hash01, plural, tierOf, transferWindow } from './world';
 
@@ -243,7 +244,7 @@ function sign(state: GameState, t: ForeignTarget, price: ForeignPrice, byDirecto
   const best = Math.max(0, ...bestEleven(squadOf(state, own)).map((p) => p.overall));
   const p = t.player;
   state.players[p.id] = p;
-  executeTransfer(state, p, own, price.fee, price.wage, t.loan ? 1 : 4);
+  executeTransfer(state, p, own, price.fee, price.wage, t.loan ? 1 : 4, { loan: !!t.loan });
   if (t.loan) {
     p.contractUntil = state.season + 1;
     p.loan = { fromId: t.clubId, buyOption: t.loan.buyOption };
@@ -258,7 +259,7 @@ function sign(state: GameState, t: ForeignTarget, price: ForeignPrice, byDirecto
   p.morale = 65;
   state.foreign!.targets = state.foreign!.targets.filter((x) => x.id !== t.id);
   if (p.overall >= best) state.clubs[own].fanMood = clamp(state.clubs[own].fanMood + 3, 0, 100);
-  const what = t.loan ? `na hostování z ${clubLabel(state, t.clubId)} (opce ${(t.loan.buyOption / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč)` : `z ${clubLabel(state, t.clubId)} za ${price.fee.toLocaleString('cs-CZ')} Kč`;
+  const what = t.loan ? `na hostování (klub ${clubLabel(state, t.clubId)}, opce ${(t.loan.buyOption / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč)` : `za ${price.fee.toLocaleString('cs-CZ')} Kč (klub ${clubLabel(state, t.clubId)})`;
   const text = `${playerName(p)} (${p.nationality}) přichází ${what}, plat ${price.wage.toLocaleString('cs-CZ')} Kč měsíčně. Odměna agentovi ${price.agent.toLocaleString('cs-CZ')} Kč${price.permit ? `, pracovní povolení ${price.permit.toLocaleString('cs-CZ')} Kč` : ''}. Skutečné hodnocení: ${p.overall}. Prvních pár měsíců se bude zabydlovat.`;
   addNews(state, { kind: 'info', title: `${byDirector ? 'Sportovní ředitel přivedl' : 'Posila ze zahraničí'}: ${playerName(p)}`, text, playerId: p.id });
   return text;
@@ -287,11 +288,13 @@ export function buyLoanee(prev: GameState, playerId: string): ActionResult {
   book(state, player.clubId, 'prestupy', -cost, `Opce na přestup: ${playerName(player)}`);
   state.market.spent += cost;
   const from = clubLabel(state, player.loan!.fromId);
+  const fromId = player.loan!.fromId;
   player.loan = undefined;
   player.contractUntil = state.season + 4;
   player.bookValue = (player.bookValue ?? 0) + cost;
   player.amortization = player.bookValue / monthsUntilContractEnd(state.date, player.contractUntil);
   player.transfers = [...(player.transfers ?? []), { date: state.date, from, to: clubLabel(state, player.clubId), fee: cost }];
+  logTransfer(state, player, fromId, player.clubId, cost, fromId.startsWith(FOREIGN_PREFIX) ? 'zahranici' : 'prestup');
   const message = `Klub využil opci: ${playerName(player)} zůstává natrvalo za ${cost.toLocaleString('cs-CZ')} Kč, smlouva do roku ${player.contractUntil}.`;
   addNews(state, { kind: 'info', title: message, playerId });
   return { state, ok: true, message };
@@ -362,16 +365,21 @@ export function aiForeignSignings(state: GameState, rng: Rng): void {
     if (comp.tier > 2) continue;
     for (const clubId of comp.clubIds) {
       const club = state.clubs[clubId];
-      if (clubId === own || club.reserveOf || !rng.chance(comp.tier === 1 ? 0.08 : 0.04)) continue;
-      const budget = club.policy.transferBudget * 1.2 - (club.transferSpent ?? 0);
+      // 1. liga: zhruba 1–3 cizinci na klub za sezónu, 2. liga méně.
+      if (clubId === own || club.reserveOf || !rng.chance(comp.tier === 1 ? 0.16 : 0.06)) continue;
+      const budget = club.policy.transferBudget * 1.6 - (club.transferSpent ?? 0);
       if (budget <= 0) continue;
       const squad = squadOf(state, clubId);
       const { position, bar } = weakestPosition(squad);
       const region = rng.pick(REGION_ORDER.filter((r) => r !== 'velke'));
       const quality = Math.min(bar + rng.int(3, 7), squadQualityForReputation(club.reputation) + 8);
       const { player: p } = makeForeignPlayer(state, rng, region, quality, position);
-      const fee = roundMoney(marketValue(p, state.season) * REGIONS[region].price * 0.9);
-      if (fee > budget || fee > club.finance.balance * 0.4) continue;
+      let fee = roundMoney(marketValue(p, state.season) * REGIONS[region].price * 0.9);
+      // Na drahého hráče nemá: část cizinců ale přichází zadarmo (konec smlouvy) nebo za symbolickou částku.
+      if (fee > budget || fee > Math.max(0, club.finance.balance) * 0.6) {
+        if (!rng.chance(0.5)) continue;
+        fee = 0;
+      }
       state.players[p.id] = p;
       executeTransfer(state, p, clubId, fee, playerWage(p.overall, club.reputation), rng.int(2, 4));
       p.adapt = REGIONS[region].adapt;

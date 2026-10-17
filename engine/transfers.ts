@@ -5,6 +5,7 @@ import { crisisDiscount, noteTimeline } from './league';
 import { book, ownerAccounting, playerWage, wageBudgetMonthly } from './finance';
 import { schemeWageFactor, SECTION_LABEL, sectionRoomFor, sectionsOf, sectionUsage } from './wages';
 import { scheduleInstalments } from './financing';
+import { logTransfer } from './transferlog';
 import { FOREIGN_CLUBS } from './names';
 import { directorForeignPick, directorSignForeign } from './foreign';
 import { bestEleven, generatePlayer, marketValue, playerAge, SQUAD_SHAPE, squadOf, squadQualityForReputation } from './players';
@@ -149,6 +150,8 @@ export interface TransferOptions {
   instalments?: boolean;
   /** Prodávající si vymíní podíl z dalšího prodeje (0–1). */
   sellOn?: number;
+  /** Hostování (jen pro historii přestupů). */
+  loan?: boolean;
 }
 
 export function executeTransfer(state: GameState, p: Player, toId: string, fee: number, wage: number, years: number, opts: TransferOptions = {}): void {
@@ -163,7 +166,7 @@ export function executeTransfer(state: GameState, p: Player, toId: string, fee: 
       book(state, p.sellOn.clubId, 'prestupy', share, `Podíl z dalšího prodeje: ${playerName(p)}`);
       if (p.sellOn.clubId === own) {
         state.market.earned += share * 0.5;
-        addNews(state, { kind: 'info', title: `Podíl z dalšího prodeje: ${playerName(p)}`, text: `Klub dostal ${share.toLocaleString('cs-CZ')} Kč z přestupu do ${clubLabel(state, toId)}.` });
+        addNews(state, { kind: 'info', title: `Podíl z dalšího prodeje: ${playerName(p)}`, text: `Klub dostal ${share.toLocaleString('cs-CZ')} Kč z jeho dalšího přestupu (nový klub: ${clubLabel(state, toId)}).` });
       }
     }
     p.sellOn = undefined;
@@ -184,6 +187,7 @@ export function executeTransfer(state: GameState, p: Player, toId: string, fee: 
   p.transfers = [...(p.transfers ?? []), { date: state.date, from: clubLabel(state, fromId), to: clubLabel(state, toId), fee }];
   state.market.history.unshift({ date: state.date, playerName: playerName(p), fromId, toId, fee });
   state.market.history.length = Math.min(state.market.history.length, 100);
+  logTransfer(state, p, fromId, toId, fee, opts.loan ? 'hostovani' : undefined);
   state.market.listed = state.market.listed.filter((id) => id !== p.id);
   state.market.offers = state.market.offers.filter((o) => o.playerId !== p.id);
   state.market.proposals = state.market.proposals.filter((o) => o.playerId !== p.id);
@@ -283,7 +287,7 @@ function loseToRival(state: GameState, neg: Negotiation): string {
   if (!neg.rival || !p || p.clubId === state.owner.clubId) return '';
   executeTransfer(state, p, neg.rival.clubId, neg.rival.fee, neg.rival.wage, 3);
   state.owner.trust.reditel = clamp(state.owner.trust.reditel - 1, 0, 100);
-  addNews(state, { kind: 'info', title: `${playerName(p)} míří do ${clubLabel(state, neg.rival.clubId)}`, text: 'Souboj o hráče jsme prohráli.' });
+  addNews(state, { kind: 'info', title: `${playerName(p)} přestupuje jinam: ${clubLabel(state, neg.rival.clubId)}`, text: 'Souboj o hráče jsme prohráli.' });
   return ` Hráče přetáhl ${clubLabel(state, neg.rival.clubId)}.`;
 }
 
@@ -297,6 +301,7 @@ export function cancelNegotiation(prev: GameState): GameState {
 export function offerFee(prev: GameState, fee: number, instalments = false, conditional = false): ActionResult {
   const n = prev.market.negotiation;
   if (!n || n.stage !== 'klub') return { state: prev, ok: false, message: 'Neprobíhá jednání s klubem.' };
+  if (!Number.isFinite(fee) || fee < 0) return { state: prev, ok: false, message: 'Zadejte platnou částku.' };
   const value = roundMoney(fee);
   if (value > budgetRemaining(prev)) {
     return { state: prev, ok: false, message: 'Na tolik nemá sportovní ředitel schválený rozpočet. Navyšte ho ve Financích.' };
@@ -338,6 +343,7 @@ export function offerFee(prev: GameState, fee: number, instalments = false, cond
 export function offerTerms(prev: GameState, wage: number, years: number, release = false): ActionResult {
   const n = prev.market.negotiation;
   if (!n || n.stage !== 'hrac') return { state: prev, ok: false, message: 'Neprobíhá jednání s hráčem.' };
+  if (!Number.isFinite(wage) || wage < 0 || !Number.isFinite(years)) return { state: prev, ok: false, message: 'Zadejte platný plat a délku smlouvy.' };
   const state = structuredClone(prev);
   const neg = state.market.negotiation!;
   const p = state.players[neg.playerId];
@@ -427,7 +433,8 @@ export function generateProposals(state: GameState): void {
       .filter((x) => x.fee <= budget)
       .filter((x) => {
         const demand = wageDemand(state, x.p, own);
-        return demand <= fair(x.p) * 1.4 && demand <= wageRoom && sectionRoomFor(state, x.p, demand).room >= 0;
+        // V nižších soutěžích jsou platy blízko minima, a tak je povolená větší odchylka od férového platu.
+        return demand <= fair(x.p) * (tierOf(state, own) >= 2 ? 2 : 1.4) && demand <= wageRoom && sectionRoomFor(state, x.p, demand).room >= 0;
       })
       .sort((a, b) => b.view.overall - a.view.overall - (b.fee - a.fee) / Math.max(budget, 1_000_000));
     for (const x of pool.slice(0, pos === needs[0] ? 2 : 1)) {
@@ -439,8 +446,8 @@ export function generateProposals(state: GameState): void {
         estimatedWage: wageDemand(state, x.p, own),
         note:
           x.p.clubId === FREE
-            ? `Volný hráč, posílil by pozici ${pos}. Skauti ho hodnotí na ${x.view.overall}.`
-            : `Hraje za ${clubLabel(state, x.p.clubId)}. Skauti ho hodnotí na ${x.view.overall}, náš nejslabší člen základní sestavy na pozici má ${bar - 2}.`,
+            ? `Volný hráč, posílil by ${({ GK: 'post brankáře', DF: 'obranu', MF: 'zálohu', FW: 'útok' } as const)[pos]}. Skauti ho hodnotí na ${x.view.overall}.`
+            : `Současný klub: ${clubLabel(state, x.p.clubId)}. Skauti ho hodnotí na ${x.view.overall}, náš nejslabší člen základní sestavy na pozici má ${bar - 2}.`,
       });
     }
   }
@@ -475,7 +482,7 @@ export function approveProposal(prev: GameState, proposalId: string): ActionResu
     addNews(state, { kind: 'info', title: `Posila: ${playerName(p)}`, text: message });
     return { state, ok: true, message };
   }
-  addNews(state, { kind: 'varovani', title: `Přestup ${playerName(p)} se nepovedl`, text: message });
+  addNews(state, { kind: 'varovani', title: `Přestup se nepovedl: ${playerName(p)}`, text: message });
   return { state, ok: false, message };
 }
 
@@ -518,7 +525,12 @@ export function generateOffers(state: GameState, rng: Rng): void {
     const core = new Set(squadOf(state, own).sort((a, b) => b.overall - a.overall).slice(0, 6).map((p) => p.id));
     for (const o of state.market.offers.filter((x) => (x.expires < state.date || closing) && x.advice === 'prijmout' && !core.has(x.playerId) && state.players[x.playerId]?.clubId === own)) {
       const r = acceptOffer(state, o.id);
-      if (r.ok) Object.assign(state, r.state);
+      if (r.ok) {
+        Object.assign(state, r.state);
+        // Prodej udělal ředitel sám: zpráva to musí říct jasně.
+        const n = state.news[0];
+        if (n?.title.startsWith('Prodej: ')) n.title = `Sportovní ředitel prodal: ${n.title.slice(8)} za ${(o.fee / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč`;
+      }
     }
   }
   state.market.offers = state.market.offers.filter((o) => o.expires >= state.date && state.players[o.playerId]?.clubId === own);
@@ -577,14 +589,14 @@ export function generateOffers(state: GameState, rng: Rng): void {
             ? 'Sportovní ředitel doporučuje odmítnout: je to opora týmu.'
             : 'Sportovní ředitel doporučuje odmítnout: hráč má vyšší hodnotu.',
     });
-    addNews(state, { kind: 'info', title: `${clubLabel(state, buyerId)} nabízí za ${playerName(p)} ${fee.toLocaleString('cs-CZ')} Kč` });
+    addNews(state, { kind: 'info', title: `${playerName(p)}: ${clubLabel(state, buyerId)} nabízí ${fee.toLocaleString('cs-CZ')} Kč` });
     // Souboj o hráče: druhý kupec přihodí.
     const second = rng.chance(0.2) ? (isForeign(buyerId) ? domestic.find((id) => id !== buyerId) : foreignBuyer(rng, p, state.season)?.id) : undefined;
     if (second && second !== buyerId) {
       const fee2 = roundMoney(fee * (1.05 + rng.next() * 0.1));
       state.market.offers[state.market.offers.length - 1].competing = true;
       state.market.offers.push({ id: `o${++state.nextId}`, playerId: p.id, buyerId: second, fee: fee2, expires: addDaysIso(state.date, deadline ? 1 : 7), instalments: false, competing: true, advice: fee2 >= goodPrice || advice === 'prijmout' ? 'prijmout' : 'odmitnout', note: `Přihazuje proti nabídce ${clubLabel(state, buyerId)}.` });
-      addNews(state, { kind: 'info', title: `Souboj o ${playerName(p)}: ${clubLabel(state, second)} přihazuje ${fee2.toLocaleString('cs-CZ')} Kč` });
+      addNews(state, { kind: 'info', title: `${playerName(p)}: ${clubLabel(state, second)} přihazuje ${fee2.toLocaleString('cs-CZ')} Kč` });
     }
   });
 }
@@ -609,7 +621,7 @@ export function aiSalesAbroad(state: GameState, rng: Rng): void {
         if (comp.tier === 1 && fee >= 25_000_000) {
           addNews(state, {
             kind: 'info',
-            title: `Přestup ligy: ${name} odchází z klubu ${clubLabel(state, clubId)} do ${clubLabel(state, buyer.id)}`,
+            title: `Přestup ligy: ${name} (${clubLabel(state, clubId)} → ${clubLabel(state, buyer.id)})`,
             text: `Odstupné ${(fee / 1_000_000).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč.`,
           });
         }
@@ -644,7 +656,7 @@ export function acceptOffer(prev: GameState, offerId: string, sellOn = false): A
   if (squad.indexOf(p) < 3) ultrasOnSale(state);
   checkRecordSale(state, playerName(p), fee);
   if (offer.advice === 'prijmout') changeAgentRelation(state, p.id, 2);
-  const message = `${playerName(p)} přestoupil do ${clubLabel(state, offer.buyerId)} za ${fee.toLocaleString('cs-CZ')} Kč${offer.instalments ? ' (ve splátkách)' : ''}${sellOn && !isForeign(offer.buyerId) ? `, s podílem ${Math.round(SELL_ON_PCT * 100)} % z dalšího prodeje` : ''}.`;
+  const message = `${playerName(p)} přestupuje za ${fee.toLocaleString('cs-CZ')} Kč, nový klub: ${clubLabel(state, offer.buyerId)}${offer.instalments ? ' (ve splátkách)' : ''}${sellOn && !isForeign(offer.buyerId) ? `, s podílem ${Math.round(SELL_ON_PCT * 100)} % z dalšího prodeje` : ''}.`;
   addNews(state, { kind: 'info', title: `Prodej: ${playerName(p)}`, text: key ? `${message} Trenér nese odchod opory nelibě.` : message });
   return { state, ok: true, message };
 }
@@ -678,7 +690,7 @@ export function releasePlayer(prev: GameState, playerId: string): ActionResult {
     // Hostování lze ukončit předčasně: hráč se vrátí bez odstupného.
     const state = structuredClone(prev);
     delete state.players[playerId];
-    const message = `${playerName(p)} ukončil hostování a vrátil se do ${clubLabel(state, p.loan.fromId)}.`;
+    const message = `${playerName(p)} ukončil hostování a vrací se do mateřského klubu (${clubLabel(state, p.loan.fromId)}).`;
     addNews(state, { kind: 'info', title: message });
     return { state, ok: true, message };
   }
@@ -690,6 +702,7 @@ export function releasePlayer(prev: GameState, playerId: string): ActionResult {
   player.bookValue = undefined;
   player.amortization = undefined;
   player.transfers = [...(player.transfers ?? []), { date: state.date, from: clubLabel(state, player.clubId), to: 'bez klubu', fee: 0 }];
+  logTransfer(state, player, player.clubId, FREE, 0);
   player.clubId = FREE;
   state.market.listed = state.market.listed.filter((id) => id !== playerId);
   state.market.offers = state.market.offers.filter((o) => o.playerId !== playerId);
@@ -714,6 +727,7 @@ export function renewContract(prev: GameState, playerId: string, wage: number, y
   const gap = p.overall - squadQualityForReputation(prev.clubs[p.clubId].reputation);
   if (gap > 10) return { state: prev, ok: false, message: `${playerName(p)} chce odejít do lepšího klubu a smlouvu neprodlouží.` };
   if ((p.morale ?? 60) < 25) return { state: prev, ok: false, message: `${playerName(p)} je nespokojený, protože málo hraje, a smlouvu teď neprodlouží.` };
+  if (!Number.isFinite(wage) || !Number.isFinite(years)) return { state: prev, ok: false, message: 'Zadejte platnou částku a délku smlouvy.' };
   const demand = renewalDemand(prev, p);
   if (wage < demand) return { state: prev, ok: false, message: `${playerName(p)} chce aspoň ${demand.toLocaleString('cs-CZ')} Kč měsíčně.` };
   const state = structuredClone(prev);
@@ -770,6 +784,7 @@ export function seasonEndContracts(state: GameState, rng: Rng): void {
   for (const p of Object.values(state.players)) {
     if (p.clubId === FREE || p.contractUntil > state.season + 1) continue;
     if (p.clubId === own) {
+      logTransfer(state, p, own, FREE, 0);
       p.clubId = FREE;
       leaving.push(playerName(p));
     } else if (rng.chance(0.25)) {
@@ -889,9 +904,14 @@ export function directorSignings(state: GameState, rng: Rng): void {
   if (remaining <= 0) return;
   const { position, bar } = weakestPosition(squad);
   const keys = keyPlayerIds(state);
+  // V nižších soutěžích je trh malý: ředitel bere i menší zlepšení a zkouší i hráče z o něco větších klubů
+  // (jestli o přestup stojí, rozhodne zájem hráče).
+  const lower = tierOf(state, own) >= 2;
+  const gain = lower ? 2 : 4;
+  const repGap = lower ? 10 : 3;
   const candidates = Object.values(state.players)
-    .filter((p) => p.position === position && p.clubId !== own && !isForeign(p.clubId) && p.overall >= bar + 4 && playerAge(p, state.season) <= 30)
-    .filter((p) => p.clubId === FREE || (state.clubs[p.clubId] && state.clubs[p.clubId].reputation <= club.reputation + 3 && !keys.has(p.id)))
+    .filter((p) => p.position === position && p.clubId !== own && !isForeign(p.clubId) && p.overall >= bar + gain && playerAge(p, state.season) <= (lower ? 32 : 30))
+    .filter((p) => p.clubId === FREE || (state.clubs[p.clubId] && state.clubs[p.clubId].reputation <= club.reputation + repGap && !keys.has(p.id)))
     .map((p) => ({ p, fee: askingPrice(state, p, keys), wage: wageDemand(state, p, own) }))
     .filter((x) => x.fee <= remaining * 0.6 && interest(state, x.p, own).ok && sectionRoomFor(state, x.p, x.wage).room >= 0 && wageBill(state, own) + x.wage <= wageBudgetMonthly(club))
     .sort((a, b) => b.p.overall - a.p.overall || a.fee - b.fee);
@@ -907,7 +927,7 @@ export function directorSignings(state: GameState, rng: Rng): void {
   executeTransfer(state, pick.p, own, pick.fee, pick.wage, rng.int(2, 4));
   addNews(state, {
     kind: 'info',
-    title: `Sportovní ředitel koupil ${playerName(pick.p)} (${pick.p.overall})`,
+    title: `Sportovní ředitel podepsal: ${playerName(pick.p)} (${pick.p.overall}) za ${(pick.fee / 1e6).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} mil. Kč`,
     text: `${from === FREE ? 'Volný hráč' : `Z klubu ${clubLabel(state, from)}`} za ${pick.fee.toLocaleString('cs-CZ')} Kč, plat ${pick.wage.toLocaleString('cs-CZ')} Kč měsíčně. Posílí nejslabší místo sestavy. Nákupy ředitele vypnete ve Financích (Přestupy).`,
   });
 }
@@ -946,18 +966,22 @@ export function aiDomesticTransfers(state: GameState, rng: Rng): void {
   const deals: string[] = [];
 
   for (const buyerId of clubs) {
-    if (!rng.chance(0.22)) continue;
+    // Asi 4 domácí příchody na klub za sezónu (léto i zima), v 1. lize o něco víc.
+    if (!rng.chance(tierOf(state, buyerId) === 1 ? 0.4 : 0.3)) continue;
     const buyer = state.clubs[buyerId];
     const squad = byClub.get(buyerId) ?? [];
     const { position, bar } = weakestPosition(squad);
-    const budget = buyer.policy.transferBudget * 1.2 - (buyer.transferSpent ?? 0);
+    // Kluby utrácejí i peníze z vlastních prodejů, proto rezerva nad rozpočtem.
+    const budget = buyer.policy.transferBudget * 1.6 - (buyer.transferSpent ?? 0);
     const candidates = Object.values(state.players).filter((p) => {
       if (p.position !== position || p.overall < bar + 2 || p.clubId === buyerId || p.clubId === own) return false;
       if (playerAge(p, state.season) > 31) return false;
       if (p.clubId === FREE) return true;
       const seller = state.clubs[p.clubId];
       if (!seller || seller.reserveOf === buyerId || buyer.reserveOf === p.clubId) return false;
-      if (seller.reputation > buyer.reputation + 3) return false;
+      // Větší kluby pouštějí menším hlavně hráče mimo základ (rezervy), menší prodávají větším.
+      if (seller.reputation > buyer.reputation + 12) return false;
+      if (seller.reputation > buyer.reputation + 3 && (p.starts ?? 0) > 8) return false;
       if (buyer.reserveOf) return false;
       return !keys.has(p.id) || rng.chance(0.15);
     });

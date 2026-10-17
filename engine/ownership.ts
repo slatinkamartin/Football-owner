@@ -149,7 +149,7 @@ export function buyShares(prev: GameState, shareholderId: string, fraction: numb
   state.owner.share = Math.round((state.owner.share + part) * 1000) / 1000;
   s.share = Math.round((s.share - part) * 1000) / 1000;
   state.shareholders = state.shareholders.filter((x) => x.share > 0.0005);
-  let message = `Koupil jste ${Math.round(part * 100)} % klubu od ${s.name} za ${price.toLocaleString('cs-CZ')} Kč. Váš podíl je ${Math.round(state.owner.share * 100)} %.`;
+  let message = `Získáváte ${Math.round(part * 100)} % klubu za ${price.toLocaleString('cs-CZ')} Kč (prodávající: ${s.name}). Váš podíl je ${Math.round(state.owner.share * 100)} %.`;
   if (state.owner.ousted && !state.owner.ousted.banUntil && state.owner.share > 0.5) {
     state.owner.ousted = undefined;
     message += ' S většinou v rukou se vracíte do vedení klubu.';
@@ -194,13 +194,13 @@ export function sellStake(prev: GameState, fraction: number): ActionResult {
   if (!state.shareholders.includes(buyer)) state.shareholders.push(buyer);
   buyer.share = Math.round((buyer.share + part) * 1000) / 1000;
   const club = state.clubs[state.owner.clubId];
-  let message = `Prodal jste ${Math.round(part * 100)} % klubu společnosti ${buyer.name} za ${price.toLocaleString('cs-CZ')} Kč.`;
+  let message = `Společnost ${buyer.name} od vás kupuje ${Math.round(part * 100)} % klubu za ${price.toLocaleString('cs-CZ')} Kč.`;
   if (state.owner.share <= 0.0005) {
     state.owner.share = 0;
     state.gameOver = {
       date: state.date,
       kind: 'prodej',
-      reason: `Prodal jste celý ${club.name}. Odcházíte s osobním majetkem ${state.owner.wallet.toLocaleString('cs-CZ')} Kč.`,
+      reason: `Celý ${club.name} má nového majitele. Odcházíte s osobním majetkem ${(state.owner.wallet + (state.business?.safe ?? 0) + (state.business?.risky ?? 0)).toLocaleString('cs-CZ')} Kč.`,
     };
     message = state.gameOver.reason;
   } else if (!state.owner.ousted && state.owner.share < 0.5 && othersShare(state) > 0.5) {
@@ -265,12 +265,14 @@ export function distributableProfit(state: GameState): number {
 /** Výplata dividendy z peněz klubu: každý dostane podle podílu. */
 export function payDividend(state: GameState, total: number): void {
   if (total <= 0) return;
-  book(state, state.owner.clubId, 'vklad', -total, 'Výplata dividendy akcionářům');
+  book(state, state.owner.clubId, 'vklad', -total, state.shareholders.length ? 'Výplata dividendy akcionářům' : 'Výběr zisku majitelem');
   state.owner.wallet += Math.round(total * state.owner.share);
 }
 
 /** Hlasování o důvěře na valné hromadě. */
 export function confidenceVote(state: GameState, dividend: number): void {
+  // Bez spolumajitelů žádná valná hromada není.
+  if (!state.shareholders.length && !state.owner.ousted) return;
   const confidence = Math.round(shareholderConfidence(state));
   const canOust = othersShare(state) > 0.5;
   const ousted = !state.owner.ousted && canOust && confidence < 30;
@@ -384,5 +386,5 @@ export function ownerBlocked(state: GameState): string | null {
   if (!o) return null;
   return o.banUntil
     ? `Máte zákaz činnosti ve fotbale do ${o.banUntil.split('-').reverse().join('. ')}. Klub zatím řídí představenstvo.`
-    : 'Byl jste odvolán z vedení klubu. Klub řídí představenstvo, vy jste jen akcionář.';
+    : 'Valná hromada vás odvolala z vedení klubu. Klub řídí představenstvo, vy jste jen akcionář.';
 }

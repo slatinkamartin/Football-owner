@@ -248,7 +248,7 @@ export function peopleTemplates(h: PeopleHelpers): Record<string, Template> {
     'pozadavek-medicina': {
       weight: (s) => {
         const injured = squad(s).filter((p) => p.injuredUntil && p.injuredUntil >= s.date && p.injury !== 'osobní volno').length;
-        return coachOf(s, s.owner.clubId) && injured >= 4 && departmentEffect(own(s), tierOf(s, s.owner.clubId), 'medicina') < 0.3 ? 1 : 0;
+        return coachOf(s, s.owner.clubId) && injured >= 2 && departmentEffect(own(s), tierOf(s, s.owner.clubId), 'medicina') < 0.3 ? 1 : 0;
       },
       create: (s) => {
         const club = own(s);
@@ -344,7 +344,7 @@ export function checkPromises(state: GameState): void {
         p.done = 'poruseno';
         const role = p.role as 'trener' | 'reditel';
         state.owner.trust[role] = clamp(state.owner.trust[role] - 15, 0, 100);
-        addNews(state, { kind: 'varovani', title: 'Porušený slib z pohovoru', text: `Při najímání jste slíbil rozpočet na přestupy aspoň ${mil(p.value ?? 0)}. Důvěra ${role === 'trener' ? 'trenéra' : 'ředitele'} −15.` });
+        addNews(state, { kind: 'varovani', title: 'Porušený slib z pohovoru', text: `Při najímání padl slib rozpočtu na přestupy aspoň ${mil(p.value ?? 0)}. Důvěra ${role === 'trener' ? 'trenéra' : 'ředitele'} −15.` });
       } else if (state.date > p.until) p.done = 'splneno';
     }
   }

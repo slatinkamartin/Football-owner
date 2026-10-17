@@ -103,7 +103,7 @@ export function Owner({ game, onChange }: Props) {
             )}
           </dl>
           <ul className="plain small muted">
-            <li>Média: sponzoři platí {Math.round((0.95 + game.owner.media / 1000) * 100)} % běžné částky, spolumajitelé čtou noviny.</li>
+            <li>Média: sponzoři platí {Math.round((0.95 + game.owner.media / 1000) * 100)} % běžné částky{partners ? ', spolumajitelé čtou noviny' : ''}.</li>
             <li>Svaz: pokuty jsou {Math.round((1.5 - game.owner.league / 100) * 100)} % běžné výše.</li>
           </ul>
           <CampaignButton game={game} onResult={apply} />
@@ -132,7 +132,7 @@ export function Owner({ game, onChange }: Props) {
         <SellCard game={game} valuation={valuation} onResult={apply} />
       </div>
 
-      {game.agm.length > 0 && (
+      {partners && game.agm.length > 0 && (
         <section className="card">
           <h2>Valné hromady</h2>
           <div className="table-wrap">
@@ -209,7 +209,7 @@ function CapitalCard({ game, onResult }: { game: GameState; onResult: (r: Action
     return (
       <section className="card">
         <h2>Peníze do klubu</h2>
-        <p className="muted">Jako jediný vlastník vkládáte peníze do klubu ve Financích. Ze zisku si na konci sezóny můžete vyplatit dividendu.</p>
+        <p className="muted">Jako jediný vlastník vkládáte peníze do klubu ve Financích (vklad nebo půjčka). Nikdo jiný to schvalovat nemusí.</p>
       </section>
     );
   }
@@ -291,7 +291,7 @@ function GreyCard({ game }: { game: GameState }) {
       </div>
       <p className="muted small">
         Rozhodnutí v šedé zóně (daňové triky, zakázky pro vlastní firmu, neoficiální jednání s hráči…) přinesou peníze nebo výhodu, ale zvyšují riziko mediální kauzy.
-        Riziko časem klesá. Při odhalení přijde pokuta, vratky, propad pověsti a nespokojení akcionáři; při závažnosti 100 ze 100 zákaz činnosti.
+        Riziko časem klesá. Při odhalení přijde pokuta, vratky, propad pověsti{game.shareholders.length > 0 ? ' a nespokojení akcionáři' : ''}; při závažnosti 100 ze 100 zákaz činnosti.
       </p>
       {scandal && <p className="warning">Probíhá kauza: sponzoři krátí plnění do {formatDate(g.scandalUntil!)}.</p>}
       {g.taxSchemeUntil && g.taxSchemeUntil > game.date && <p className="small">Platy přes obrazová práva běží do {formatDate(g.taxSchemeUntil)}.</p>}

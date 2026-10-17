@@ -76,7 +76,7 @@ export function monthlyAgents(state: GameState, rng: Rng): void {
       if (client && !state.tips.some((t) => t.playerId === client.id)) {
         state.tips.push({ playerId: client.id, agentId: a.id, until: addDays(state.date, 45) });
         addWatch(state, client.id);
-        addNews(state, { kind: 'info', title: `Tip od agenta ${a.name}: ${playerName(client)}`, text: `Hráč ${clubLabel(state, client.clubId)} chce změnu. Klub ho teď pustí o 10 % levněji (do ${addDays(state.date, 45).split('-').reverse().join('. ')}). Je mezi sledovanými.`, playerId: client.id });
+        addNews(state, { kind: 'info', title: `Tip agenta: ${playerName(client)}`, text: `Agent ${a.name} hlásí, že hráč chce změnu (klub ${clubLabel(state, client.clubId)}). Klub ho teď pustí o 10 % levněji (do ${addDays(state.date, 45).split('-').reverse().join('. ')}). Je mezi sledovanými.`, playerId: client.id });
       }
     }
     if (a.style === 'chamtivy' && a.relation <= 25 && rng.next() < 0.25) {
@@ -233,9 +233,9 @@ export function settleConditionals(state: GameState, promoted: boolean, europe: 
   for (const c of state.conditionals ?? []) {
     if (c.season !== last) continue;
     if ((c.kind === 'postup' && promoted) || (c.kind === 'evropa' && europe)) {
-      book(state, own, 'prestupy', -c.amount, `Doplatek za ${c.playerName} (${c.kind === 'postup' ? 'postup' : 'Evropa'})`);
-      if (state.clubs[c.sellerId]) book(state, c.sellerId, 'prestupy', c.amount, `Doplatek za ${c.playerName}`);
-      addNews(state, { kind: 'info', title: `Doplatek ${mil(c.amount)} za ${c.playerName}`, text: 'Podmínka ve smlouvě se splnila.' });
+      book(state, own, 'prestupy', -c.amount, `Doplatek za hráče: ${c.playerName} (${c.kind === 'postup' ? 'postup' : 'Evropa'})`);
+      if (state.clubs[c.sellerId]) book(state, c.sellerId, 'prestupy', c.amount, `Doplatek za hráče: ${c.playerName}`);
+      addNews(state, { kind: 'info', title: `Doplatek ${mil(c.amount)}: ${c.playerName}`, text: 'Podmínka ve smlouvě se splnila.' });
     }
   }
   state.conditionals = (state.conditionals ?? []).filter((c) => c.season >= state.season);

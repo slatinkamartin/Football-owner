@@ -142,8 +142,8 @@ export function Tables({ game }: { game: GameState }) {
                 </>
               ),
             },
-            { key: 'club', label: 'Klub', value: (p) => game.clubs[p.clubId].shortName, className: () => 'muted' },
-            { key: 'pos', label: 'Poz.', value: (p) => ['GK', 'DF', 'MF', 'FW'].indexOf(p.position), render: (p) => POSITION_SHORT[p.position], className: () => 'muted' },
+            { key: 'club', label: 'Klub', hideSm: true, value: (p) => game.clubs[p.clubId].shortName, className: () => 'muted' },
+            { key: 'pos', label: 'Poz.', hideSm: true, value: (p) => ['GK', 'DF', 'MF', 'FW'].indexOf(p.position), render: (p) => POSITION_SHORT[p.position], className: () => 'muted' },
             { key: 'age', label: 'Věk', num: true, hideSm: true, value: (p) => playerAge(p, game.season) },
             { key: 'apps', label: 'Záp.', num: true, value: (p) => p.apps },
             { key: 'starts', label: 'Start', num: true, hideSm: true, title: 'Zápasy v základní sestavě', value: (p) => p.starts },

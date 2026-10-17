@@ -76,8 +76,9 @@ export function ConditionCard({ game }: { game: GameState }) {
 /** Nabídky akcí na stadionu. */
 export function EventOffersCard({ game, onResult }: { game: GameState; onResult: (r: ActionResult) => void }) {
   const offers = game.eventOffers ?? [];
-  const open = offers.filter((o) => !o.accepted);
-  const planned = offers.filter((o) => o.accepted);
+  // Prošlé nabídky (po termínu platnosti nebo akce) už nejde přijmout, nezobrazují se.
+  const open = offers.filter((o) => !o.accepted && o.expires >= game.date && o.date > game.date);
+  const planned = offers.filter((o) => o.accepted && o.date >= game.date);
   return (
     <section className="card">
       <h2>Akce na stadionu</h2>
