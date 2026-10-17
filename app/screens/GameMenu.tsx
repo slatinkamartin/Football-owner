@@ -32,13 +32,23 @@ export function GameMenu({
       .catch(() => setBackupText(text));
   };
 
-  const downloadBackup = () => {
+  const downloadBackup = async () => {
     const blob = new Blob([serializeGame(game)], { type: 'application/json' });
+    const club = game.clubs[game.owner.clubId]?.shortName ?? 'hra';
+    const filename = `majitel-${club}-${game.date}.json`.toLowerCase().replace(/[^a-z0-9.\-]+/g, '-');
+    // V publikované stránce (claude.ai) se soubor ukládá přes prohlížeč stránky, jinak běžným odkazem.
+    const host = (window as unknown as { claude?: { use?: (n: string) => Promise<{ save: (r: { filename: string; data: Blob }) => Promise<unknown> } | null> } }).claude;
+    if (host?.use) {
+      const downloads = await host.use('downloads').catch(() => null);
+      if (downloads) {
+        await downloads.save({ filename, data: blob }).catch(() => undefined);
+        return;
+      }
+    }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    const club = game.clubs[game.owner.clubId]?.shortName ?? 'hra';
     a.href = url;
-    a.download = `majitel-${club}-${game.date}.json`.toLowerCase().replace(/[^a-z0-9.\-]+/g, '-');
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -78,7 +88,7 @@ export function GameMenu({
           Hra se ukládá automaticky po každém tahu do tohoto prohlížeče. Pro přenos na jiné zařízení si stáhněte zálohu jako soubor (nebo ji zkopírujte jako text).
         </p>
         <div className="buttons">
-          <button id="download-backup" className="primary" onClick={downloadBackup}>Stáhnout zálohu</button>
+          <button id="download-backup" className="primary" onClick={() => void downloadBackup()}>Stáhnout zálohu</button>
           <button id="copy-backup" onClick={copyBackup}>Zkopírovat jako text</button>
         </div>
         {copied && <p className="ok">Záloha je ve schránce. Uložte si ji třeba do poznámek.</p>}
