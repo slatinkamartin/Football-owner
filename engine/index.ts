@@ -41,3 +41,4 @@ export * from './surroundings';
 export * from './venue';
 export * from './meta';
 export * from './transferlog';
+export * from './rosters';

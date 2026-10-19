@@ -1,10 +1,13 @@
 import { useState } from 'react';
 import pack from '../../data/cz-zaklad/pack.json';
-import { careerAllows, DIFFICULTY, newCareerGame, newGame, newScenarioGame, SCENARIOS, type DataPack, type Difficulty, type GameState, type ScenarioId } from '../../engine';
+import rosterCsv from '../../data/soupisky/hraci.csv?raw';
+import { careerAllows, DIFFICULTY, parseRosterCsv, rostersByClub, type RosterRow, newCareerGame, newGame, newScenarioGame, SCENARIOS, type DataPack, type Difficulty, type GameState, type ScenarioId } from '../../engine';
 import { loadCareer, saveCareer } from '../storage';
 import { money, num } from '../format';
 
 const czPack = pack as DataPack;
+// Databáze skutečných soupisek (data/soupisky/hraci.csv).
+const builtinRosters = parseRosterCsv(rosterCsv).rows;
 
 const SHARES = [
   { share: 1, label: '100 % klubu', text: 'O všem rozhodujete sami a nikomu se nezodpovídáte.' },
@@ -20,19 +23,24 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
   const [career, setCareer] = useState(() => loadCareer());
   const [mode, setMode] = useState<'volna' | 'scenar' | 'kariera'>(career ? 'kariera' : 'volna');
   const [scenario, setScenario] = useState<ScenarioId>('zachrana');
+  const [customRosters, setCustomRosters] = useState<{ rows: RosterRow[]; errors: string[]; name: string } | null>(null);
+  const available = customRosters?.rows ?? builtinRosters;
+  const [useRosters, setUseRosters] = useState(builtinRosters.length > 0);
+  const rosters = useRosters && available.length ? available : undefined;
+  const rosterClubs = rostersByClub(available).size;
 
   const start = () => {
     const name = ownerName.trim() || 'Majitel';
     if (mode === 'scenar') {
-      onStart(newScenarioGame(czPack, scenario, { ownerName: name, difficulty }));
+      onStart(newScenarioGame(czPack, scenario, { ownerName: name, difficulty, rosters }));
       return;
     }
     if (!clubId) return;
     if (mode === 'kariera' && career) {
-      onStart(newCareerGame(czPack, career, { clubId, difficulty, ownerShare }));
+      onStart(newCareerGame(czPack, career, { clubId, difficulty, ownerShare, rosters }));
       return;
     }
-    onStart(newGame(czPack, { clubId, ownerName: name, difficulty, ownerShare }));
+    onStart(newGame(czPack, { clubId, ownerName: name, difficulty, ownerShare, rosters }));
   };
   const locked = (reputation: number) => (mode === 'kariera' ? careerAllows(career ?? undefined, reputation) : undefined);
 
@@ -112,6 +120,45 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
         {mode === 'kariera' && career && (
           <p className="muted small">Do nového klubu si přinášíte osobní peníze {money(career.wallet)}, pověst u médií {Math.round(career.media)} a u svazu {Math.round(career.league)}. Startovní podmínky dál určují příjem z jiného podnikání, peníze klubu a náročnost hry.</p>
         )}
+      </section>
+
+      <section className="card">
+        <h2>Hráči</h2>
+        <div className="choices">
+          <button className={`choice ${rosters ? 'selected' : ''}`} disabled={!available.length} onClick={() => setUseRosters(true)}>
+            <strong>Skutečné soupisky</strong>
+            <span>{available.length ? `${available.length} hráčů z ${rosterClubs} klubů${customRosters ? ` (soubor ${customRosters.name})` : ' z databáze hry'}. Ostatní kluby dostanou vymyšlené hráče.` : 'Databáze soupisek je zatím prázdná. Nahrajte vlastní soubor.'}</span>
+          </button>
+          <button className={`choice ${!rosters ? 'selected' : ''}`} onClick={() => setUseRosters(false)}>
+            <strong>Vymyšlení hráči</strong>
+            <span>Všechny kluby dostanou náhodně vygenerované hráče podle své úrovně.</span>
+          </button>
+        </div>
+        <label className="button-like small-btn">
+          Nahrát vlastní soupisky (CSV)
+          <input
+            type="file"
+            accept=".csv,text/csv,text/plain"
+            hidden
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const parsed = parseRosterCsv(await file.text());
+              const unknown = [...new Set(parsed.rows.map((r) => r.club))].filter((id) => !czPack.clubs.some((c) => c.id === id));
+              setCustomRosters({ rows: parsed.rows.filter((r) => !unknown.includes(r.club)), errors: [...parsed.errors, ...unknown.map((id) => `Neznámý klub „${id}“ (řádky přeskočeny).`)], name: file.name });
+              if (parsed.rows.length) setUseRosters(true);
+              e.target.value = '';
+            }}
+          />
+        </label>
+        {customRosters && customRosters.errors.length > 0 && (
+          <div className="warning small">
+            <strong>Některé řádky souboru se nenačetly:</strong>
+            <ul className="plain">{customRosters.errors.slice(0, 8).map((x, i) => <li key={i}>{x}</li>)}</ul>
+            {customRosters.errors.length > 8 && <span>… a další ({customRosters.errors.length - 8}).</span>}
+          </div>
+        )}
+        <p className="muted small">Formát souboru je popsaný v data/soupisky/README.md (jeden řádek = hráč: klub; jméno; příjmení; rok narození; pozice BR/OBR/ZAL/UT; …).</p>
       </section>
 
       {mode !== 'scenar' && <section className="card">

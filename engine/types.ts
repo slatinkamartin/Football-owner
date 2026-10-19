@@ -1093,6 +1093,8 @@ export interface GameState {
   matchPlan?: MatchPlan;
   /** Zápasy, u kterých majitel přípravu odmítl (nevyskakuje znovu). */
   planDismissed?: string[];
+  /** Hra začala se skutečnými soupiskami z databáze. */
+  realRosters?: boolean;
   pulse?: PulseState;
   settings?: GameSettings;
   /** Zahraniční skauting a vyhlédnutí hráči. */

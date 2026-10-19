@@ -84,6 +84,7 @@ import { communityEffect } from './operations';
 import { adminMonthly, pitchFactor, campBonus, dailyOperations, homeMatchOperations, maintenanceInjury, monthlyOperations } from './operations';
 import { NEW_CATEGORIES_V10, NEW_CATEGORIES_V11, SAVE_VERSION, type Departments, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
 import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
+import { fillFromRoster, rostersByClub, type RosterRow } from './rosters';
 
 export const START_SEASON = 2026;
 const MAX_SQUAD = 26;
@@ -102,6 +103,8 @@ export interface NewGameOptions {
   /** Podíl majitele v klubu (výchozí 100 %). */
   ownerShare?: number;
   seed?: number;
+  /** Skutečné soupisky (databáze data/soupisky). Kluby bez soupisky dostanou vygenerované hráče. */
+  rosters?: RosterRow[];
 }
 
 // ---------- Založení hry ----------
@@ -126,6 +129,21 @@ function createClub(def: ClubDef, tier: number): Club {
   club.policy.transferBudget = defaultTransferBudget(club);
   club.finance.balance = Math.round(annualCosts(club, tier) * 0.15);
   return club;
+}
+
+/** Kádr ze skutečné soupisky; chybějící brankáře a malý kádr doplní vygenerovaní hráči. */
+function fillRealSquad(state: GameState, rng: Rng, club: Club, rows: RosterRow[]): void {
+  fillFromRoster(state, club, rows);
+  const squad = squadOf(state, club.id);
+  const quality = squadQualityForReputation(club.reputation) - 4;
+  const extra: Player[] = [];
+  const count = (pos: Position) => squad.filter((p) => p.position === pos).length + extra.filter((p) => p.position === pos).length;
+  for (const [pos, min] of [['GK', 2], ['DF', 5], ['MF', 5], ['FW', 3]] as const) {
+    while (count(pos) < min) extra.push(generatePlayer(rng, state, { clubId: club.id, position: pos, season: state.season, quality }));
+  }
+  while (squad.length + extra.length < 18) extra.push(generatePlayer(rng, state, { clubId: club.id, position: rng.pick(['DF', 'MF', 'FW'] as Position[]), season: state.season, quality }));
+  for (const p of extra) state.players[p.id] = p;
+  if (extra.length) setMarketWages(extra, club);
 }
 
 function fillSquad(state: GameState, rng: Rng, club: Club): void {
@@ -188,13 +206,17 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
   for (const def of pack.competitions) {
     state.competitions[def.id] = { ...def, clubIds: [], fixtures: [] };
   }
+  const rosters = opts.rosters ? rostersByClub(opts.rosters) : undefined;
   for (const def of pack.clubs) {
     const comp = state.competitions[def.competition];
     const club = createClub(def, comp.tier);
     state.clubs[club.id] = club;
     comp.clubIds.push(club.id);
-    fillSquad(state, rng, club);
+    const roster = rosters?.get(club.id);
+    if (roster?.length) fillRealSquad(state, rng, club, roster);
+    else fillSquad(state, rng, club);
   }
+  if (rosters?.size) state.realRosters = true;
 
   const own = state.clubs[opts.clubId];
   if (!own) throw new Error(`Neznámý klub ${opts.clubId}`);

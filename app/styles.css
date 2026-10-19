@@ -1034,3 +1034,4 @@ input[type='checkbox'], input[type='radio'] { flex: none; width: auto; padding: 
 .cols-toggle { align-self: center; margin-left: auto; }
 /* Pohár: ostatní zápasy kola sbalené. */
 .cup-others summary { cursor: pointer; padding: 4px 0; }
+.newgame .button-like.small-btn { display: inline-block; margin-top: 10px; }
