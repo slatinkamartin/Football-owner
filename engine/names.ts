@@ -109,7 +109,7 @@ export const FOREIGN_CLUBS: { id: string; name: string; country: string; level: 
 ];
 
 /** Země EU a EHP: hráči z nich nepotřebují pracovní povolení a nepočítají se do limitu cizinců. */
-export const EU_COUNTRIES = new Set(['Slovensko', 'Polsko', 'Maďarsko', 'Chorvatsko', 'Slovinsko', 'Rumunsko', 'Bulharsko', 'Rakousko', 'Německo', 'Itálie', 'Francie', 'Nizozemsko', 'Belgie', 'Dánsko', 'Švédsko', 'Finsko', 'Norsko', 'Řecko']);
+export const EU_COUNTRIES = new Set(['Česko', 'Slovensko', 'Polsko', 'Maďarsko', 'Chorvatsko', 'Slovinsko', 'Rumunsko', 'Bulharsko', 'Rakousko', 'Německo', 'Itálie', 'Francie', 'Nizozemsko', 'Belgie', 'Lucembursko', 'Dánsko', 'Švédsko', 'Finsko', 'Estonsko', 'Lotyšsko', 'Litva', 'Irsko', 'Španělsko', 'Portugalsko', 'Řecko', 'Kypr', 'Malta', 'Norsko', 'Island', 'Lichtenštejnsko', 'Švýcarsko']);
 
 /** Jména podle regionů (aby hráč z Ghany nebo Argentiny nezněl česky). */
 export const REGION_NAMES: Record<ScoutRegion, { first: string[]; last: string[] }> = {

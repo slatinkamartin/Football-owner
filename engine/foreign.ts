@@ -331,8 +331,8 @@ export function monthlyForeign(state: GameState): void {
   }
   // Fanoušci a patrioti nesou nelibě sestavu plnou cizinců.
   const foreigners = bestEleven(squadOf(state, own)).filter((p) => p.nationality).length;
-  if (foreigners >= 7) {
-    state.clubs[own].fanMood = clamp(state.clubs[own].fanMood - 0.4 * (foreigners - 6), 0, 100);
+  if (foreigners >= 8) {
+    state.clubs[own].fanMood = clamp(state.clubs[own].fanMood - 0.4 * (foreigners - 7), 0, 100);
     satisfy(state, -0.3, ['patriot']);
   }
 }
