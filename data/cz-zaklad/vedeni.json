@@ -1,0 +1,101 @@
+{
+  "poznamka": "Vlastníci a předsedové prvoligových klubů podle české Wikipedie. Ve hře se zobrazují jen jako údaj na kartě klubu; jednání soupeřů ve hře se připisuje vedení klubu, ne těmto osobám.",
+  "vedeni": [
+    {
+      "klub": "slavia",
+      "vlastnik": "Pavel Tykač",
+      "predseda": "Jaroslav Tvrdík",
+      "zdroj": "https://cs.wikipedia.org/wiki/SK_Slavia_Praha (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "sparta",
+      "vlastnik": "Daniel Křetínský",
+      "predseda": "Daniel Křetínský",
+      "zdroj": "https://cs.wikipedia.org/wiki/AC_Sparta_Praha (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "plzen",
+      "vlastnik": "Michal Strnad",
+      "predseda": null,
+      "zdroj": "https://cs.wikipedia.org/wiki/FC_Viktoria_Plzeň (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "banik",
+      "vlastnik": "Václav Brabec",
+      "predseda": null,
+      "zdroj": "https://cs.wikipedia.org/wiki/FC_Baník_Ostrava (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "olomouc",
+      "vlastnik": null,
+      "predseda": null,
+      "zdroj": "https://cs.wikipedia.org/wiki/SK_Sigma_Olomouc (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "liberec",
+      "vlastnik": "Ondřej Kania",
+      "predseda": "Petra Kania",
+      "zdroj": "https://cs.wikipedia.org/wiki/FC_Slovan_Liberec (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "jablonec",
+      "vlastnik": "Jakub Střeštík",
+      "predseda": null,
+      "zdroj": "https://cs.wikipedia.org/wiki/FK_Jablonec (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "boleslav",
+      "vlastnik": null,
+      "predseda": "Luboš Bartůněk",
+      "zdroj": "https://cs.wikipedia.org/wiki/FK_Mladá_Boleslav (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "hradec",
+      "vlastnik": null,
+      "predseda": "Dominik Kohel",
+      "zdroj": "https://cs.wikipedia.org/wiki/FC_Hradec_Králové (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "bohemians",
+      "vlastnik": null,
+      "predseda": "Antonín Panenka",
+      "zdroj": "https://cs.wikipedia.org/wiki/Bohemians_Praha_1905 (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "slovacko",
+      "vlastnik": "Vítězslav Skopal",
+      "predseda": "Vítězslav Skopal",
+      "zdroj": "https://cs.wikipedia.org/wiki/1._FC_Slovácko (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "teplice",
+      "vlastnik": "Accolade Holding",
+      "predseda": "Pavel Šedlbauer",
+      "zdroj": "https://cs.wikipedia.org/wiki/FK_Teplice (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "pardubice",
+      "vlastnik": null,
+      "predseda": "Vít Zavřel",
+      "zdroj": "https://cs.wikipedia.org/wiki/FK_Pardubice (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "zlin",
+      "vlastnik": null,
+      "predseda": "Zdeněk Červenka",
+      "zdroj": "https://cs.wikipedia.org/wiki/FC_Zlín (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "brno",
+      "vlastnik": "Vojtěch Kačena",
+      "predseda": "Jan Mynář",
+      "zdroj": "https://cs.wikipedia.org/wiki/FC_Zbrojovka_Brno (stav 20. 10. 2026)"
+    },
+    {
+      "klub": "artis",
+      "vlastnik": "Igor Fait",
+      "predseda": "Libor Kleibl",
+      "zdroj": "https://cs.wikipedia.org/wiki/SK_Artis_Brno (stav 20. 10. 2026)"
+    }
+  ]
+}
