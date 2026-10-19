@@ -398,9 +398,12 @@ function isEligibleFor(state: GameState, clubId: string, targetTier: number, exc
   return tierOf(state, club.reserveOf) !== targetTier;
 }
 
-function lowerCompFor(state: GameState, tier: number, region: Club['region']): Competition | undefined {
+function lowerCompFor(state: GameState, tier: number, region: Club['region'], planned: { to: Competition }[] = []): Competition | undefined {
   const lower = Object.values(state.competitions).filter((c) => c.tier === tier + 1);
-  return lower.find((c) => !c.region || c.region === region) ?? lower[0];
+  // Víc skupin pro stejný region (ČFL A a B): sestupující jde do menší skupiny (včetně už naplánovaných přesunů).
+  const size = (c: Competition) => c.clubIds.length + planned.filter((m) => m.to === c).length;
+  const fit = lower.filter((c) => !c.region || c.region === region).sort((a, b) => size(a) - size(b));
+  return fit[0] ?? lower[0];
 }
 
 function createPoolClub(state: GameState, rng: Rng, region: Club['region']): Club {
@@ -485,15 +488,31 @@ function endSeason(state: GameState, rng: Rng): void {
     const upperTable = tables.get(upper.id)!;
     for (const row of upperTable.slice(upperTable.length - upper.relegate)) {
       const club = state.clubs[row.clubId];
-      const to = lowerCompFor(state, upper.tier, club.region)!;
+      const to = lowerCompFor(state, upper.tier, club.region, moves)!;
       moves.push({ clubId: row.clubId, from: upper, to, up: false });
       moved.add(row.clubId);
     }
+    const pools = new Map<string, Competition[]>();
     for (const lower of lowers) {
+      if (lower.promotePool) {
+        pools.set(lower.promotePool, [...(pools.get(lower.promotePool) ?? []), lower]);
+        continue;
+      }
       const eligible = tables.get(lower.id)!.filter((r) => isEligibleFor(state, r.clubId, upper.tier, moved));
       for (const row of eligible.slice(0, lower.promote)) {
         moves.push({ clubId: row.clubId, from: lower, to: upper, up: true });
         moved.add(row.clubId);
+      }
+    }
+    // Skupiny jedné soutěže (ČFL A a B): postupují nejlepší vítězové skupin podle bodů na zápas a skóre.
+    for (const groups of pools.values()) {
+      const winners = groups
+        .map((g) => ({ g, row: tables.get(g.id)!.find((r) => isEligibleFor(state, r.clubId, upper.tier, moved)) }))
+        .filter((x) => x.row)
+        .sort((a, b) => b.row!.points / Math.max(1, b.row!.played) - a.row!.points / Math.max(1, a.row!.played) || b.row!.goalsFor - b.row!.goalsAgainst - (a.row!.goalsFor - a.row!.goalsAgainst));
+      for (const { g, row } of winners.slice(0, groups[0].promote)) {
+        moves.push({ clubId: row!.clubId, from: g, to: upper, up: true });
+        moved.add(row!.clubId);
       }
     }
   }
@@ -1240,7 +1259,7 @@ export function updatePolicy(prev: GameState, patch: Partial<Club['policy']>): G
   const state = structuredClone(prev);
   const club = state.clubs[state.owner.clubId];
   club.policy = { ...club.policy, ...clean, ...(clean.departments ? { departments: { ...club.policy.departments, ...clean.departments } as Departments } : {}) };
-  club.policy.wageMultiplier = Math.max(0.5, Math.min(2, club.policy.wageMultiplier));
+  club.policy.wageMultiplier = Math.max(0.5, Math.min(3, club.policy.wageMultiplier));
   if (club.policy.seasonTicketPrice !== undefined) club.policy.seasonTicketPrice = Math.max(0, Math.round(club.policy.seasonTicketPrice));
   if (club.policy.departments) {
     for (const k of Object.keys(club.policy.departments) as (keyof Departments)[]) club.policy.departments[k] = Math.max(0, Math.round(club.policy.departments[k]));

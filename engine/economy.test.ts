@@ -8,7 +8,7 @@ import type { DataPack, GameState } from './types';
 import { FOREIGN_PREFIX, FREE } from './world';
 
 const czPack = pack as DataPack;
-const start = newGame(czPack, { clubId: 'bohemians', ownerName: 'Test', difficulty: 'stredni', seed: 5 });
+const start = newGame(czPack, { clubId: 'bohemians', ownerName: 'Test', difficulty: 'stredni', seed: 2 });
 
 const squadValueEur = (s: GameState, id: string) =>
   squadOf(s, id).reduce((sum, p) => sum + playerValue(s, p), 0) / CZK_PER_EUR;
@@ -21,7 +21,7 @@ describe('kalibrace podle české ligy', () => {
     expect(squadValueEur(start, 'slavia')).toBeLessThan(160_000_000);
     expect(squadValueEur(start, 'banik')).toBeGreaterThan(8_000_000);
     expect(squadValueEur(start, 'banik')).toBeLessThan(35_000_000);
-    expect(squadValueEur(start, 'kozlovice')).toBeLessThan(2_000_000);
+    expect(squadValueEur(start, 'horniredice')).toBeLessThan(2_000_000);
   });
 
   it('platy odpovídají úrovni soutěže', () => {
@@ -29,7 +29,7 @@ describe('kalibrace podle české ligy', () => {
     expect(median(wages(start, 'bohemians'))).toBeGreaterThan(100_000);
     expect(median(wages(start, 'bohemians'))).toBeLessThan(250_000);
     expect(median(wages(start, 'zizkov'))).toBeLessThan(70_000);
-    expect(median(wages(start, 'kozlovice'))).toBeLessThan(20_000);
+    expect(median(wages(start, 'horniredice'))).toBeLessThan(20_000);
   });
 
   it('lepší umístění přinese víc peněz', () => {

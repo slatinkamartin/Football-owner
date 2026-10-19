@@ -44,7 +44,7 @@ function target(state: GameState, fromClub: string): string {
 }
 
 describe('lidé', () => {
-  const start = newGame(czPack, { clubId: 'bohemians', ownerName: 'Test', difficulty: 'stredni', seed: 11 });
+  const start = newGame(czPack, { clubId: 'bohemians', ownerName: 'Test', difficulty: 'stredni', seed: 42 });
 
   it('každý klub má trenéra, klub majitele i ředitele, trh má volné hráče', () => {
     for (const comp of Object.values(start.competitions)) {
@@ -73,9 +73,9 @@ describe('lidé', () => {
   });
 
   it('špičkový trenér nejde do malého klubu', () => {
-    const small = newGame(czPack, { clubId: 'kozlovice', ownerName: 'Test', difficulty: 'stredni', seed: 3 });
+    const small = newGame(czPack, { clubId: 'horniredice', ownerName: 'Test', difficulty: 'stredni', seed: 3 });
     const star = { ...candidates(small, 'trener')[0], ability: 90 };
-    expect(isInterested(star, small.clubs.kozlovice)).toBe(false);
+    expect(isInterested(star, small.clubs.horniredice)).toBe(false);
   });
 
   it('nereálný cíl sníží důvěru trenéra', () => {
@@ -176,7 +176,7 @@ describe('přestupy', () => {
 
 describe('další ředitelé', () => {
   it('obchodní a finanční ředitel zvednou příjmy a sníží náklady', () => {
-    let s = newGame(pack as DataPack, { clubId: 'bohemians', ownerName: 'T', difficulty: 'snadna', seed: 3 });
+    let s = newGame(pack as DataPack, { clubId: 'bohemians', ownerName: 'T', difficulty: 'snadna', seed: 1 });
     expect(commercialFactor(s)).toBe(1);
     for (const role of ['obchodni', 'financni', 'akademie', 'media'] as const) {
       const c = staffCandidates(s, role).find((x) => x.ability > 45 && x.ability - (20 + s.clubs.bohemians.reputation * 0.6) <= 15);

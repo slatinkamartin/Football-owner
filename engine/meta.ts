@@ -105,7 +105,7 @@ export interface ScenarioDef {
 
 export const SCENARIOS: ScenarioDef[] = [
   { id: 'zachrana', title: 'Zachraňte krachující klub', description: 'Zlín je v minusu a splácí úvěr. Za dvě sezóny udržte 1. ligu a dostaňte účet z hluboké díry. Hvězdy podle zdraví financí (zůstatek po odečtení vaší půjčky klubu): ★ ztráta do 10 % ročních nákladů, ★★ aspoň nula, ★★★ rezerva 10 % nákladů.', clubId: 'zlin', seasons: 2 },
-  { id: 'vzestup', title: 'Z ČFL do 1. ligy', description: 'Kolín hraje třetí ligu. Do sedmi sezón ho doveďte do 1. ligy. ★ za postup do 2. ligy, ★★ za 1. ligu, ★★★ za 1. ligu do pěti sezón.', clubId: 'kolin', seasons: 7 },
+  { id: 'vzestup', title: 'Vraťte Dynamo do 1. ligy', description: 'České Budějovice spadly až do ČFL. Do šesti sezón je doveďte zpátky do 1. ligy. ★ za postup do 2. ligy, ★★ za 1. ligu, ★★★ za 1. ligu do čtyř sezón.', clubId: 'budejovice', seasons: 6 },
   { id: 'evropa', title: 'Evropa s městem jako spolumajitelem', description: 'Hradec vlastníte z 51 %, město a patrioti zbytek. Do tří sezón skončete do 4. místa 1. ligy (Evropa).', clubId: 'hradec', seasons: 3, ownerShare: 0.51 },
   { id: 'prodejni', title: 'Prodejní klub', description: 'Jablonec žije z prodejů. Za čtyři sezóny vydělejte na přestupech čistých 400 mil. Kč a zůstaňte v 1. lize. Čím víc navíc, tím víc hvězd.', clubId: 'jablonec', seasons: 4 },
 ];
@@ -190,7 +190,7 @@ function scenarioStars(state: GameState, def: ScenarioDef, used: number): number
   }
   if (sc.id === 'vzestup') {
     if (tierOf(state, state.owner.clubId) > 1) return 1;
-    return used <= 5 ? 3 : 2;
+    return used <= 4 ? 3 : 2;
   }
   return used <= Math.ceil(def.seasons / 2) ? 3 : used < def.seasons ? 2 : 1;
 }

@@ -521,7 +521,8 @@ export function generateOffers(state: GameState, rng: Rng): void {
   if (policy === 'prodejni' && state.clubs[own].policy.autoSquad !== false && mayTrade && !state.owner.ousted) {
     const md = state.date.slice(5);
     const closing = (md >= '08-24' && md <= '08-31') || (md >= '02-07' && md <= '02-14');
-    const core = new Set(squadOf(state, own).sort((a, b) => b.overall - a.overall).slice(0, 6).map((p) => p.id));
+    // Chráněné jsou opory i dva nejbližší za nimi: jeden nově podepsaný hráč tak oporu hned neodsune na prodej.
+    const core = new Set(squadOf(state, own).sort((a, b) => b.overall - a.overall).slice(0, 8).map((p) => p.id));
     for (const o of state.market.offers.filter((x) => (x.expires < state.date || closing) && x.advice === 'prijmout' && !core.has(x.playerId) && state.players[x.playerId]?.clubId === own)) {
       const r = acceptOffer(state, o.id);
       if (r.ok) {

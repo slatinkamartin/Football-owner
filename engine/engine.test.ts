@@ -98,7 +98,8 @@ describe('průběh hry', () => {
   it('založí svět a rozlosuje sezónu', () => {
     expect(Object.keys(start.clubs)).toHaveLength(czPack.clubs.length);
     expect(start.competitions.cz1.fixtures).toHaveLength(16 * 15);
-    expect(start.competitions.cz3c.fixtures).toHaveLength(18 * 17);
+    expect(start.competitions.cz3a.fixtures).toHaveLength(16 * 15);
+    expect(start.competitions.cz3m.fixtures).toHaveLength(18 * 17);
   });
 
   it('je deterministický', () => {
@@ -118,8 +119,12 @@ describe('průběh hry', () => {
     }
     expect(afterOne.competitions.cz1.clubIds).toHaveLength(16);
     expect(afterOne.competitions.cz2.clubIds).toHaveLength(16);
-    expect(afterOne.competitions.cz3c.clubIds).toHaveLength(18);
-    expect(afterOne.competitions.cz3m.clubIds).toHaveLength(16);
+    expect(afterOne.competitions.cz3a.clubIds).toHaveLength(16);
+    expect(afterOne.competitions.cz3b.clubIds).toHaveLength(16);
+    expect(afterOne.competitions.cz3m.clubIds).toHaveLength(18);
+    // Z ČFL postupuje jen lepší z vítězů skupin A a B, z MSFL vítěz: dohromady dva kluby.
+    const fromThird = Object.values(afterOne.competitions.cz2.clubIds).filter((id) => !start.competitions.cz2.clubIds.includes(id) && !start.competitions.cz1.clubIds.includes(id));
+    expect(fromThird.length).toBeLessThanOrEqual(2);
 
     // B-týmy nehrají nejvyšší soutěž ani soutěž s mateřským klubem.
     for (const comp of Object.values(afterOne.competitions)) {

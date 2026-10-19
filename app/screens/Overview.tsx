@@ -313,7 +313,7 @@ function ScenarioCard({ game }: { game: GameState }) {
     const net = club.finance.balance - debt;
     goal = { label: `Zůstatek klubu${debt ? ' po odečtení půjčky majitele' : ''} (★ od −10 % nákladů, ★★ od nuly) a 1. liga`, value: `${money(net)} · ${tier === 1 ? '1. liga ✓' : 'mimo 1. ligu ✕'}`, pct: net >= 0 ? 100 : Math.max(5, 100 - (Math.abs(net) / Math.max(1, annualCosts(club, tier) * 0.2)) * 100), ok: net >= -annualCosts(club, tier) * 0.1 && tier === 1 };
   } else if (sc.id === 'vzestup') {
-    goal = { label: 'Soutěž (★ 2. liga, ★★ 1. liga, ★★★ 1. liga do 5 sezón)', value: `${comp?.name ?? '–'}${tier === 1 ? ' ✓' : ` · zbývá ${tier - 1} ${tier - 1 === 1 ? 'postup' : 'postupy'}`}`, pct: tier === 1 ? 100 : tier === 2 ? 50 : 10, ok: tier === 1 };
+    goal = { label: 'Soutěž (★ 2. liga, ★★ 1. liga, ★★★ 1. liga do 4 sezón)', value: `${comp?.name ?? '–'}${tier === 1 ? ' ✓' : ` · zbývá ${tier - 1} ${tier - 1 === 1 ? 'postup' : 'postupy'}`}`, pct: tier === 1 ? 100 : tier === 2 ? 50 : 10, ok: tier === 1 };
   } else if (sc.id === 'evropa') {
     const table = comp ? computeTable(comp, game) : [];
     const pos = table.findIndex((r) => r.clubId === club.id) + 1;

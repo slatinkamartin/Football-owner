@@ -64,6 +64,7 @@ npm run build      # produkční sestavení do složky dist/
 ### Novinky verze 0.24: skutečné soupisky a jeden mzdový rozpočet
 
 - **Skutečné soupisky:** databáze `data/soupisky/hraci.csv`, 27 klubů 1. a 2. ligy, 836 hráčů, stav k 19. 10. 2026 (zdroje chanceliga.cz a chnliga.cz). Volba „Skutečné soupisky / Vymyšlení hráči“ při nové hře, nahrání vlastního CSV.
+- **Soutěže podle sezóny 2026/27:** Chance Liga (nováčci Zbrojovka a Artis Brno), Chance Národní liga (Kladno, Česká Lípa, Třinec, Vlašim, Baník B a sestupující Karviná a Dukla), ČFL ve dvou skupinách A a B po 16 klubech (postupuje lepší z vítězů skupin) a MSFL s 18 kluby. Scénář „Vzestup“ teď vede České Budějovice z ČFL zpátky do 1. ligy.
 - **Jeden mzdový rozpočet:** platy hráčů mají jeden společný strop, rozdělení do sekcí (opory, základ, rotace, mladí) je zrušené.
 
 ### Novinky verze 0.23: ladění (plynulost, vyváženost, opravy)

@@ -78,7 +78,8 @@ describe('řádky rozpočtu a jejich dopad', () => {
 
   it('prodejní klub: ředitel sám neprodá opory', () => {
     const core = Object.values(start.players).filter((p) => p.clubId === 'bohemians').sort((a, b) => b.overall - a.overall).slice(0, 6).map((p) => p.id);
-    let s = updatePolicy(start, { salesPolicy: 'prodejni' });
+    // Bez peněz na nákupy zůstanou opory oporami (posily by je jinak mohly odsunout).
+    let s = updatePolicy(start, { salesPolicy: 'prodejni', transferBudget: 0 });
     for (let i = 0; i < 10; i++) s = advanceDays(s, 7).state;
     for (const id of core) expect(s.players[id].clubId).toBe('bohemians');
   });

@@ -560,7 +560,7 @@ export function prepareBudget(state: GameState): void {
   // Návrh vždy pokryje platy podepsaných smluv (strop nesmí být pod tím, co klub už musí platit).
   const contracted = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0);
   const baseCap = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
-  if (wageBudgetMonthly(club) < contracted) club.policy.wageMultiplier = Math.min(2, Math.ceil((contracted / Math.max(1, baseCap)) * 20) / 20);
+  if (wageBudgetMonthly(club) < contracted) club.policy.wageMultiplier = Math.min(3, Math.ceil((contracted / Math.max(1, baseCap)) * 20) / 20);
   // Ani bez přestupů nejhorší případ nevychází: návrh sníží nevyužitou rezervu ve mzdovém stropu (ne pod podepsané platy).
   const worstAfter = forecastSeason(state);
   const gap = reserve - (worstAfter.worstMin ?? worstAfter.cashMin);

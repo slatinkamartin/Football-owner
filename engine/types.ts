@@ -19,6 +19,8 @@ export interface CompetitionDef {
   format?: 'nadstavba';
   /** Baráž: kluby na pozicích `upper` hrají s kluby na pozicích `lower` z nižší soutěže `vs`. */
   playoff?: { vs: string; upper: number[]; lower: number[] };
+  /** Skupiny se stejným klíčem sdílí postupová místa (`promote`): postupují nejlepší vítězové skupin. */
+  promotePool?: string;
 }
 
 export interface ClubDef {
