@@ -1,6 +1,6 @@
 # Databáze soupisek
 
-Skutečné soupisky klubů 1. a 2. ligy. Teď obsahuje 16 klubů letošní Chance Ligy (494 hráčů, stav 19. 10. 2026, zdroj chanceliga.cz; role podle odehraných zápasů v sezóně 2026/27). Hra je načte při založení nové hry
+Skutečné soupisky klubů 1. a 2. ligy. Teď obsahuje 27 klubů a 836 hráčů, stav k 19. 10. 2026: 16 klubů Chance Ligy (zdroj chanceliga.cz) a 11 klubů Chance Národní ligy (zdroj chnliga.cz). Role v kádru vychází z odehraných zápasů a minut v sezóně 2026/27. Kluby, které letos hrají nižší soutěž (České Budějovice, Vyškov, Sparta B, Chrudim, Varnsdorf), zatím mají vymyšlené hráče. Hra je načte při založení nové hry
 (volba „Skutečné soupisky“). Kluby, které tu nejsou, dostanou vygenerované hráče.
 
 ## Soubory
