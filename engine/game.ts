@@ -29,7 +29,7 @@ import { approveBudget, adjustForNewTier, monthlyReport, TICKET_ANGER, BUDGET_DE
 import { homeAdvantage, ownTeamSpirit } from './atmosphere';
 import { activeOverdraft, applyLicenceSanction, CRISIS_MONTHS, dailyFinancing, emergencyOwnerLoan, enterCrisis, insolvencyMonths, leaveCrisisIfSolved, monthlyFinancing } from './financing';
 import { generateSponsorOffers, initialSponsors, seasonStartSponsors, sponsorEuropeBonus, sponsorMonthly, sponsorSeasonBonuses } from './sponsors';
-import { goalBonusPoints, pointsBonusFactor, schemeSpirit, suggestedSplit, wageMorale } from './wages';
+import { goalBonusPoints, pointsBonusFactor, schemeSpirit, wageMorale } from './wages';
 import { monthlyEurope, qualifyEurope, resolveEurope, startEurope } from './europe';
 import { boardCoversLoss, clubValuation, createShareholders, monthlyShareholders } from './ownership';
 import { afterMatchday, allFixtures, baseSeasonDone, finalStandings, setupCup, startGroups, startPlayoffs } from './competitions';
@@ -1318,7 +1318,6 @@ function migrateToV9(state: GameState): void {
   const rng = createRng(state.rngState + 9);
   const own = state.clubs[state.owner.clubId];
   if (!own.sponsors) initialSponsors(state, rng);
-  own.policy.wageSplit ??= suggestedSplit(state);
   own.sponsorDeal = undefined;
   state.payments ??= [];
 }

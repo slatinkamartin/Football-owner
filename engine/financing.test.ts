@@ -2,35 +2,31 @@ import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
 import { activeOverdraft, applyGrant, lendToClub, licenceProblems, repayOwnerLoan, sellTvAdvance, setOverdraft, tvAdvanceOffer } from './financing';
 import { balanceSheet, investmentLoanOffer, takeLoan } from './finance';
-import { advanceDays, newGame, updatePolicy } from './game';
+import { advanceDays, newGame } from './game';
 import { squadOf } from './players';
 import { acceptOffer, executeTransfer } from './transfers';
-import { DEFAULT_SPLIT, sectionRoomFor, sectionsOf, sectionUsage, setWageSection, wageCommitments, wageMorale } from './wages';
+import { wageCommitments, wageMorale, wageRoomFor, wageUsage } from './wages';
 import { projectOptions, startProject } from './facilities';
 import type { DataPack, GameState } from './types';
 
 const czPack = pack as DataPack;
 const start = newGame(czPack, { clubId: 'bohemians', ownerName: 'T', difficulty: 'snadna', seed: 9 });
 
-describe('mzdové sekce', () => {
-  it('strop se dělí do sekcí a hráči jsou zařazení', () => {
-    const usage = sectionUsage(start);
-    expect(usage.map((u) => u.section)).toEqual(['opory', 'zaklad', 'rotace', 'mladi']);
-    expect(usage.find((u) => u.section === 'opory')!.players).toBe(6);
-    const cap = usage.reduce((a, u) => a + u.cap, 0);
-    expect(cap).toBeGreaterThan(0);
-    expect(usage[0].cap / cap).toBeCloseTo(DEFAULT_SPLIT.opory, 1);
+describe('mzdový rozpočet', () => {
+  it('jeden strop pro platy celého kádru', () => {
+    const usage = wageUsage(start);
+    expect(usage.cap).toBeGreaterThan(0);
+    expect(usage.bill).toBe(squadOf(start, 'bohemians').reduce((a, p) => a + p.wage, 0));
+    expect(usage.room).toBe(usage.cap - usage.bill);
+    expect(usage.continuing + usage.expiring).toBe(usage.bill);
     expect(wageCommitments(start)[0].amount).toBeGreaterThan(0);
   });
 
-  it('malá sekce zablokuje drahý podpis a ruční přeřazení se projeví', () => {
-    const s = updatePolicy(start, { wageSplit: { opory: 0.05, zaklad: 0.55, rotace: 0.3, mladi: 0.1 } });
-    const star = Object.values(s.players).filter((p) => p.clubId !== 'bohemians' && p.clubId).sort((a, b) => b.overall - a.overall)[0];
-    expect(sectionRoomFor(s, star, star.wage).room).toBeLessThan(0);
-    const p = squadOf(s, 'bohemians').sort((a, b) => b.overall - a.overall)[0];
-    const moved = setWageSection(s, p.id, 'rotace');
-    expect(sectionsOf(moved).get(p.id)).toBe('rotace');
-    expect(sectionUsage(moved).find((u) => u.section === 'rotace')!.players).toBe(sectionUsage(s).find((u) => u.section === 'rotace')!.players);
+  it('plat nad strop se nevejde, vlastní hráč se počítá bez dosavadního platu', () => {
+    const star = Object.values(start.players).filter((p) => p.clubId !== 'bohemians' && p.clubId).sort((a, b) => b.overall - a.overall)[0];
+    expect(wageRoomFor(start, star, wageUsage(start).room + 1)).toBeLessThan(0);
+    const own = squadOf(start, 'bohemians')[0];
+    expect(wageRoomFor(start, own, own.wage)).toBe(wageUsage(start).room);
   });
 
   it('opora, která bere méně než hráč z rotace, ztrácí morálku', () => {

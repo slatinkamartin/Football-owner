@@ -4,6 +4,9 @@ import {
   BONUS_HINT,
   BONUS_LABEL,
   bonusScheme,
+  coreIds,
+  wageRoomFor,
+  wageUsage,
   budgetApproved,
   budgetRemaining,
   CAMP_LABEL,
@@ -30,13 +33,7 @@ import {
   renewContract,
   ROLE_LABEL,
   seasonLabel,
-  SECTION_HINT,
-  SECTION_LABEL,
-  sectionRoomFor,
-  sectionsOf,
-  sectionUsage,
   securityPerMatch,
-  setWageSection,
   STAFF_KEY,
   squadOf,
   tierOf,
@@ -45,8 +42,6 @@ import {
   wageCommitments,
   wagePlan,
   wageRank,
-  wageSplit,
-  WAGE_SECTIONS,
   type ActionResult,
   type BonusScheme,
   type CampChoice,
@@ -54,7 +49,6 @@ import {
   type GameState,
   type Level,
   type StaffRole,
-  type WageSection,
 } from '../../../engine';
 import { Notice } from '../../components';
 import { money } from '../../format';
@@ -93,23 +87,14 @@ export function FinanceExpenses({ game, onChange, onOpen, focus }: { game: GameS
   const total = costs.reduce((a, l) => a + l.amount, 0);
 
   // Platy
-  const split = wageSplit(game);
-  const usage = sectionUsage(game);
-  const sections = sectionsOf(game);
+  const usage = wageUsage(game);
+  const core = coreIds(game);
   const scheme = bonusScheme(game);
   const wp = wagePlan(game);
-  const sum = (k: 'cap' | 'bill' | 'expiring' | 'room') => usage.reduce((a, u) => a + u[k], 0);
   const squad = squadOf(game, club.id).sort((a, b) => b.wage - a.wage);
   const issues = hierarchyIssues(game);
   const expiring = squad.filter((p) => contractExpiring(game, p)).sort((a, b) => a.contractUntil - b.contractUntil || b.overall - a.overall);
   const commitments = wageCommitments(game);
-  const changeSplit = (section: WageSection, value: number) => {
-    const others = WAGE_SECTIONS.filter((s) => s !== section);
-    const rest = others.reduce((a, s) => a + split[s], 0);
-    const next = { ...split, [section]: value } as Record<WageSection, number>;
-    for (const s of others) next[s] = rest > 0 ? (split[s] / rest) * (1 - value) : (1 - value) / others.length;
-    set({ wageSplit: next });
-  };
   const base = wageBudgetMonthly({ ...club, policy: { ...club.policy, wageMultiplier: 1 } });
   const markPct = (wp.contracts / 12 / Math.max(1, base)) * 100;
 
@@ -169,38 +154,9 @@ export function FinanceExpenses({ game, onChange, onOpen, focus }: { game: GameS
             )}
           />
         </div>
-        <h3>Rozdělení do sekcí</h3>
-        <div className="table-wrap">
-          <table className="sections">
-            <thead>
-              <tr><th>Sekce</th><th className="num">Podíl</th><th className="num">Rozpočet</th><th className="num">Platy</th><th className="num hide-sm">Končí v létě</th><th className="num">Zbývá</th></tr>
-            </thead>
-            <tbody>
-              {usage.map((u) => (
-                <tr key={u.section}>
-                  <td className="wrap">
-                    <strong>{SECTION_LABEL[u.section]}</strong> <span className="muted small">({u.players})</span>
-                    <input type="range" min={0} max={70} step={1} value={Math.round(split[u.section] * 100)} aria-label={`Podíl sekce ${SECTION_LABEL[u.section]}`} onChange={(e) => changeSplit(u.section, Number(e.target.value) / 100)} />
-                    <span className="muted small">{SECTION_HINT[u.section]}</span>
-                  </td>
-                  <td className="num" data-label="Podíl">{Math.round(split[u.section] * 100)} %</td>
-                  <td className="num" data-label="Rozpočet">{money(u.cap)}</td>
-                  <td className="num" data-label="Platy">{money(u.bill)}</td>
-                  <td className="num hide-sm muted">{money(u.expiring)}</td>
-                  <td className={`num ${u.room < 0 ? 'neg' : 'pos'}`} data-label="Zbývá">{money(u.room)}</td>
-                </tr>
-              ))}
-              <tr className="total">
-                <td>Celkem (měsíčně)</td>
-                <td className="num" data-label="Podíl">100 %</td>
-                <td className="num" data-label="Rozpočet">{money(sum('cap'))}</td>
-                <td className="num" data-label="Platy">{money(sum('bill'))}</td>
-                <td className="num hide-sm">{money(sum('expiring'))}</td>
-                <td className={`num ${sum('room') < 0 ? 'neg' : 'pos'}`} data-label="Zbývá">{money(sum('room'))}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <h3>Čerpání rozpočtu na platy</h3>
+        <span className="meter wide"><span className={`meter-fill ${usage.room < 0 ? 'bad' : usage.bill > usage.cap * 0.9 ? 'warn' : 'good'}`} style={{ width: `${Math.min(100, (usage.bill / Math.max(1, usage.cap)) * 100)}%` }} /></span>
+        <p className="muted small">{usage.players} hráčů bere {money(usage.bill)} z {money(usage.cap)} měsíčně, z toho {money(usage.expiring)} jsou smlouvy končící v létě.</p>
         <h3>Systém prémií</h3>
         <div className="choices compact">
           {(['fixni', 'vyvazeny', 'vykonovy'] as BonusScheme[]).map((b) => (
@@ -224,40 +180,19 @@ export function FinanceExpenses({ game, onChange, onOpen, focus }: { game: GameS
       </LineCard>
 
       <section className="card" id="line-hraci">
-        <h2>Hráči po sekcích <span className="muted small">· {money(sum('bill'))} z {money(sum('cap'))} měsíčně</span></h2>
+        <h2>Platy hráčů <span className="muted small">· {money(usage.bill)} z {money(usage.cap)} měsíčně</span></h2>
         {issues.map((t, i) => <p key={i} className="warning soft">{t}</p>)}
-        <div className="sections-grid">
-          {WAGE_SECTIONS.map((sec) => {
-            const u = usage.find((x) => x.section === sec)!;
-            const list = squad.filter((p) => sections.get(p.id) === sec);
-            return (
-              <div key={sec} className="subcard">
-                <div className="row-between">
-                  <strong>{SECTION_LABEL[sec]}</strong>
-                  <span className={`small ${u.room < 0 ? 'neg' : 'muted'}`}>{money(u.bill)} z {money(u.cap)}</span>
-                </div>
-                <span className="meter wide"><span className={`meter-fill ${u.room < 0 ? 'bad' : u.bill > u.cap * 0.9 ? 'warn' : 'good'}`} style={{ width: `${Math.min(100, (u.bill / Math.max(1, u.cap)) * 100)}%` }} /></span>
-                <ul className="plain small wage-list">
-                  {list.map((p) => (
-                    <li key={p.id} className="row-between">
-                      <span>
-                        <span className="muted">{POSITION_SHORT[p.position]}</span> <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> <span className="muted">({p.overall}, do {p.contractUntil})</span>
-                      </span>
-                      <span className="wage-cell">
-                        {money(p.wage)}
-                        <select aria-label={`Sekce hráče ${playerName(p)}`} value={p.wageSection ?? ''} onChange={(e) => onChange(setWageSection(game, p.id, (e.target.value || undefined) as WageSection | undefined))}>
-                          <option value="">auto</option>
-                          {WAGE_SECTIONS.map((s) => <option key={s} value={s}>{SECTION_LABEL[s]}</option>)}
-                        </select>
-                      </span>
-                    </li>
-                  ))}
-                  {list.length === 0 && <li className="muted">nikdo</li>}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
+        <ul className="plain small wage-list">
+          {squad.map((p) => (
+            <li key={p.id} className="row-between">
+              <span>
+                <span className="muted">{POSITION_SHORT[p.position]}</span> <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> <span className="muted">({p.overall}, do {p.contractUntil})</span>
+                {core.has(p.id) && <span className="muted"> · opora</span>}
+              </span>
+              <span className="wage-cell">{money(p.wage)}</span>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {expiring.length > 0 && (
@@ -267,18 +202,18 @@ export function FinanceExpenses({ game, onChange, onOpen, focus }: { game: GameS
           <div className="table-wrap">
             <table className="expiring">
               <thead>
-                <tr><th>Hráč</th><th className="num">Teď</th><th className="num">Chce</th><th className="num">Místo v sekci</th><th /></tr>
+                <tr><th>Hráč</th><th className="num">Teď</th><th className="num">Chce</th><th className="num">Volno po prodloužení</th><th /></tr>
               </thead>
               <tbody>
                 {expiring.map((p) => {
                   const demand = renewalDemand(game, p);
-                  const room = sectionRoomFor(game, p, demand);
+                  const room = wageRoomFor(game, p, demand);
                   return (
                     <tr key={p.id}>
                       <td data-label="Hráč"><span className="muted">{POSITION_SHORT[p.position]}</span> <PlayerLink id={p.id}>{playerName(p)}</PlayerLink> <span className="muted small">({p.overall}, {playerAge(p, game.season)} let)</span></td>
                       <td data-label="Teď" className="num">{money(p.wage)}</td>
                       <td data-label="Chce" className="num">{money(demand)}</td>
-                      <td data-label={SECTION_LABEL[room.section]} className={`num ${room.room < 0 ? 'neg' : 'muted'}`}>{SECTION_LABEL[room.section]}: {money(room.room)}</td>
+                      <td data-label="Volno po prodloužení" className={`num ${room < 0 ? 'neg' : 'muted'}`}>{money(room)}</td>
                       <td><button onClick={() => apply(renewContract(game, p.id, demand, 2))}>Prodloužit</button></td>
                     </tr>
                   );

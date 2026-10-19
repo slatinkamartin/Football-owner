@@ -7,7 +7,7 @@ import { createRng, type Rng } from './rng';
 import { directorAbility, scoutingError, type ActionResult } from './staff';
 import type { ForeignMarket, ForeignTarget, GameState, Player, Position, ScoutRegion } from './types';
 import { budgetRemaining, executeTransfer, monthsUntilContractEnd, playerName, wageBill, weakestPosition } from './transfers';
-import { sectionRoomFor } from './wages';
+import { wageRoomFor } from './wages';
 import { logTransfer } from './transferlog';
 import { ffpBlocksSigning } from './finplus';
 import { addNews, clamp, clubLabel, FOREIGN_PREFIX, hash01, plural, tierOf, transferWindow } from './world';
@@ -234,7 +234,7 @@ export function foreignBlocked(state: GameState, t: ForeignTarget, price = forei
   if (t.player.nonEu && nonEuCount(state) >= NON_EU_LIMIT) return `V kádru je už ${NON_EU_LIMIT} hráčů mimo EU.`;
   if (price.total > budgetRemaining(state)) return 'Nevejde se do rozpočtu na přestupy.';
   if (wageBill(state, own) + price.wage > wageBudgetMonthly(state.clubs[own]) * 1.05) return 'Plat by překročil mzdový strop.';
-  if (sectionRoomFor(state, t.player, price.wage).room < 0) return 'Plat se nevejde do mzdové sekce.';
+  if (wageRoomFor(state, t.player, price.wage) < 0) return 'Plat se nevejde do mzdového rozpočtu.';
   return undefined;
 }
 

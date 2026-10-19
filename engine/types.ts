@@ -100,7 +100,7 @@ export interface Player {
   bookValue?: number;
   /** Měsíční odpis registrace. */
   amortization?: number;
-  /** Ruční zařazení do mzdové sekce (jen klub majitele). */
+  /** Zastaralé (dřív mzdové sekce), hra ho ignoruje. */
   wageSection?: WageSection;
   /** Podíl z dalšího prodeje pro bývalý klub. */
   sellOn?: { clubId: string; pct: number };
@@ -500,7 +500,7 @@ export interface ClubPolicy {
   departments?: Departments;
   /** Sportovní ředitel sám prodlužuje smlouvy a doplňuje kádr (výchozí ano). */
   autoSquad?: boolean;
-  /** Rozdělení mzdového stropu do sekcí (podíly, součet 1). */
+  /** Zastaralé (dřív rozdělení mzdového rozpočtu do sekcí), hra ho ignoruje. */
   wageSplit?: Record<WageSection, number>;
   bonusScheme?: BonusScheme;
   /** Sjednaný kontokorent. */

@@ -61,6 +61,11 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.24: skutečné soupisky a jeden mzdový rozpočet
+
+- **Skutečné soupisky:** databáze `data/soupisky/hraci.csv`, 27 klubů 1. a 2. ligy, 836 hráčů, stav k 19. 10. 2026 (zdroje chanceliga.cz a chnliga.cz). Volba „Skutečné soupisky / Vymyšlení hráči“ při nové hře, nahrání vlastního CSV.
+- **Jeden mzdový rozpočet:** platy hráčů mají jeden společný strop, rozdělení do sekcí (opory, základ, rotace, mladí) je zrušené.
+
 ### Novinky verze 0.23: ladění (plynulost, vyváženost, opravy)
 
 - **Jedno tlačítko posunu**: hra jde k dalšímu zápasu, milníku nebo o týden. Zastaví se jen na tom, co máte v nastavení.
@@ -312,7 +317,7 @@ npm run build      # produkční sestavení do složky dist/
   - Rozpočet: čtyři kroky s plánem v kostce.
   - Příjmy, Náklady a Financování.
   - Účetnictví: výsledovka, rozvaha, výkaz peněžních toků, pohyby.
-- **Mzdový rozpočet po sekcích:** opory, základ, rotace a mladí, každá s vlastním rozpočtem. Hráče řadí hra podle role a dají se přeřadit ručně. Sportovní ředitel podepisuje a prodlužuje jen v rámci sekce, vyjednávání ukazuje, kolik v sekci zbývá. Platová hierarchie ovlivňuje náladu v kabině. Přehled podepsaných platů na další tři sezóny.
+- **Mzdový rozpočet:** jeden strop pro platy celého kádru (od verze 0.24; dřív se dělil do sekcí). Sportovní ředitel podepisuje a prodlužuje, jen dokud se platy vejdou pod strop, vyjednávání ukazuje, kolik v rozpočtu zbude. Platová hierarchie ovlivňuje náladu v kabině. Přehled podepsaných platů na další tři sezóny.
 - **Systém prémií:**
   - vyšší pevné platy;
   - vyvážený;

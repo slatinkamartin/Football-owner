@@ -1,76 +1,20 @@
 import { playerWage, wageBudgetMonthly } from './finance';
-import { playerAge, squadOf } from './players';
-import type { BonusScheme, GameState, Player, WageSection } from './types';
+import { squadOf } from './players';
+import type { BonusScheme, GameState, Player } from './types';
 import { clamp } from './world';
 
 /**
- * Mzdový rozpočet po sekcích. Strop pro platy hráčů se dělí do obálek (opory, základ, rotace, mladí).
- * Sportovní ředitel podepisuje a prodlužuje jen v rámci obálky sekce, kam hráč patří.
+ * Mzdový rozpočet: jeden strop pro platy celého kádru. Sportovní ředitel podepisuje a prodlužuje,
+ * jen dokud se platy vejdou pod strop.
  */
 
-export const WAGE_SECTIONS: WageSection[] = ['opory', 'zaklad', 'rotace', 'mladi'];
-export const SECTION_LABEL: Record<WageSection, string> = {
-  opory: 'Opory',
-  zaklad: 'Základ sestavy',
-  rotace: 'Rotace a doplněk',
-  mladi: 'Mladí do 21 let',
-};
-export const SECTION_HINT: Record<WageSection, string> = {
-  opory: '6 nejlepších hráčů kádru',
-  zaklad: 'dalších 9 hráčů, kteří pravidelně hrají',
-  rotace: 'zbytek kádru',
-  mladi: 'hráči do 21 let mimo opory',
-};
-export const DEFAULT_SPLIT: Record<WageSection, number> = { opory: 0.42, zaklad: 0.33, rotace: 0.17, mladi: 0.08 };
-
-/** Rozdělení, které pokryje současné platy v každé sekci; volné místo se rozdělí podle běžného poměru. */
-export function suggestedSplit(state: GameState): Record<WageSection, number> {
-  const club = state.clubs[state.owner.clubId];
-  const sections = sectionsOf(state);
-  const squad = squadOf(state, club.id);
-  const bills = WAGE_SECTIONS.map((sec) => squad.filter((p) => sections.get(p.id) === sec).reduce((a, p) => a + p.wage, 0));
-  const total = bills.reduce((a, b) => a + b, 0);
-  const cap = Math.max(wageBudgetMonthly(club), total, 1);
-  const free = cap - total;
-  const raw = WAGE_SECTIONS.map((sec, i) => (bills[i] + free * DEFAULT_SPLIT[sec]) / cap);
-  const sum = raw.reduce((a, b) => a + b, 0);
-  return Object.fromEntries(WAGE_SECTIONS.map((sec, i) => [sec, Math.ceil((raw[i] / sum) * 1000) / 1000])) as Record<WageSection, number>;
+/** Opory kádru: šest nejlepších hráčů (pro platovou hierarchii v kabině). */
+export function coreIds(state: GameState, clubId = state.owner.clubId): Set<string> {
+  const squad = [...squadOf(state, clubId)].sort((a, b) => b.overall - a.overall || a.id.localeCompare(b.id));
+  return new Set(squad.slice(0, 6).map((p) => p.id));
 }
 
-export function wageSplit(state: GameState): Record<WageSection, number> {
-  return state.clubs[state.owner.clubId].policy.wageSplit ?? DEFAULT_SPLIT;
-}
-
-/** Automatické zařazení podle pořadí v kádru a věku (ruční zařazení má přednost). */
-export function sectionsOf(state: GameState, clubId = state.owner.clubId, extra?: Player): Map<string, WageSection> {
-  const squad = [...squadOf(state, clubId), ...(extra ? [extra] : [])].sort((a, b) => b.overall - a.overall || a.id.localeCompare(b.id));
-  const map = new Map<string, WageSection>();
-  // Ručně zařazení hráči zabírají místa své sekce, ostatní se řadí podle pořadí.
-  const manual = squad.filter((p) => p.wageSection && clubId === state.owner.clubId && p !== extra);
-  for (const p of manual) map.set(p.id, p.wageSection!);
-  let opory = manual.filter((p) => p.wageSection === 'opory').length;
-  let zaklad = manual.filter((p) => p.wageSection === 'zaklad').length;
-  squad.forEach((p) => {
-    if (map.has(p.id)) return;
-    if (opory < 6) {
-      map.set(p.id, 'opory');
-      opory++;
-    }
-    else if (playerAge(p, state.season) <= 21) map.set(p.id, 'mladi');
-    else if (zaklad < 9) {
-      map.set(p.id, 'zaklad');
-      zaklad++;
-    } else map.set(p.id, 'rotace');
-  });
-  return map;
-}
-
-export function sectionOf(state: GameState, p: Player): WageSection {
-  return sectionsOf(state, p.clubId).get(p.id) ?? 'rotace';
-}
-
-export interface SectionUsage {
-  section: WageSection;
+export interface WageUsage {
   cap: number;
   bill: number;
   /** Platy hráčů, kterým smlouva pokračuje i příští sezónu. */
@@ -81,28 +25,20 @@ export interface SectionUsage {
   players: number;
 }
 
-export function sectionUsage(state: GameState): SectionUsage[] {
+/** Čerpání mzdového rozpočtu klubu majitele. */
+export function wageUsage(state: GameState): WageUsage {
   const club = state.clubs[state.owner.clubId];
   const cap = wageBudgetMonthly(club);
-  const split = wageSplit(state);
-  const sections = sectionsOf(state);
   const squad = squadOf(state, club.id);
-  return WAGE_SECTIONS.map((section) => {
-    const list = squad.filter((p) => sections.get(p.id) === section);
-    const bill = list.reduce((a, p) => a + p.wage, 0);
-    const continuing = list.filter((p) => p.contractUntil > state.season + 1).reduce((a, p) => a + p.wage, 0);
-    const c = Math.round(cap * split[section]);
-    return { section, cap: c, bill, continuing, expiring: bill - continuing, room: c - bill, players: list.length };
-  });
+  const bill = squad.reduce((a, p) => a + p.wage, 0);
+  const continuing = squad.filter((p) => p.contractUntil > state.season + 1).reduce((a, p) => a + p.wage, 0);
+  return { cap, bill, continuing, expiring: bill - continuing, room: cap - bill, players: squad.length };
 }
 
-/** Kolik místa zbývá v sekci, kam by hráč s daným platem přišel (záporné = přečerpání). */
-export function sectionRoomFor(state: GameState, p: Player, wage: number): { section: WageSection; room: number } {
-  const candidate = { ...p, clubId: state.owner.clubId, wageSection: undefined };
-  const section = sectionsOf(state, state.owner.clubId, candidate).get(p.id) ?? 'rotace';
-  const usage = sectionUsage(state).find((u) => u.section === section)!;
+/** Kolik místa v mzdovém rozpočtu zbude, když hráč bude brát daný plat (záporné = přečerpání). */
+export function wageRoomFor(state: GameState, p: Player, wage: number): number {
   const already = p.clubId === state.owner.clubId ? p.wage : 0;
-  return { section, room: usage.room + already - wage };
+  return wageUsage(state).room + already - wage;
 }
 
 /** Závazky z podepsaných smluv na příští sezóny (roční platy). */
@@ -161,8 +97,8 @@ export function wageMorale(state: GameState): void {
   const own = state.owner.clubId;
   const rep = state.clubs[own].reputation;
   const squad = squadOf(state, own);
-  const sections = sectionsOf(state);
-  const maxLower = Math.max(0, ...squad.filter((p) => sections.get(p.id) !== 'opory').map((p) => p.wage));
+  const core = coreIds(state);
+  const maxLower = Math.max(0, ...squad.filter((p) => !core.has(p.id)).map((p) => p.wage));
   const sorted = [...squad].sort((a, b) => a.wage - b.wage);
   const median = sorted[Math.floor(sorted.length / 2)]?.wage ?? 0;
   const star = sorted[sorted.length - 1];
@@ -170,8 +106,8 @@ export function wageMorale(state: GameState): void {
   for (const p of squad) {
     const ratio = p.wage / Math.max(5_000, playerWage(p.overall, rep));
     let delta = ratio < 0.7 ? -4 : ratio < 0.85 ? -2 : ratio > 1.2 ? 1 : 0;
-    if (sections.get(p.id) === 'opory' && p.wage < maxLower) delta -= 2;
-    if (envy && p !== star && sections.get(p.id) === 'opory') delta -= 1;
+    if (core.has(p.id) && p.wage < maxLower) delta -= 2;
+    if (envy && p !== star && core.has(p.id)) delta -= 1;
     if (delta) p.morale = clamp(p.morale + delta, 0, 100);
   }
 }
@@ -179,25 +115,16 @@ export function wageMorale(state: GameState): void {
 /** Upozornění na platovou hierarchii pro rozhraní. */
 export function hierarchyIssues(state: GameState): string[] {
   const squad = squadOf(state, state.owner.clubId);
-  const sections = sectionsOf(state);
+  const core = coreIds(state);
   const out: string[] = [];
-  const lower = squad.filter((p) => sections.get(p.id) !== 'opory').sort((a, b) => b.wage - a.wage)[0];
-  const underpaid = squad.filter((p) => sections.get(p.id) === 'opory' && lower && p.wage < lower.wage);
+  const lower = squad.filter((p) => !core.has(p.id)).sort((a, b) => b.wage - a.wage)[0];
+  const underpaid = squad.filter((p) => core.has(p.id) && lower && p.wage < lower.wage);
   if (lower && underpaid.length) {
-    out.push(`${underpaid.length} ${underpaid.length === 1 ? 'opora bere' : 'opory berou'} méně než ${lower.firstName} ${lower.lastName} z nižší sekce. V kabině to vadí.`);
+    out.push(`${underpaid.length} ${underpaid.length === 1 ? 'opora bere' : 'opory berou'} méně než ${lower.firstName} ${lower.lastName}, který mezi opory nepatří. V kabině to vadí.`);
   }
   const sorted = [...squad].sort((a, b) => a.wage - b.wage);
   const median = sorted[Math.floor(sorted.length / 2)]?.wage ?? 0;
   const star = sorted[sorted.length - 1];
   if (star && median > 0 && star.wage > median * 4) out.push(`${star.firstName} ${star.lastName} bere přes čtyřnásobek mediánu kádru. Ostatní opory mu to závidí.`);
   return out;
-}
-
-/** Ruční přeřazení hráče do mzdové sekce (undefined = automaticky podle role). */
-export function setWageSection(prev: GameState, playerId: string, section?: WageSection): GameState {
-  const p = prev.players[playerId];
-  if (!p || p.clubId !== prev.owner.clubId) return prev;
-  const state = structuredClone(prev);
-  state.players[playerId].wageSection = section;
-  return state;
 }

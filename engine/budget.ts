@@ -29,7 +29,7 @@ import { financeFactor, goalTarget, staffAbility, STAFF_KEY, expectedPosition, t
 import { matchdayExtras } from './stadium';
 import { CUP_FINALIST_PRIZE, CUP_ROUNDS } from './competitions';
 import { EUROPE_BONUS_SHARE, europeRange } from './europe';
-import { goalBonusPoints, pointsBonusFactor, suggestedSplit } from './wages';
+import { goalBonusPoints, pointsBonusFactor } from './wages';
 import { overdraftLimit } from './financing';
 import { sponsorForecast, sponsorMonthly } from './sponsors';
 
@@ -538,7 +538,6 @@ export function prepareBudget(state: GameState): void {
   const tier = tierOf(state, club.id);
   state.budget = { season: state.season };
   club.policy.departments ??= departmentReference(club, tier);
-  club.policy.wageSplit ??= suggestedSplit(state);
   club.policy.seasonTicketPrice ??= defaultSeasonTicketPrice(tier);
   const cfo = staffAbility(state, 'financni');
   // Návrh rozpočtu na přestupy: tolik, aby klubu během sezóny nedošly peníze.

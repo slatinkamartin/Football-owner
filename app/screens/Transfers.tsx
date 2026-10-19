@@ -4,8 +4,7 @@ import { PlayerLink } from '../nav';
 import {
   acceptOffer,
   isForeign,
-  SECTION_LABEL,
-  sectionRoomFor,
+  wageRoomFor,
   SELL_ON_DISCOUNT,
   SELL_ON_PCT,
   approveProposal,
@@ -150,7 +149,7 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
   const [conditional, setConditional] = useState(false);
   const [release, setRelease] = useState(false);
   const done = n.stage === 'hotovo' || n.stage === 'neuspech';
-  const room = p && n.stage === 'hrac' ? sectionRoomFor(game, p, Number(wage.replace(/\s/g, '')) || 0) : undefined;
+  const room = p && n.stage === 'hrac' ? wageRoomFor(game, p, Number(wage.replace(/\s/g, '')) || 0) : undefined;
 
   return (
     <section className="card negotiation">
@@ -204,10 +203,10 @@ function NegotiationCard({ game, onResult, onClose }: { game: GameState; onResul
       {n.stage === 'hrac' && (
         <p className="muted small">
           K platu přibude odměna agentovi ve výši dvou měsíčních platů.
-          {room && (
+          {room !== undefined && (
             <>
-              {' '}Hráč patří do mzdové sekce <strong>{SECTION_LABEL[room.section]}</strong>:{' '}
-              <span className={room.room < 0 ? 'neg' : 'pos'}>{room.room < 0 ? `přečerpá ji o ${money(-room.room)} měsíčně` : `zbude ${money(room.room)} měsíčně`}</span>.
+              {' '}Mzdový rozpočet:{' '}
+              <span className={room < 0 ? 'neg' : 'pos'}>{room < 0 ? `přečerpá ho o ${money(-room)} měsíčně` : `zbude ${money(room)} měsíčně`}</span>.
             </>
           )}
         </p>
@@ -243,8 +242,8 @@ function Proposals({ game, onResult, onReject }: { game: GameState; onResult: (r
                 <p className="small">
                   Odhad: odstupné {money(x.estimatedFee)}, plat {money(x.estimatedWage)} měsíčně
                   {(() => {
-                    const r = sectionRoomFor(game, p, x.estimatedWage);
-                    return <> · sekce {SECTION_LABEL[r.section]}, zbude {money(r.room)}</>;
+                    const r = wageRoomFor(game, p, x.estimatedWage);
+                    return <> · v mzdovém rozpočtu zbude {money(r)}</>;
                   })()}.
                 </p>
                 <div className="buttons">

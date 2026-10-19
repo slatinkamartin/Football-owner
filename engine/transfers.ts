@@ -3,7 +3,7 @@ import { ffpBlocksSigning } from './finplus';
 import { AGENT_STYLE_LABEL, agentFeeFactor, agentOf, agentWageFactor, changeAgentRelation, closeDomino, deadlineDay, deadlineDiscount, releaseClauseFor, startDomino, tipDiscount } from './market';
 import { crisisDiscount, noteTimeline } from './league';
 import { book, ownerAccounting, playerWage, wageBudgetMonthly } from './finance';
-import { schemeWageFactor, SECTION_LABEL, sectionRoomFor, sectionsOf, sectionUsage } from './wages';
+import { schemeWageFactor, wageRoomFor, wageUsage } from './wages';
 import { scheduleInstalments } from './financing';
 import { logTransfer } from './transferlog';
 import { FOREIGN_CLUBS } from './names';
@@ -434,7 +434,7 @@ export function generateProposals(state: GameState): void {
       .filter((x) => {
         const demand = wageDemand(state, x.p, own);
         // V nižších soutěžích jsou platy blízko minima, a tak je povolená větší odchylka od férového platu.
-        return demand <= fair(x.p) * (tierOf(state, own) >= 2 ? 2 : 1.4) && demand <= wageRoom && sectionRoomFor(state, x.p, demand).room >= 0;
+        return demand <= fair(x.p) * (tierOf(state, own) >= 2 ? 2 : 1.4) && demand <= wageRoom;
       })
       .sort((a, b) => b.view.overall - a.view.overall - (b.fee - a.fee) / Math.max(budget, 1_000_000));
     for (const x of pool.slice(0, pos === needs[0] ? 2 : 1)) {
@@ -469,9 +469,8 @@ export function approveProposal(prev: GameState, proposalId: string): ActionResu
   else if (p.clubId === own) message = 'Hráč už je náš.';
   else if (!interest(state, p, own).ok) message = interest(state, p, own).reason;
   else if (fee > budgetRemaining(state)) message = `Klub ${clubLabel(state, p.clubId)} chce ${fee.toLocaleString('cs-CZ')} Kč, na to rozpočet nestačí.`;
-  else if (sectionRoomFor(state, p, minWage).room < 0) {
-    const { section } = sectionRoomFor(state, p, minWage);
-    message = `${playerName(p)} chce ${minWage.toLocaleString('cs-CZ')} Kč měsíčně, to se nevejde do mzdové sekce ${SECTION_LABEL[section]}. Upravte rozdělení mzdového rozpočtu.`;
+  else if (wageRoomFor(state, p, minWage) < 0) {
+    message = `${playerName(p)} chce ${minWage.toLocaleString('cs-CZ')} Kč měsíčně, to se nevejde do mzdového rozpočtu. Zvyšte ho ve Financích.`;
   }
   else {
     executeTransfer(state, p, own, fee, minWage, 3);
@@ -756,11 +755,10 @@ export function seasonEndContracts(state: GameState, rng: Rng): void {
   if (directorOf(state, own) && club.policy.autoSquad !== false) {
     const squad = squadOf(state, own).sort((a, b) => b.overall - a.overall);
     // Počítá se jen s platy hráčů, kteří zůstávají; místo po odcházejících jde na prodloužení.
-    const sections = sectionsOf(state);
-    const usage = sectionUsage(state);
+    const usage = wageUsage(state);
     // Na prodloužení smí jít aspoň místo po odcházejících platech, i když strop po sestupu nebo propadu
     // pověsti klesl: klub tak udrží kádr na dosavadní platové úrovni a nezačne se rozpadat.
-    const free = new Map(usage.map((u) => [u.section, Math.max(u.cap - u.continuing, u.expiring)]));
+    let free = Math.max(usage.cap - usage.continuing, usage.expiring);
     let bill = squad.filter((p) => !contractExpiring(state, p)).reduce((a, p) => a + p.wage, 0);
     const cap = Math.max(wageBudgetMonthly(club), squad.reduce((a, p) => a + p.wage, 0));
     for (const p of squad.slice(0, SQUAD_TARGET)) {
@@ -769,9 +767,8 @@ export function seasonEndContracts(state: GameState, rng: Rng): void {
       const demand = renewalDemand(state, p);
       if (demand > fairWage(state, p, own) * 1.25) continue;
       if (p.overall - squadQualityForReputation(club.reputation) > 10) continue;
-      const section = sections.get(p.id) ?? 'rotace';
-      if (bill + demand > cap || (free.get(section) ?? 0) < demand) continue;
-      free.set(section, (free.get(section) ?? 0) - demand);
+      if (bill + demand > cap || free < demand) continue;
+      free -= demand;
       bill += demand;
       p.wage = demand;
       p.contractUntil = state.season + 1 + rng.int(1, 3);
@@ -864,7 +861,7 @@ export function emergencyFill(state: GameState, rng: Rng, when: string): void {
     const room = wageBudgetMonthly(club) - wageBill(state, own);
     const pool = Object.values(state.players).filter((p) => p.clubId === FREE && p.position === pos && interest(state, p, own).ok);
     const affordable = pool
-      .filter((p) => wageDemand(state, p, own) <= room && sectionRoomFor(state, p, wageDemand(state, p, own)).room >= 0)
+      .filter((p) => wageDemand(state, p, own) <= room)
       .sort((a, b) => b.overall - a.overall);
     if (squadCount() >= MIN_SQUAD && !needs().length && !affordable.length) break;
     const fa = (auto ? affordable[0] : undefined) ?? pool.sort((a, b) => a.wage - b.wage)[0];
@@ -888,7 +885,7 @@ export function emergencyFill(state: GameState, rng: Rng, when: string): void {
 
 /**
  * Jednou týdně v přestupním okně: sportovní ředitel (se zapnutou péčí o kádr) sám koupí posilu na nejslabší
- * místo základní sestavy, když je výrazně lepší, vejde se do rozpočtu na přestupy i do mzdové sekce.
+ * místo základní sestavy, když je výrazně lepší, vejde se do rozpočtu na přestupy i do mzdového rozpočtu.
  * Jeden nákup smí stát nejvýš 60 % zbývajícího rozpočtu; dražší posily nechává na majiteli (návrhy).
  */
 export function directorSignings(state: GameState, rng: Rng): void {
@@ -913,7 +910,7 @@ export function directorSignings(state: GameState, rng: Rng): void {
     .filter((p) => p.position === position && p.clubId !== own && !isForeign(p.clubId) && p.overall >= bar + gain && playerAge(p, state.season) <= (lower ? 32 : 30))
     .filter((p) => p.clubId === FREE || (state.clubs[p.clubId] && state.clubs[p.clubId].reputation <= club.reputation + repGap && !keys.has(p.id)))
     .map((p) => ({ p, fee: askingPrice(state, p, keys), wage: wageDemand(state, p, own) }))
-    .filter((x) => x.fee <= remaining * 0.6 && interest(state, x.p, own).ok && sectionRoomFor(state, x.p, x.wage).room >= 0 && wageBill(state, own) + x.wage <= wageBudgetMonthly(club))
+    .filter((x) => x.fee <= remaining * 0.6 && interest(state, x.p, own).ok && wageBill(state, own) + x.wage <= wageBudgetMonthly(club))
     .sort((a, b) => b.p.overall - a.p.overall || a.fee - b.fee);
   // V regionech se skautskou sítí hledá i v cizině (podle odhadu skautů, takže s rizikem).
   const abroad = directorForeignPick(state, position, bar, remaining);
