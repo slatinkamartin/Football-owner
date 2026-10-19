@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import pack from '../../data/cz-zaklad/pack.json';
 import rosterCsv from '../../data/soupisky/hraci.csv?raw';
 import { careerAllows, DIFFICULTY, parseRosterCsv, rostersByClub, type RosterRow, newCareerGame, newGame, newScenarioGame, SCENARIOS, type DataPack, type Difficulty, type GameState, type ScenarioId } from '../../engine';
-import { loadCareer, saveCareer } from '../storage';
+import { listRosterSets, loadCareer, saveCareer, type RosterSet } from '../storage';
+import { RosterEditor } from './RosterEditor';
 import { money, num } from '../format';
 
 const czPack = pack as DataPack;
@@ -24,24 +25,48 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
   const [mode, setMode] = useState<'volna' | 'scenar' | 'kariera'>(career ? 'kariera' : 'volna');
   const [scenario, setScenario] = useState<ScenarioId>('zachrana');
   const [customRosters, setCustomRosters] = useState<{ rows: RosterRow[]; errors: string[]; name: string } | null>(null);
-  const available = customRosters?.rows ?? builtinRosters;
-  const [useRosters, setUseRosters] = useState(builtinRosters.length > 0);
-  const rosters = useRosters && available.length ? available : undefined;
-  const rosterClubs = rostersByClub(available).size;
+  // Zdroj hráčů: databáze hry, nahraný soubor, uložená soupiska z konfigurátoru (id), nebo vymyšlení hráči.
+  const [source, setSource] = useState<string>(builtinRosters.length ? 'db' : 'none');
+  const [sets, setSets] = useState<RosterSet[]>([]);
+  const [editing, setEditing] = useState<{ base: RosterRow[]; baseName: string; existing?: RosterSet } | null>(null);
+  useEffect(() => {
+    void listRosterSets().then(setSets);
+  }, []);
+  const chosenSet = sets.find((s) => s.id === source);
+  const rosters = source === 'db' ? builtinRosters : source === 'file' ? customRosters?.rows : chosenSet?.rows;
+  const describe = (rows: RosterRow[]) => `${rows.length} hráčů z ${rostersByClub(rows).size} klubů`;
 
   const start = () => {
     const name = ownerName.trim() || 'Majitel';
     if (mode === 'scenar') {
-      onStart(newScenarioGame(czPack, scenario, { ownerName: name, difficulty, rosters }));
+      onStart(newScenarioGame(czPack, scenario, { ownerName: name, difficulty, rosters: rosters?.length ? rosters : undefined }));
       return;
     }
     if (!clubId) return;
     if (mode === 'kariera' && career) {
-      onStart(newCareerGame(czPack, career, { clubId, difficulty, ownerShare, rosters }));
+      onStart(newCareerGame(czPack, career, { clubId, difficulty, ownerShare, rosters: rosters?.length ? rosters : undefined }));
       return;
     }
-    onStart(newGame(czPack, { clubId, ownerName: name, difficulty, ownerShare, rosters }));
+    onStart(newGame(czPack, { clubId, ownerName: name, difficulty, ownerShare, rosters: rosters?.length ? rosters : undefined }));
   };
+  if (editing) {
+    return (
+      <RosterEditor
+        base={editing.base}
+        baseName={editing.baseName}
+        existing={editing.existing}
+        onClose={(savedId) => {
+          setEditing(null);
+          void listRosterSets().then((list) => {
+            setSets(list);
+            if (savedId) setSource(savedId);
+            else if (!list.some((s) => s.id === source) && source !== 'db' && source !== 'file' && source !== 'none') setSource('db');
+          });
+          window.scrollTo(0, 0);
+        }}
+      />
+    );
+  }
   const locked = (reputation: number) => (mode === 'kariera' ? careerAllows(career ?? undefined, reputation) : undefined);
 
   return (
@@ -125,14 +150,40 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
       <section className="card">
         <h2>Hráči</h2>
         <div className="choices">
-          <button className={`choice ${rosters ? 'selected' : ''}`} disabled={!available.length} onClick={() => setUseRosters(true)}>
-            <strong>Skutečné soupisky</strong>
-            <span>{available.length ? `${available.length} hráčů z ${rosterClubs} klubů${customRosters ? ` (soubor ${customRosters.name})` : ' z databáze hry'}. Ostatní kluby dostanou vymyšlené hráče.` : 'Databáze soupisek je zatím prázdná. Nahrajte vlastní soubor.'}</span>
+          <button className={`choice ${source === 'db' ? 'selected' : ''}`} disabled={!builtinRosters.length} onClick={() => setSource('db')}>
+            <strong>Skutečné soupisky (databáze hry)</strong>
+            <span>{builtinRosters.length ? `${describe(builtinRosters)}, stav k 19. 10. 2026. Ostatní kluby dostanou vymyšlené hráče.` : 'Databáze soupisek je prázdná.'}</span>
           </button>
-          <button className={`choice ${!rosters ? 'selected' : ''}`} onClick={() => setUseRosters(false)}>
+          {sets.map((s) => (
+            <div key={s.id} className={`choice roster-choice ${source === s.id ? 'selected' : ''}`} role="button" tabIndex={0} onClick={() => setSource(s.id)} onKeyDown={(e) => e.key === 'Enter' && setSource(s.id)}>
+              <strong>{s.name}</strong>
+              <span>Vlastní soupiska: {describe(s.rows)}, upraveno {new Date(s.updated).toLocaleDateString('cs-CZ')}.</span>
+              <button className="linkbtn" onClick={(e) => { e.stopPropagation(); setEditing({ base: s.rows, baseName: s.name, existing: s }); }}>Upravit ›</button>
+            </div>
+          ))}
+          {customRosters && customRosters.rows.length > 0 && (
+            <button className={`choice ${source === 'file' ? 'selected' : ''}`} onClick={() => setSource('file')}>
+              <strong>Nahraný soubor {customRosters.name}</strong>
+              <span>{describe(customRosters.rows)}.</span>
+            </button>
+          )}
+          <button className={`choice ${source === 'none' ? 'selected' : ''}`} onClick={() => setSource('none')}>
             <strong>Vymyšlení hráči</strong>
             <span>Všechny kluby dostanou náhodně vygenerované hráče podle své úrovně.</span>
           </button>
+        </div>
+        <div className="buttons roster-buttons">
+          <button
+            className="primary"
+            onClick={() => {
+              const base = source === 'file' && customRosters ? customRosters.rows : chosenSet ? chosenSet.rows : builtinRosters;
+              const baseName = source === 'file' && customRosters ? customRosters.name : chosenSet ? chosenSet.name : 'databáze hry';
+              setEditing({ base, baseName, existing: chosenSet });
+            }}
+          >
+            {chosenSet ? 'Upravit vybranou soupisku' : 'Konfigurátor soupisek'}
+          </button>
+          {chosenSet && <button onClick={() => setEditing({ base: builtinRosters, baseName: 'databáze hry' })}>Nová soupiska z databáze</button>}
         </div>
         <label className="button-like small-btn">
           Nahrát vlastní soupisky (CSV)
@@ -146,7 +197,7 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
               const parsed = parseRosterCsv(await file.text());
               const unknown = [...new Set(parsed.rows.map((r) => r.club))].filter((id) => !czPack.clubs.some((c) => c.id === id));
               setCustomRosters({ rows: parsed.rows.filter((r) => !unknown.includes(r.club)), errors: [...parsed.errors, ...unknown.map((id) => `Neznámý klub „${id}“ (řádky přeskočeny).`)], name: file.name });
-              if (parsed.rows.length) setUseRosters(true);
+              if (parsed.rows.length) setSource('file');
               e.target.value = '';
             }}
           />

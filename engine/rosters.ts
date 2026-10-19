@@ -138,3 +138,26 @@ export function fillFromRoster(state: GameState, club: Club, rows: RosterRow[] |
   setMarketWages(squad, club);
   return true;
 }
+
+const POSITION_CODE: Record<Position, string> = { GK: 'BR', DF: 'OBR', MF: 'ZAL', FW: 'UT' };
+
+/** Soupisky zpátky do CSV (stejný formát jako data/soupisky/hraci.csv). */
+export function rosterToCsv(rows: RosterRow[]): string {
+  const cell = (v: string | number | undefined) => (v === undefined ? '' : String(v).replace(/[;\r\n]/g, ' ').trim());
+  const lines = rows.map((r) =>
+    [r.club, r.firstName, r.lastName, r.birthYear, POSITION_CODE[r.position], r.nationality, r.role, r.overall, r.potential, r.contractUntil, ''].map(cell).join(';'),
+  );
+  return [ROSTER_COLUMNS.join(';'), ...lines].join('\n') + '\n';
+}
+
+/** Kontrola soupisky před uložením: chybějící údaje a kluby s malým kádrem. */
+export function rosterWarnings(rows: RosterRow[], clubName: (id: string) => string): string[] {
+  const out: string[] = [];
+  const bad = rows.filter((r) => !r.lastName.trim() || !Number.isInteger(r.birthYear) || r.birthYear < 1970 || r.birthYear > 2015);
+  if (bad.length) out.push(`${bad.length} hráčů nemá příjmení nebo platný rok narození.`);
+  for (const [club, list] of rostersByClub(rows)) {
+    const gk = list.filter((r) => r.position === 'GK').length;
+    if (list.length < 18 || gk < 2) out.push(`${clubName(club)}: ${list.length} hráčů, ${gk} brankářů (hra doplní vymyšlené hráče do 18 a 2 brankářů).`);
+  }
+  return out;
+}

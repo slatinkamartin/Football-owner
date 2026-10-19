@@ -1,5 +1,5 @@
 import { del, get, set } from 'idb-keyval';
-import { migrateSave, type Career, type GameState } from '../engine';
+import { migrateSave, type Career, type GameState, type RosterRow } from '../engine';
 
 const KEY = 'majitel:ulozena-hra';
 
@@ -65,4 +65,32 @@ export function loadCareer(): Career | null {
   } catch {
     return null;
   }
+}
+
+const ROSTERS_KEY = 'majitel:soupisky';
+
+/** Vlastní soupisky z konfigurátoru (uložené v prohlížeči). */
+export interface RosterSet {
+  id: string;
+  name: string;
+  updated: string;
+  rows: RosterRow[];
+}
+
+export async function listRosterSets(): Promise<RosterSet[]> {
+  try {
+    return ((await get<RosterSet[]>(ROSTERS_KEY)) ?? []).sort((a, b) => (a.updated < b.updated ? 1 : -1));
+  } catch {
+    return [];
+  }
+}
+
+export async function saveRosterSet(set_: RosterSet): Promise<void> {
+  const all = (await get<RosterSet[]>(ROSTERS_KEY).catch(() => undefined)) ?? [];
+  await set(ROSTERS_KEY, [...all.filter((s) => s.id !== set_.id), set_]);
+}
+
+export async function deleteRosterSet(id: string): Promise<void> {
+  const all = (await get<RosterSet[]>(ROSTERS_KEY).catch(() => undefined)) ?? [];
+  await set(ROSTERS_KEY, all.filter((s) => s.id !== id));
 }

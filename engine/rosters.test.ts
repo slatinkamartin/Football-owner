@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import pack from '../data/cz-zaklad/pack.json';
 import { newGame } from './game';
 import { squadOf } from './players';
-import { parseRosterCsv, rostersByClub } from './rosters';
+import { parseRosterCsv, rostersByClub, rosterToCsv } from './rosters';
 import type { DataPack } from './types';
 
 const czPack = pack as DataPack;
@@ -48,5 +48,17 @@ describe('databáze soupisek', () => {
     expect(df.nonEu).toBe(false);
     // Kluby bez soupisky dostanou vygenerované hráče jako dřív.
     expect(squadOf(s, 'slavia').length).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe('konfigurátor soupisek', () => {
+  it('soupiska jde uložit do CSV a znovu přečíst beze ztráty', () => {
+    const text = readFileSync(new URL('../data/soupisky/hraci.csv', import.meta.url), 'utf8');
+    const { rows } = parseRosterCsv(text);
+    const edited = rows.map((r, i) => (i === 0 ? { ...r, overall: 91, contractUntil: 2030 } : r));
+    const back = parseRosterCsv(rosterToCsv(edited));
+    expect(back.errors).toEqual([]);
+    expect(back.rows.length).toBe(rows.length);
+    expect(back.rows[0]).toEqual({ ...edited[0] });
   });
 });
