@@ -118,6 +118,12 @@ export interface Player {
   releaseClause?: number;
   /** Hostování z ciziny: na konci sezóny se vrací, pokud klub nevyužije opci. */
   loan?: { fromId: string; buyOption: number };
+  /** W1: reprezentace ve hře (starty za A-tým a U21, poslední nominace, za koho hraje). */
+  intl?: { caps: number; youthCaps: number; lastCall?: string; lastYouth?: string; nation?: string };
+  /** W1: odchovanec akademie tohoto klubu. */
+  academy?: string;
+  /** W1: milníky hráče (odchovanci, reprezentace). */
+  milestones?: { date: string; key: string; text: string }[];
 }
 
 // ---------- Zahraniční trh ----------
@@ -1026,6 +1032,8 @@ export interface EuropeEntry {
   /** Kde skončil: ligová fáze některé soutěže, nebo vyřazení v předkolech. */
   result: EuropeCompetition | 'predkola';
   revenue: number;
+  /** W1: kam klub majitele v sezóně došel (např. „osmifinále Evropské ligy“). */
+  best?: string;
 }
 
 export interface EuropeSeason {
@@ -1033,6 +1041,8 @@ export interface EuropeSeason {
   entries: EuropeEntry[];
   /** Vyhodnoceno a vyplaceno (konec srpna). */
   resolved?: boolean;
+  /** W1: evropská cesta klubu majitele (los, zápasy, ligová fáze, jaro). */
+  run?: import('./europe').EuroRun;
 }
 
 export const SAVE_VERSION = 11;
@@ -1141,6 +1151,8 @@ export interface GameState {
   /** Evropské poháry českých klubů v aktuální sezóně a historie. */
   europe?: EuropeSeason;
   europeHistory?: EuropeEntry[];
+  /** W1: reprezentační srazy a letní příběh hvězdy. */
+  stars?: import('./stars').StarsState;
   /** Kluby mimo modelované soutěže (divize a níže). */
   pool: string[];
   news: NewsItem[];
@@ -1149,4 +1161,16 @@ export interface GameState {
   transferLog?: TransferLogEntry[];
   nextId: number;
   gameOver?: { date: string; reason: string; kind?: 'krach' | 'prodej' | 'trest' };
+  /** W2: vedení soupeřů – vztahy, rivalita, poslední střety (engine/rivals.ts). */
+  rivalBoards?: import('./rivals').RivalsState;
+  /** W2: hodnocení majitele za sezóny a pověst klubů na začátku sezóny (engine/ownerRating.ts). */
+  ownerRatings?: import('./ownerRating').OwnerRatingRecord[];
+  ownerRatingStart?: { season: number; reputation: Record<string, number> };
+  /** W3: odznaky majitele a počítadla (engine/achievements.ts). */
+  achievements?: import('./achievements').AchievementsState;
+  /** W3: osobní výzvy sezóny (engine/challenges.ts). */
+  challenges?: import('./challenges').ChallengesState;
+  /** W3: dlouhodobé efekty velkých rozhodnutí a plánování nabídek (engine/bigdecisions.ts). */
+  longEffects?: import('./bigdecisions').LongEffect[];
+  bigDecisions?: import('./bigdecisions').BigDecisionsState;
 }

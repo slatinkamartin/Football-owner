@@ -15,6 +15,9 @@ import { resolvePress } from './matchday';
 import { PEOPLE_COOLDOWN, peopleTemplates } from './people';
 import { FINANCE_COOLDOWN, financeTemplates } from './finplus';
 import { takeoverTemplate, ultrasTemplates } from './surroundings';
+import { starsTemplates } from './stars';
+import { rivalTemplates } from './rivals';
+import { bigDecisionTemplates } from './bigdecisions';
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -100,7 +103,13 @@ export const TEMPLATES: Record<string, Template> = {
   ...financeTemplates({ teamMorale, media }),
   // Převzetí klubu a kotel (engine/surroundings.ts).
   prevzeti: takeoverTemplate(),
+  // W3: velká rozhodnutí s dlouhými důsledky (engine/bigdecisions.ts, plánuje je weeklyBigDecisions).
+  ...bigDecisionTemplates(),
+  // Vedení soupeřů: výroky a lákání sponzorů (engine/rivals.ts, vznikají z háčků).
+  ...rivalTemplates(),
   ...ultrasTemplates(),
+  // W1: letní nabídka z velké ligy za hvězdu (engine/stars.ts).
+  ...starsTemplates(),
   // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
   'tiskovka-zapas': {
     weight: () => 0,

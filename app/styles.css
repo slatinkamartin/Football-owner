@@ -1056,3 +1056,64 @@ input[type='checkbox'], input[type='radio'] { flex: none; width: auto; padding: 
 .roster-table td:nth-child(6) select { min-width: 92px; }
 .roster-table td:nth-child(10) select { min-width: 110px; }
 .roster-table td:last-child .linkbtn { color: var(--neg); }
+
+/* --- W2: soupeři v kanceláři a hodnocení majitele --- */
+.rivals-list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.rivals-list li:last-child { border-bottom: 0; }
+.rivals-list p { margin: 2px 0 0; }
+.rivals-meters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.owner-grade-row { display: flex; align-items: center; gap: 14px; margin: 6px 0 10px; }
+.owner-grade { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 10px; font-size: 28px; font-weight: 800; background: var(--line); color: var(--text); flex: none; }
+.owner-grade.grade-A, .owner-grade.grade-B { background: #2e9e5b; color: #fff; }
+.owner-grade.grade-C { background: #c9a227; color: #fff; }
+.owner-grade.grade-D, .owner-grade.grade-E, .owner-grade.grade-F { background: #cf6b6b; color: #fff; }
+.owner-rating-parts li { display: grid; grid-template-columns: minmax(0, 1fr) auto 2.5em; align-items: center; gap: 6px; padding: 2px 0; }
+.owner-rating-parts { margin-bottom: 8px; }
+.owner-rating-parts .num { text-align: right; font-variant-numeric: tabular-nums; }
+.owner-grade-past { display: inline-block; margin: 0 12px 4px 0; white-space: nowrap; }
+.club-real { margin-top: 2px; }
+
+/* --- W1: evropské večery a hvězdy s příběhem --- */
+.w1-card h2.w1-sub { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.w1-card p { margin: 6px 0; }
+.w1-story { margin: 12px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.w1-story .pc-badges { margin-bottom: 8px; }
+.w1-milestones { margin: 10px 0 0; padding: 0; list-style: none; }
+.w1-milestones li { padding: 3px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.europe-row .cup-round h3 { font-size: 15px; margin: 12px 0 4px; }
+
+/* --- W3: úspěchy, výzvy sezóny, dlouhodobé závazky --- */
+.ach-filter { display: inline-flex; gap: 4px; margin: 4px 0 10px; }
+.ach-filter button { font-size: 13px; padding: 4px 10px; }
+.ach-filter button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ach-grid { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.ach { display: flex; gap: 10px; align-items: flex-start; padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); min-width: 0; }
+.ach-icon { font-size: 26px; line-height: 1; flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--accent-soft); }
+.ach-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 14px; }
+.ach-desc { color: var(--muted); font-size: 12px; }
+.ach-when { color: var(--muted); font-size: 11px; }
+.ach-tier { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.ach-steps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.ach-step { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--line); color: var(--muted); white-space: nowrap; }
+.ach-step.on.bronze { background: #f3e1cf; color: #7a4a1d; }
+.ach-step.on.silver { background: #e6e9ee; color: #44505e; }
+.ach-step.on.gold { background: #fbefc4; color: #7a5b00; }
+.ach-bronze { border-color: #d8b08a; }
+.ach-bronze .ach-icon { background: #f3e1cf; }
+.ach-bronze .ach-tier { color: #7a4a1d; }
+.ach-silver { border-color: #b8c0cb; }
+.ach-silver .ach-icon { background: #e6e9ee; }
+.ach-silver .ach-tier { color: #44505e; }
+.ach-gold { border-color: #e2c25a; }
+.ach-gold .ach-icon { background: #fbefc4; }
+.ach-gold .ach-tier { color: #7a5b00; }
+.ach-locked { background: var(--bg); }
+.ach-locked .ach-icon { filter: grayscale(1); opacity: 0.45; background: var(--line); }
+.ach-locked strong { color: var(--muted); }
+.ach-toast { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 21; display: flex; flex-direction: column; gap: 2px; max-width: min(340px, calc(100% - 32px)); padding: 10px 14px; border-radius: 10px; background: #fbefc4; color: #5c4400; box-shadow: var(--shadow); font-size: 14px; animation: ach-in 0.25s ease-out; }
+.ach-toast-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+.ach-toast .linkbtn { align-self: flex-end; font-size: 12px; color: inherit; }
+@keyframes ach-in { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 600px) { .ach-toast { left: 16px; right: 16px; max-width: none; } .ach-grid { grid-template-columns: 1fr; } }
+.long-effects li { padding: 8px 0; border-top: 1px solid var(--line); }
+.long-effects li:first-child { border-top: 0; padding-top: 0; }

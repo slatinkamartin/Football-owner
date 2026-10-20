@@ -13,8 +13,10 @@ import {
   STYLE_LABEL,
   clubMoment,
   isRival,
-  OWNER_TYPE_LABEL,
-  ownerTypeOf,
+  NATURE_LABEL,
+  natureOf,
+  realManagement,
+  rivalBoard,
   type GameState,
 } from '../../engine';
 import { money, num } from '../format';
@@ -38,6 +40,8 @@ export function ClubCard({ game, clubId }: { game: GameState; clubId: string }) 
   const next = fixtures.find((x) => !x.fixture.result);
   const squad = squadOf(game, clubId).map((p) => ({ p, view: scouted(game, p) }));
   const parent = club.reserveOf ? game.clubs[club.reserveOf] : undefined;
+  // Skutečné vedení jen jako fakt; herní jednání se připisuje vedení klubu, ne osobám.
+  const real = realManagement(clubId);
 
   return (
     <div className="club-card-sheet">
@@ -52,10 +56,17 @@ export function ClubCard({ game, clubId }: { game: GameState; clubId: string }) 
             </p>
             {!own && (
               <p className="small">
-                Majitel: <strong>{OWNER_TYPE_LABEL[ownerTypeOf(clubId)].label}</strong> <span className="muted">({OWNER_TYPE_LABEL[ownerTypeOf(clubId)].hint})</span>
+                Vedení klubu: <strong>{NATURE_LABEL[natureOf(clubId)].label}</strong> <span className="muted">({NATURE_LABEL[natureOf(clubId)].hint})</span>
+                {' · '}vztah k vám <strong className={rivalBoard(game, clubId).relation < 0 ? 'neg' : 'pos'}>{rivalBoard(game, clubId).relation > 0 ? '+' : ''}{rivalBoard(game, clubId).relation}</strong>, rivalita {rivalBoard(game, clubId).rivalry}
                 {clubMoment(game, clubId) === 'krize' && <> · <span className="neg">v krizi</span></>}
                 {clubMoment(game, clubId) === 'snura' && <> · <span className="pos">vítězná šňůra</span></>}
                 {isRival(game, clubId) && <> · <strong>váš rival ({isRival(game, clubId)!.label})</strong></>}
+              </p>
+            )}
+            {real && (
+              <p className="small muted club-real">
+                Ve skutečnosti: {[real.owner && `vlastník ${real.owner}`, real.chairman && `předseda ${real.chairman}`].filter(Boolean).join(', ')} ·{' '}
+                <a href={real.source.split(' ')[0]} target="_blank" rel="noreferrer">zdroj: Wikipedie</a>
               </p>
             )}
           </div>

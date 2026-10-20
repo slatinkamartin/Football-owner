@@ -5,6 +5,7 @@ import { deleteGame, loadGame, saveCareer, saveGame } from './storage';
 import { SeasonReportView } from './screens/Report';
 import { Finance, type FinanceTab } from './screens/Finance';
 import { GameMenu } from './screens/GameMenu';
+import { AchievementToast } from './screens/Achievements'; // W3
 import { MatchDetail } from './screens/MatchDetail';
 import { ClubCard } from './screens/ClubCard';
 import { PlayerCard } from './screens/PlayerCard';
@@ -247,6 +248,7 @@ export function App() {
         {tab === 'hra' && <GameMenu game={game} onLoad={(g) => { resetView(); update(g); }} onNewGame={startOver} />}
       </main>
 
+      <AchievementToast game={game} />
       {stopReason && !milestone && (
         <div className="toast stop-toast" role="status">
           <strong>Zastaveno:</strong> {stopReason} <button className="linkbtn" onClick={() => setStopReason(null)}>Zavřít</button>

@@ -6,5 +6,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     include: ['engine/**/*.test.ts'],
+    // Simulace celých sezón trvají s novinkami déle; výchozích 5 s je na hraně.
+    testTimeout: 30000,
   },
 });

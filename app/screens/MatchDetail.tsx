@@ -13,8 +13,15 @@ import { homeEdgeScore, ratingText,
 } from '../../engine';
 import { num } from '../format';
 import { ClubLink, PlayerLink, Sheet } from '../nav';
+import { findEuroMatch, isEuroMatchId } from '../../engine';
+import { EuroMatchSheet } from './EuropeExtras';
 
 export function findFixture(game: GameState, id: string): { fixture: Fixture; name: string; roundLabel: string } | undefined {
+  // W1: evropské zápasy klubu majitele (náhled je v EuroMatchSheet).
+  if (isEuroMatchId(id)) {
+    const eu = findEuroMatch(game, id);
+    return eu?.match.result ? { fixture: { id, round: 0, date: eu.match.date, homeId: game.owner.clubId, awayId: game.owner.clubId }, name: eu.match.comp, roundLabel: eu.match.stage } : undefined;
+  }
   const x = allFixtures(game).find((a) => a.fixture.id === id);
   if (!x) return undefined;
   const roundLabel = x.cup ? (x.cup.rounds[x.fixture.round - 1]?.name ?? '') + (x.cup.kind === 'baraz' ? `, ${x.fixture.round}. zápas` : '') : `${x.fixture.round}. kolo`;
@@ -22,6 +29,7 @@ export function findFixture(game: GameState, id: string): { fixture: Fixture; na
 }
 
 export function MatchDetail({ game, fixtureId, onClose, onBack }: { game: GameState; fixtureId: string; onClose: () => void; onBack?: () => void }) {
+  if (isEuroMatchId(fixtureId)) return <EuroMatchSheet game={game} id={fixtureId} onClose={onClose} onBack={onBack} />;
   const found = findFixture(game, fixtureId);
   if (!found) return null;
   const { fixture: f, name: compName, roundLabel } = found;

@@ -22,7 +22,6 @@ import {
   budgetApproved,
   budgetDue,
   dressingRoom,
-  EUROPE_LABEL,
   type BriefingTask,
   type MilestoneTab,
 } from '../../engine';
@@ -30,7 +29,9 @@ import { Briefing, PulsePanel, Stories } from './Briefing';
 import { SideGoalsCard } from './finance/Extras';
 import { Badge, Meter } from '../components';
 import { findFixture } from './MatchDetail';
+import { EuropeStarsCard } from './EuropeExtras';
 import { Decisions } from './Decisions';
+import { ChallengesCard } from './Challenges'; // W3
 import { LineChart } from '../chart';
 import { PlayerLink } from '../nav';
 import { money } from '../format';
@@ -69,6 +70,7 @@ export function Overview({
       <Decisions game={game} onChange={onChange} />
       <ScenarioCard game={game} />
       <SideGoalsCard game={game} onOpen={() => onNavigate('finance')} />
+      <ChallengesCard game={game} />
       <section className="card">
         <h2>Další zápas</h2>
         {next ? (
@@ -87,6 +89,7 @@ export function Overview({
         )}
       </section>
 
+      <EuropeStarsCard game={game} onOpenMatch={onOpenMatch} />
       {last && (
         <section className="card">
           <h2>Poslední zápas</h2>
@@ -123,23 +126,6 @@ export function Overview({
           <p className="muted">Klub nehraje žádnou soutěž.</p>
         )}
       </section>
-
-      {game.europe?.season === game.season && game.europe.entries.some((e) => e.clubId === game.owner.clubId) && (() => {
-        const e = game.europe!.entries.find((x) => x.clubId === game.owner.clubId)!;
-        return (
-          <section className="card">
-            <h2>Evropské poháry</h2>
-            <dl className="kv">
-              <dt>Start</dt>
-              <dd>předkola: {EUROPE_LABEL[e.entry]}</dd>
-              <dt>Výsledek</dt>
-              <dd>{game.europe!.resolved ? (e.result === 'predkola' ? EUROPE_LABEL.predkola : `ligová fáze: ${EUROPE_LABEL[e.result]}`) : 'rozhodne se do konce srpna'}</dd>
-              <dt>{game.europe!.resolved ? 'Příjmy' : 'Odhad příjmů'}</dt>
-              <dd>{money(e.revenue)}</dd>
-            </dl>
-          </section>
-        );
-      })()}
 
       <section className="card">
         <div className="row-between">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DIFFICULTY, formatDate, scenarioDef, scenarioStatus, settingsOf, updateSettings, type GameSettings, type GameState, type SeasonReport } from '../../engine';
 import { SeasonReportView } from './Report';
+import { AchievementsCard } from './Achievements'; // W3
 import { parseGame, serializeGame } from '../storage';
 
 export function GameMenu({
@@ -77,6 +78,7 @@ export function GameMenu({
       <HowToPlayCard />
       <GameSettingsCard game={game} onChange={onLoad} />
       <ChapterCard game={game} />
+      <AchievementsCard game={game} />
       <section className="card">
         <h2>Uložená hra</h2>
         <dl className="kv">

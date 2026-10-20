@@ -96,7 +96,7 @@ export function weeklyRivalOwners(state: GameState, rng: Rng): void {
       const fresh = generateStaff(rng, state, 'trener', staffLevelForReputation(club.reputation) + rng.int(-6, 6), clubId);
       state.staff[fresh.id] = fresh;
       club.staff.coachId = fresh.id;
-      if (c === comp) addNews(state, { kind: 'info', title: `${club.shortName} vyhodil trenéra`, text: `Po čtyřech prohrách v řadě nervózní majitel sáhl ke změně. Nový trenér ${fresh.firstName} ${fresh.lastName}.` });
+      if (c === comp) addNews(state, { kind: 'info', title: `${club.shortName} vyhodil trenéra`, text: `Po čtyřech prohrách v řadě sáhlo nervózní vedení klubu ke změně. Nový trenér ${fresh.firstName} ${fresh.lastName}.` });
     }
   }
 }

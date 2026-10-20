@@ -19,6 +19,7 @@ import { LineChart } from '../chart';
 import { Badge, Meter } from '../components';
 import { money } from '../format';
 import { ClubLink, useNav } from '../nav';
+import { PlayerStoryBlock } from './EuropeExtras';
 
 const MONTHS = ['led', 'úno', 'bře', 'dub', 'kvě', 'čvn', 'čvc', 'srp', 'zář', 'říj', 'lis', 'pro'];
 const monthLabel = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(2, 4)}`;
@@ -94,6 +95,7 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
         </div>
       </div>
       {!view.exact && <p className="muted small">Hodnocení cizích hráčů jsou odhady skautů.</p>}
+      <PlayerStoryBlock game={game} player={p} />{/* W1: reprezentace, odchovanec, milníky */}
 
       <div className="grid two">
         <dl className="kv meters">

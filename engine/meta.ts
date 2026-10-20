@@ -1,6 +1,8 @@
 import { annualCosts } from './finance';
 import { newGame, type NewGameOptions } from './game';
 import { squadOf } from './players';
+import { careerAchievements, restoreCareerAchievements, seasonAchievementLines, type AchievementRecord } from './achievements'; // W3
+import { challengeReportLines } from './challenges'; // W3
 import { addTrophy, legacyScore, personalWealth, type Trophy } from './surroundings';
 import type { DataPack, GameState } from './types';
 import { addNews, competitionOf, tierOf } from './world';
@@ -33,6 +35,12 @@ export interface SeasonReport {
   sideGoals: string[];
   trophies: string[];
   seen?: boolean;
+  /** W3: výzvy sezóny a odznaky získané v sezóně. */
+  challenges?: string[];
+  achievements?: string[];
+  /** W2: hodnocení majitele (známka A–F) a pořadí mezi majiteli soutěže. */
+  ownerGrade?: string;
+  ownerRank?: { rank: number; of: number };
 }
 
 /** Zlomové okamžiky bez opakování (stejný příběh dvakrát za sezónu se liší jen koncem v závorce). */
@@ -79,8 +87,15 @@ export function buildSeasonReport(state: GameState, position: number, goalText: 
     balance: club.finance.balance,
     grade: state.rating?.season === state.season ? state.rating.grade : undefined,
     sideGoals: (state.sideGoals?.season === state.season ? state.sideGoals.goals : []).map((g) => `${g.label}: ${g.done === 'splneno' ? 'splněno' : 'nesplněno'}`),
-    trophies: (state.trophies ?? []).filter((t) => t.season === state.season && (!t.clubId || t.clubId === club.id)).map((t) => t.text),
+    trophies: (state.trophies ?? []).filter((t) => t.season === state.season && (!t.clubId || t.clubId === club.id) && t.kind !== 'vyzva').map((t) => t.text),
+    challenges: challengeReportLines(state), // W3
+    achievements: seasonAchievementLines(state), // W3
   };
+  const ownerRating = state.ownerRatings?.find((r) => r.season === state.season);
+  if (ownerRating) {
+    report.ownerGrade = ownerRating.grade;
+    report.ownerRank = { rank: ownerRating.rank, of: ownerRating.of };
+  }
   state.seasonReports = [report, ...(state.seasonReports ?? [])].slice(0, 12);
 }
 
@@ -232,6 +247,8 @@ export interface Career {
   /** Síň slávy ze všech klubů. */
   trophies: Trophy[];
   clubs: { name: string; seasons: string; result: string }[];
+  /** W3: odznaky ze všech klubů. */
+  achievements?: Record<string, AchievementRecord>;
 }
 
 /** Uloží kariéru po skončení v klubu (prodej, odvolání, krach). */
@@ -252,6 +269,7 @@ export function careerFrom(state: GameState, previous?: Career): Career {
         .map((t) => ({ ...t, clubId: t.clubId ?? club.id, clubName: t.clubName ?? club.name })),
     ],
     clubs: [...(previous?.clubs ?? []), { name: club.name, seasons: `${first}/${String(first + 1).slice(2)}–${state.season}/${String(state.season + 1).slice(2)}`, result }],
+    achievements: careerAchievements(state, previous?.achievements), // W3
   };
 }
 
@@ -273,6 +291,7 @@ export function newCareerGame(pack: DataPack, career: Career, opts: Omit<NewGame
   // Trofeje z minulých klubů zůstávají v síni slávy, označené klubem (nové trofeje neblokují).
   state.trophies = career.trophies.map((t) => ({ ...t, clubId: t.clubId ?? 'kariera' }));
   state.career = career;
+  restoreCareerAchievements(state, career.achievements); // W3
   addNews(state, { kind: 'sezona', title: `Nová kapitola kariéry: ${state.clubs[opts.clubId].name}`, text: `Předchozí kluby: ${career.clubs.map((c) => `${c.name} (${c.seasons}, ${c.result})`).join(', ')}. Odkaz kariéry ${legacyScore(state)} bodů.` });
   return state;
 }

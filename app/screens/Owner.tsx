@@ -1,4 +1,6 @@
+import { OwnerRatingCard, RivalsCard } from './OwnerRivals';
 import { BusinessCard, CityCard, HallOfFame, UltrasCard } from './OwnerExtras';
+import { OwnerW3Cards } from './LongEffects'; // W3
 import { useState } from 'react';
 import {
   BAN_SEVERITY,
@@ -55,10 +57,16 @@ export function Owner({ game, onChange }: Props) {
       {ousted && <ComebackCard game={game} onResult={apply} />}
 
       <div className="grid two">
+        <OwnerRatingCard game={game} />
+        <RivalsCard game={game} />
+      </div>
+
+      <div className="grid two">
         <BusinessCard game={game} onResult={apply} />
         <HallOfFame game={game} />
         <CityCard game={game} onResult={apply} />
         <UltrasCard game={game} />
+        <OwnerW3Cards game={game} />
       </div>
 
       <div className="grid">

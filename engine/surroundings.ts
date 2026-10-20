@@ -281,7 +281,7 @@ export function ultrasOnSale(state: GameState): void {
 
 export interface Trophy {
   season: number;
-  kind: 'titul' | 'pohar' | 'postup' | 'evropa' | 'stadion' | 'rekord' | 'odchovanec' | 'scenar';
+  kind: 'titul' | 'pohar' | 'postup' | 'evropa' | 'stadion' | 'rekord' | 'odchovanec' | 'scenar' | 'vyzva';
   text: string;
   points: number;
   /** Klub, ve kterém trofej vznikla (kariéra napříč kluby). Starší záznamy ji nemají. */
@@ -289,7 +289,7 @@ export interface Trophy {
   clubName?: string;
 }
 
-export const TROPHY_POINTS: Record<Trophy['kind'], number> = { titul: 30, pohar: 15, postup: 15, evropa: 20, stadion: 10, rekord: 5, odchovanec: 5, scenar: 20 };
+export const TROPHY_POINTS: Record<Trophy['kind'], number> = { titul: 30, pohar: 15, postup: 15, evropa: 20, stadion: 10, rekord: 5, odchovanec: 5, scenar: 20, vyzva: 5 };
 
 export function addTrophy(state: GameState, kind: Trophy['kind'], text: string): void {
   const list = state.trophies ?? [];

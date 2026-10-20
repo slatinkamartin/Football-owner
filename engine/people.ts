@@ -516,6 +516,7 @@ export function closeYouthIntake(prev: GameState, mutate = false): ActionResult 
     if (chosen.includes(p.id)) {
       p.clubId = own;
       p.contractUntil = state.season + 3;
+      p.academy = own;
       signed.push(`${playerName(p)} (${p.overall}, potenciál ${p.potential})`);
     } else {
       p.clubId = FREE;

@@ -61,6 +61,24 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.25: hvězdy, soupeři, odznaky a velká rozhodnutí
+
+- **Hvězdy s příběhem:**
+  - reprezentační srazy (A-tým i jednadvacítka) s únavou, rizikem zranění a růstem ceny;
+  - milníky odchovanců;
+  - letní zájem velkého klubu o vaši hvězdu (prodat, udržet s klauzulí, nebo slíbit odchod).
+- **Evropské večery:** los proti skutečným evropským klubům, dvojzápasová předkola, ligová fáze se skutečně odehranými zápasy, jaro až do finále, vyprodané domácí večery a prémie UEFA.
+- **Vedení soupeřů:**
+  - každý klub má povahu vedení, vztah k vám a rivalitu;
+  - soupeř přebíjí vaše nabídky, rýpe v médiích po derby a láká vaše sponzory;
+  - karta „Soupeři v kanceláři“;
+  - skutečné vedení prvoligových klubů (Wikipedie) je jen údaj na kartě klubu.
+- **Hodnocení majitele:** známka A–F a pořadí mezi majiteli ligy, průběžně i ve výroční zprávě.
+- **Úspěchy:** 29 odznaků s bronzovým, stříbrným a zlatým stupněm, přenášejí se v kariéře.
+- **Výzvy sezóny:** tři osobní výzvy každou sezónu za body odkazu, peníze nebo pověst.
+- **Velká rozhodnutí:** nejvýš dvě za sezónu s důsledky na roky dopředu (prodej stadionu městu, partnerství se zahraničním klubem, B-tým, fanouškovský podíl, investiční fond, větší stadion na jaro, sázka na mládí); přehled dlouhodobých závazků.
+- **Konfigurátor soupisek:** úprava hráčů na úvodní obrazovce, uložené vlastní soupisky k výběru při nové hře.
+
 ### Novinky verze 0.24: skutečné soupisky a jeden mzdový rozpočet
 
 - **Skutečné soupisky:** databáze `data/soupisky/hraci.csv`, 27 klubů 1. a 2. ligy, 836 hráčů, stav k 19. 10. 2026 (zdroje chanceliga.cz a chnliga.cz). Volba „Skutečné soupisky / Vymyšlení hráči“ při nové hře, nahrání vlastního CSV.

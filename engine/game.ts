@@ -31,6 +31,8 @@ import { activeOverdraft, applyLicenceSanction, CRISIS_MONTHS, dailyFinancing, e
 import { generateSponsorOffers, initialSponsors, seasonStartSponsors, sponsorEuropeBonus, sponsorMonthly, sponsorSeasonBonuses } from './sponsors';
 import { goalBonusPoints, pointsBonusFactor, schemeSpirit, wageMorale } from './wages';
 import { monthlyEurope, qualifyEurope, resolveEurope, startEurope } from './europe';
+import { dailyEurope } from './europe';
+import { dailyStars } from './stars';
 import { boardCoversLoss, clubValuation, createShareholders, monthlyShareholders } from './ownership';
 import { afterMatchday, allFixtures, baseSeasonDone, finalStandings, setupCup, startGroups, startPlayoffs } from './competitions';
 import { monthlyDevelopment, moraleNews, recordCareers, recordTimeline, recordTrend } from './development';
@@ -77,6 +79,8 @@ import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditio
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
 import { afterOwnMatch, halftimeAdjust, nextOwnFixture, pendingPrematch, planEffect, type OwnFixture } from './matchday';
 import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyRivalOwners } from './league';
+import { dailyRivals } from './rivals';
+import { ownerRatingTick, seasonOwnerRatings } from './ownerRating';
 import { milestoneToday, nextMilestone } from './milestones';
 import { aiForeignSignings, monthlyForeign, refreshForeignMarket, returnLoans, weeklyForeign } from './foreign';
 import { analyticsBonus, completeBigProjects, monthlyBigProjects, monthlyPrograms } from './investments';
@@ -85,6 +89,9 @@ import { adminMonthly, pitchFactor, campBonus, dailyOperations, homeMatchOperati
 import { NEW_CATEGORIES_V10, NEW_CATEGORIES_V11, SAVE_VERSION, type Departments, type Club, type ClubDef, type Competition, type DataPack, type Difficulty, type GameState, type Player, type Position } from './types';
 import { addNews, clubLabel, competitionOf, FREE, tierOf, transferWindow } from './world';
 import { fillFromRoster, rostersByClub, type RosterRow } from './rosters';
+import { seasonAchievements, weeklyAchievements } from './achievements'; // W3
+import { challengesTick, createChallenges, settleChallenges } from './challenges'; // W3
+import { monthlyLongEffects, weeklyBigDecisions } from './bigdecisions'; // W3
 
 export const START_SEASON = 2026;
 const MAX_SQUAD = 26;
@@ -251,6 +258,7 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
   initialSponsors(state, rng);
   prepareBudget(state);
   createSideGoals(state);
+  createChallenges(state); // W3: výzvy první sezóny
   addNews(state, {
     kind: 'info',
     title: `Vítejte v klubu ${own.name}`,
@@ -459,6 +467,7 @@ function endSeason(state: GameState, rng: Rng): void {
     });
     if (comp.tier === 1) qualifyEurope(state, table, state.cups.pohar?.winner);
   }
+  seasonOwnerRatings(state); // W2: hodnocení majitelů (po odměnách a pověsti, před postupy a sestupy)
 
   const ownComp = competitionOf(state, state.owner.clubId);
   const ownTable = ownComp ? tables.get(ownComp.id)! : [];
@@ -623,6 +632,8 @@ function endSeason(state: GameState, rng: Rng): void {
   seasonRating(state);
   seasonFfp(state);
   scenarioSeasonEnd(state);
+  settleChallenges(state); // W3: výzvy sezóny
+  seasonAchievements(state); // W3: sezónní odznaky
   if (ownComp) {
     const target = goalTarget(state.owner.seasonGoal, ownComp);
     const label = goalLabel(state.owner.seasonGoal, ownComp);
@@ -1007,7 +1018,11 @@ function processDay(state: GameState, rng: Rng): void {
   dailyFinancing(state, rng);
   dailyOperations(state);
   sideGoalsTick(state);
+  challengesTick(state); // W3: losování a průběžné vyhodnocení výzev
+  ownerRatingTick(state); // W2
   if (md === BUDGET_DEADLINE) budgetDeadline(state);
+  dailyEurope(state, rng); // W1: evropské zápasy klubu majitele
+  dailyStars(state, rng); // W1: reprezentace, odchovanci, letní zájem o hvězdu
   if (md === '08-28') {
     resolveEurope(state, rng);
     const e = state.europe?.entries.find((x) => x.clubId === state.owner.clubId && x.season === state.season);
@@ -1026,6 +1041,8 @@ function processDay(state: GameState, rng: Rng): void {
     checkPromises(state);
     weeklyReleaseClauses(state, rng);
     weeklyRivalOwners(state, rng);
+    weeklyAchievements(state); // W3
+    weeklyBigDecisions(state, createEvent); // W3: velká rozhodnutí a podíly z prodejů
     snapshotPulse(state);
     maybeCreateEvent(state, rng);
     aiDomesticTransfers(state, rng);
@@ -1044,11 +1061,13 @@ function processDay(state: GameState, rng: Rng): void {
   dailyDeadline(state, rng);
   playMatchesOn(state, rng);
   afterMatchday(state, rng);
+  dailyRivals(state); // W2: vedení soupeřů
   for (const comp of Object.values(state.competitions)) {
     if (comp.format === 'nadstavba' && !comp.groups && comp.reservedDates && baseSeasonDone(comp)) startGroups(state, comp, rng);
   }
   if (md === '06-08') startPlayoffs(state);
   if (state.date.endsWith('-01')) monthlyFinance(state, rng);
+  if (state.date.endsWith('-01')) monthlyLongEffects(state); // W3
   if (md === '08-31' || md === '02-14') {
     closeWindow(state, rng);
     state.grey.tapped = [];

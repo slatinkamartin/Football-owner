@@ -13,6 +13,8 @@ import type { Rng } from './rng';
 import { directorAbility, directorOf, scoutingError, severance, type ActionResult } from './staff';
 import type { GameState, IncomingOffer, Negotiation, Player, Position, TransferProposal } from './types';
 import { addNews, clamp, clubLabel, FOREIGN_PREFIX, FREE, hash01, isForeign, plural, tierOf, transferWindow } from './world';
+import { intlValueFactor } from './stars';
+import { rivalOverbid } from './rivals';
 
 const MIN_SQUAD = 18;
 /** Velikost kádru, kterou drží sportovní ředitel. */
@@ -36,7 +38,7 @@ export function leagueValueFactor(tier: number): number {
 
 /** Tržní hodnota hráče v Kč podle jeho kvality, věku, potenciálu a soutěže, kde hraje. */
 export function playerValue(state: GameState, p: Player): number {
-  const v = marketValue(p, state.season) * leagueValueFactor(tierOf(state, p.clubId));
+  const v = marketValue(p, state.season) * leagueValueFactor(tierOf(state, p.clubId)) * intlValueFactor(p, state.date);
   const step = v >= 10_000_000 ? 1_000_000 : v >= 1_000_000 ? 100_000 : 10_000;
   return Math.max(10_000, Math.round(v / step) * step);
 }
@@ -313,7 +315,11 @@ export function offerFee(prev: GameState, fee: number, instalments = false, cond
   // Splátky prodávající přijme jen s příplatkem 5 %, doplatek při postupu/Evropě počítá napůl.
   const effective = (instalments ? value / 1.05 : value) * (conditional ? 1.15 : 1);
   const required = Math.max(neg.minFee, neg.rival ? neg.rival.fee * 1.02 : 0);
-  if (effective >= required) {
+  // Vedení soupeře může nabídku na poslední chvíli přebít (engine/rivals.ts).
+  const overbid = effective >= required ? rivalOverbid(state, neg, value) : undefined;
+  if (overbid) {
+    message = overbid;
+  } else if (effective >= required) {
     neg.stage = 'hrac';
     neg.agreedFee = value;
     neg.instalments = instalments;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { competitionOf, cupPath, EUROPE_LABEL, europeStrength, formatShortDate, leaguePhaseChance, workload, type Cup, type Fixture, type GameState } from '../../engine';
+import { competitionOf, cupPath, formatShortDate, workload, type Cup, type Fixture, type GameState } from '../../engine';
 import { Badge, Meter } from '../components';
+import { EuropeSection } from './EuropeExtras';
 import { money } from '../format';
 import { num } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
@@ -73,7 +74,7 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
         </section>
       )}
     </div>
-    <EuropeRow game={game} />
+    <EuropeSection game={game} onOpenMatch={onOpenMatch} />
     <div className="grid two">
       <section className="card">
         <h2>Zápasy klubu</h2>
@@ -236,34 +237,6 @@ function CupSection({ game, cup, onOpenMatch }: { game: GameState; cup: Cup; onO
           );
         })}
       </div>
-    </section>
-  );
-}
-
-/** Evropské poháry: předkola se nehrají jako zápasy, výsledek se rozhodne na konci srpna. */
-function EuropeRow({ game }: { game: GameState }) {
-  const eu = game.europe;
-  const own = game.owner.clubId;
-  const e = eu?.season === game.season ? eu.entries.find((x) => x.clubId === own) : undefined;
-  if (!eu || !e) return null;
-  const chance = Math.round(leaguePhaseChance(europeStrength(game, own), e.entry) * 100);
-  return (
-    <section className="card europe-row">
-      <div className="row-between">
-        <h2>Evropské poháry: předkola {EUROPE_LABEL[e.entry]}</h2>
-        {eu.resolved ? (
-          <Badge tone={e.result === 'predkola' ? 'bad' : 'good'}>{e.result === 'predkola' ? EUROPE_LABEL.predkola : `ligová fáze: ${EUROPE_LABEL[e.result]}`}</Badge>
-        ) : (
-          <Badge tone="warn">rozhodne se do konce srpna</Badge>
-        )}
-      </div>
-      <p className="muted small">
-        {eu.resolved
-          ? e.result === 'predkola'
-            ? `Klub vypadl v předkolech. Za účast dostal ${money(e.revenue)}.`
-            : `Postup do ligové fáze. Peníze ${money(e.revenue)} chodí od října do ledna po částech.`
-          : `Předkola se nehrají jako jednotlivé zápasy: o postupu rozhodne síla kádru (průměr 14 nejlepších hráčů). Šance na ligovou fázi teď asi ${chance} %. Posily do konce srpna ji zvednou.`}
-      </p>
     </section>
   );
 }

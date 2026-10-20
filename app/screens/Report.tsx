@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ratingText, type SeasonReport } from '../../engine';
 import { Badge } from '../components';
 import { money } from '../format';
+import { ReportW3Section } from './Achievements'; // W3
 
 /** Výroční zpráva sezóny. */
 export function SeasonReportView({ report, onClose, children }: { report: SeasonReport; onClose: () => void; children?: ReactNode }) {
@@ -14,6 +15,7 @@ export function SeasonReportView({ report, onClose, children }: { report: Season
         <p>
           Cíl: {report.goalText} <Badge tone={report.goalMet ? 'good' : 'bad'}>{report.goalMet ? 'splněn' : 'nesplněn'}</Badge>
           {report.grade && <> · finanční vysvědčení <Badge tone={report.grade <= 'B' ? 'good' : report.grade >= 'E' ? 'bad' : 'neutral'}>{report.grade}</Badge></>}
+          {report.ownerGrade && <> · hodnocení majitele <Badge tone={report.ownerGrade <= 'B' ? 'good' : report.ownerGrade >= 'E' ? 'bad' : 'neutral'}>{report.ownerGrade}</Badge>{report.ownerRank && <span className="muted"> ({report.ownerRank.rank}. z {report.ownerRank.of} majitelů soutěže)</span>}</>}
         </p>
         <div className="report-grid">
           <div className="pc-big">
@@ -60,6 +62,7 @@ export function SeasonReportView({ report, onClose, children }: { report: Season
             <ul className="plain small">{report.trophies.map((m, i) => <li key={i}>🏆 {m}</li>)}</ul>
           </>
         )}
+        <ReportW3Section report={report} />
         {children}
         <button className="primary" autoFocus onClick={onClose}>Pokračovat do nové sezóny</button>
       </div>
