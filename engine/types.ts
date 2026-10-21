@@ -285,7 +285,7 @@ export interface TrendPoint {
 
 // ---------- Lidé ----------
 
-export type StaffRole = 'trener' | 'reditel' | 'financni' | 'obchodni' | 'akademie' | 'media';
+export type StaffRole = 'trener' | 'reditel' | 'financni' | 'obchodni' | 'akademie' | 'media' | 'site';
 export type CoachStyle = 'utocny' | 'vyvazeny' | 'defenzivni';
 
 export interface Staff {
@@ -322,6 +322,8 @@ export interface ClubStaff {
   commercialId?: string;
   academyId?: string;
   mediaId?: string;
+  /** W2: správce sociálních sítí. */
+  socialId?: string;
 }
 
 // ---------- Přestupy ----------
@@ -1109,6 +1111,10 @@ export interface GameState {
   realRosters?: boolean;
   /** Probíhající velký zápas (týden přípravy až reakce po zápase), viz engine/bigmatch.ts. */
   bigMatch?: BigMatchState;
+  /** W2: sociální sítě, krok po zápase a paměť rivality (engine/social.ts). */
+  social?: import('./social').SocialState;
+  /** W1: poslední los evropských pohárů klubu majitele (karta s odkrytím). */
+  euroDraw?: EuroDrawState;
   pulse?: PulseState;
   settings?: GameSettings;
   /** Zahraniční skauting a vyhlédnutí hráči. */
@@ -1175,6 +1181,8 @@ export interface GameState {
   /** W3: dlouhodobé efekty velkých rozhodnutí a plánování nabídek (engine/bigdecisions.ts). */
   longEffects?: import('./bigdecisions').LongEffect[];
   bigDecisions?: import('./bigdecisions').BigDecisionsState;
+  /** W3: fanoušci průběžně – rada, ankety, výjezdy, oslavy (engine/fans.ts). */
+  fans?: import('./fans').FansState;
 }
 
 /** Stav velkého zápasu: příprava v týdnu před ním a reakce po něm. Pole doplňují moduly přípravy, přenosu a sítí. */
@@ -1190,4 +1198,30 @@ export interface BigMatchState {
   moments?: string[];
   /** Hotové kroky po zápase (děkovačka, příspěvek…). */
   after?: Record<string, string>;
+  /** W1: popis zápasu pro kartu a přenos (doma, soupeř, soutěž). */
+  home?: boolean;
+  opponentName?: string;
+  opponentId?: string;
+  label?: string;
+  competition?: string;
+  /** W1: den, kdy začal týden velkého zápasu. */
+  started?: string;
+  /** W1: den posledního zastavení posunu kvůli velkému zápasu (zastavuje se jen občas). */
+  lastStop?: string;
+  /** W1: rozhodnutí majitele během zápasu (body zlomu přenosu). */
+  live?: { minute: number; kind: string; choice: string }[];
+  /** W1: výsledek z pohledu klubu majitele a vyúčtování po zápase. */
+  result?: { gf: number; ga: number };
+  settled?: boolean;
+  /** W1: krátké shrnutí dopadů přípravy (pro kartu po zápase). */
+  report?: string[];
+}
+
+/** W1: los evropských pohárů s postupným odkrytím soupeře. */
+export interface EuroDrawState {
+  date: string;
+  stage: string;
+  /** Soupeři v pořadí odkrývání (ligová fáze víc, vyřazovací fáze jeden). */
+  opponents: { name: string; country: string; rating: number }[];
+  seen?: boolean;
 }

@@ -61,6 +61,26 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.26: velké zápasy, fanoušci a sociální sítě
+
+- **Velký zápas** (derby, Evropa, souboj o čelo, o záchranu, pohár od čtvrtfinále, baráž):
+  - **Týden předem:** odpočet s napětím, výroky soupeře a příběh rivality („Odveta za podzimní 0:4“).
+  - **Rozhodnutí v přípravě:** lístky (zdražit nebo lidové ceny, rozdělení kotel, rodiny a hosté), choreo a pyrotechnika, bezpečnost u rizikových zápasů, host v lóži majitele.
+  - **Přenos:** hlasitost kotle a nástup s chorem; v zápase nejvýš dvě rozhodnutí navíc k poločasu (sporný verdikt, pyro a přerušení, vabank v 75. minutě), která poctivě ovlivní zbytek zápasu.
+  - **Po zápase:** titulky novin, děkovačka nebo vysvětlování u kotle, příspěvek klubu a reakce fanoušků, tržby za dresy hrdiny.
+- **Evropa:** losování s postupným odkrytím soupeře, příjezd hostujících fanoušků, sledování evropských zápasů (záznam bez rozhodování).
+- **Fanoušci:**
+  - fanouškovská rada s měsíčním nápadem;
+  - ankety (hráč měsíce, dres, hymna, moment sezóny) jako závazek;
+  - dotované výjezdy na derby a do Evropy;
+  - oslavy úspěchů na náměstí.
+- **Sociální sítě:**
+  - profil majitele (sledující, dosah, tón);
+  - ohlášení posily videem;
+  - kauzy na sítích a nevhodné příspěvky hráčů;
+  - nová role správce sociálních sítí.
+  - Komentáře a reakce jsou od vymyšlených fanoušků.
+
 ### Novinky verze 0.25: hvězdy, soupeři, odznaky a velká rozhodnutí
 
 - **Hvězdy s příběhem:**

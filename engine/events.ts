@@ -17,6 +17,7 @@ import { FINANCE_COOLDOWN, financeTemplates } from './finplus';
 import { takeoverTemplate, ultrasTemplates } from './surroundings';
 import { starsTemplates } from './stars';
 import { rivalTemplates } from './rivals';
+import { socialTemplates } from './social'; // W2: sociální sítě
 import { bigDecisionTemplates } from './bigdecisions';
 
 /**
@@ -107,6 +108,7 @@ export const TEMPLATES: Record<string, Template> = {
   ...bigDecisionTemplates(),
   // Vedení soupeřů: výroky a lákání sponzorů (engine/rivals.ts, vznikají z háčků).
   ...rivalTemplates(),
+  ...socialTemplates(), // W2: kauzy, příspěvky hráčů, ohlášení posily
   ...ultrasTemplates(),
   // W1: letní nabídka z velké ligy za hvězdu (engine/stars.ts).
   ...starsTemplates(),

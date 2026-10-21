@@ -49,3 +49,6 @@ export * from './achievements';
 export * from './challenges';
 export * from './bigdecisions';
 export * from './bigmatch';
+export * from './social'; // W2
+export * from './fans'; // W3
+export * from './matchexperience'; // W1

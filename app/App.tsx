@@ -6,6 +6,7 @@ import { SeasonReportView } from './screens/Report';
 import { Finance, type FinanceTab } from './screens/Finance';
 import { GameMenu } from './screens/GameMenu';
 import { AchievementToast } from './screens/Achievements'; // W3
+import { PostMatch } from './screens/PostMatch'; // W2
 import { MatchDetail } from './screens/MatchDetail';
 import { ClubCard } from './screens/ClubCard';
 import { PlayerCard } from './screens/PlayerCard';
@@ -14,6 +15,8 @@ import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
 import { Overview } from './screens/Overview';
 import { LiveMatch, MatchDialog } from './screens/MatchPrep';
+import { EuroLive, EuroMatchDialog } from './screens/BigMatch'; // W1
+import { bigMatchWeekStarted, euroMatchTomorrow } from '../engine'; // W1
 import { Owner } from './screens/Owner';
 import { CalendarStrip } from './SeasonCalendar';
 import { People } from './screens/People';
@@ -49,6 +52,7 @@ export function App() {
   const [stopReason, setStopReason] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [matchOpen, setMatchOpen] = useState(false);
+  const [liveEuro, setLiveEuro] = useState(false); // W1: evropský přenos
   const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
   const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
@@ -87,6 +91,7 @@ export function App() {
   // Při nové nebo nahrané hře zavřít všechna okna, ať se nic nepřenese do jiné hry.
   const resetView = () => {
     setLive(false);
+    setLiveEuro(false);
     setMatchOpen(false);
     setModals([]);
     setMilestone(null);
@@ -125,6 +130,8 @@ export function App() {
   const nm = nextMilestone(game);
   const nmDays = nm ? daysUntil(game, nm.date) : 99;
   const match = ownMatchTomorrow(game);
+  // W1: evropský zápas klubu majitele zítra (když se nehraje i domácí zápas).
+  const euro = match ? undefined : euroMatchTomorrow(game);
   const step = nextStep(game);
   const showMilestones = settingsOf(game).stops.milestone;
   const advance = (next: GameState, reason?: string) => {
@@ -135,17 +142,19 @@ export function App() {
   };
   // Jedno tlačítko: v předvečer zápasu otevře zápas, jinak posune hru k dalšímu zápasu, milníku nebo o týden.
   const onStep = () => {
-    if (match) {
+    if (match || euro) {
       setMatchOpen(true);
       return;
     }
     const r = advanceStep(game);
     advance(r.state, r.reason);
   };
-  const stepLabel = match ? 'Zápas ›' : `${step.label} ›`;
+  const stepLabel = match ? 'Zápas ›' : euro ? 'Evropský zápas ›' : `${step.label} ›`;
   const stepTitle = match
     ? `Zítra: ${clubLabel(game, match.fixture.homeId)} – ${clubLabel(game, match.fixture.awayId)} (${match.name})`
-    : step.kind === 'zapas'
+    : euro
+      ? `Zítra: ${euro.stage}, ${euro.opponent.name}`
+      : step.kind === 'zapas'
       ? 'Posunout hru na předvečer dalšího zápasu'
       : step.kind === 'milnik'
         ? `Posunout hru k milníku: ${nm?.title ?? ''}`
@@ -201,7 +210,7 @@ export function App() {
               <strong>{money(club.finance.balance)}</strong>
             </div>
             <div className="advance">
-              <button className={match ? 'primary match-btn' : 'primary'} disabled={!!game.gameOver} title={stepTitle} onClick={onStep}>
+              <button className={match || euro ? 'primary match-btn' : 'primary'} disabled={!!game.gameOver} title={stepTitle} onClick={onStep}>
                 {stepLabel}
               </button>
             </div>
@@ -249,6 +258,7 @@ export function App() {
       </main>
 
       <AchievementToast game={game} />
+      {!live && !matchOpen && modals.length === 0 && !milestone && !report && !game.gameOver && <PostMatch game={game} onChange={update} />}{/* W2: krok po zápase */}
       {stopReason && !milestone && (
         <div className="toast stop-toast" role="status">
           <strong>Zastaveno:</strong> {stopReason} <button className="linkbtn" onClick={() => setStopReason(null)}>Zavřít</button>
@@ -273,7 +283,38 @@ export function App() {
         );
       })()}
 
-      {live && !game.gameOver && (
+      {live && liveEuro && !game.gameOver && (
+        <EuroLive
+          game={game}
+          onChange={(g) => { update(g); setStopReason(bigMatchWeekStarted(g, game.bigMatch?.id) ?? null); }}
+          onClose={() => { setLive(false); setLiveEuro(false); }}
+          onSummary={(id) => {
+            setLive(false);
+            setLiveEuro(false);
+            setModals([{ type: 'match', id }]);
+          }}
+        />
+      )}
+
+      {matchOpen && euro && !live && !game.gameOver && (
+        <EuroMatchDialog
+          game={game}
+          onClose={() => setMatchOpen(false)}
+          onResult={() => {
+            setMatchOpen(false);
+            const r = advanceDays(game, 1);
+            advance(r.state, bigMatchWeekStarted(r.state, game.bigMatch?.id));
+            if (!r.state.gameOver) setModals([{ type: 'match', id: euro.id }]);
+          }}
+          onLive={() => {
+            setMatchOpen(false);
+            setLiveEuro(true);
+            setLive(true);
+          }}
+        />
+      )}
+
+      {live && !liveEuro && !game.gameOver && (
         <LiveMatch
           game={game}
           onChange={update}
@@ -293,7 +334,7 @@ export function App() {
           onResult={() => {
             setMatchOpen(false);
             const r = advanceDays(game, 1, true);
-            advance(r.state);
+            advance(r.state, bigMatchWeekStarted(r.state, game.bigMatch?.id)); // W1: začal týden dalšího velkého zápasu
             if (r.fixtureId && !r.state.gameOver) setModals([{ type: 'match', id: r.fixtureId }]);
           }}
           onLive={() => {

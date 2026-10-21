@@ -22,6 +22,7 @@ import {
 import { money, num } from '../format';
 import { PlayerLink, useNav } from '../nav';
 import { DataTable } from '../table';
+import { RivalryPanel } from './Social'; // W2
 
 export function ClubCard({ game, clubId }: { game: GameState; clubId: string }) {
   const nav = useNav();
@@ -123,7 +124,7 @@ export function ClubCard({ game, clubId }: { game: GameState; clubId: string }) 
                   <li key={f.id}>
                     <button className="fixture-btn" onClick={() => nav.open({ type: 'match', id: f.id })}>
                       <span className={`score ${tone}`}>{r.homeGoals}:{r.awayGoals}</span>{' '}
-                      {home ? 'doma s' : 'venku s'} {game.clubs[home ? f.awayId : f.homeId].shortName}
+                      {home ? 'doma:' : 'venku:'} {game.clubs[home ? f.awayId : f.homeId].shortName}
                       <span className="muted small"> · {name}</span>
                     </button>
                   </li>
@@ -139,6 +140,7 @@ export function ClubCard({ game, clubId }: { game: GameState; clubId: string }) 
         </div>
       </div>
 
+      {!own && <RivalryPanel game={game} clubId={clubId} />}{/* W2 */}
       <h3>Kádr</h3>
       {!own && <p className="muted small">Hodnocení jsou odhady vašich skautů.</p>}
       <DataTable

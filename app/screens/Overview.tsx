@@ -32,6 +32,8 @@ import { findFixture } from './MatchDetail';
 import { EuropeStarsCard } from './EuropeExtras';
 import { Decisions } from './Decisions';
 import { ChallengesCard } from './Challenges'; // W3
+import { FansCard } from './Fans'; // W3: fanoušci průběžně
+import { BigMatchCard, EuroDrawCard } from './BigMatch'; // W1
 import { LineChart } from '../chart';
 import { PlayerLink } from '../nav';
 import { money } from '../format';
@@ -67,10 +69,12 @@ export function Overview({
   return (
     <div className="grid">
       <Briefing game={game} onNavigate={onNavigate} />
+      <EuroDrawCard game={game} onChange={onChange} /><BigMatchCard game={game} onChange={onChange} /> {/* W1 */}
       <Decisions game={game} onChange={onChange} />
       <ScenarioCard game={game} />
       <SideGoalsCard game={game} onOpen={() => onNavigate('finance')} />
       <ChallengesCard game={game} />
+      <FansCard game={game} onChange={onChange} /> {/* W3 */}
       <section className="card">
         <h2>Další zápas</h2>
         {next ? (

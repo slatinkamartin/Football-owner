@@ -46,6 +46,8 @@ export interface MatchOptions {
   decisive?: number;
   /** Změna od 46. minuty (rozhodnutí o poločase). */
   halftime?: { home?: { style?: CoachStyle; bonus?: number }; away?: { style?: CoachStyle; bonus?: number } };
+  /** Další body zlomu (velký zápas): změna platí od minuty `minute + 1`, nasazení a styl stran, posun domácího prostředí. */
+  changes?: { minute: number; home?: { style?: CoachStyle; bonus?: number }; away?: { style?: CoachStyle; bonus?: number }; homeEdge?: number }[];
 }
 
 export function isAvailable(p: Player, date: string): boolean {
@@ -148,7 +150,8 @@ interface SideState {
 
 export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attendance: number, opts?: MatchOptions): MatchResult {
   const date = opts?.date ?? '2026-08-01';
-  const homeEdge = opts?.homeEdge ?? HOME_EDGE;
+  let homeEdge = opts?.homeEdge ?? HOME_EDGE;
+  const startEdge = homeEdge;
   const season = opts?.season ?? Number(date.slice(0, 4));
   const events: MatchEvent[] = [];
   const scorers: MatchResult['scorers'] = [];
@@ -214,6 +217,16 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
         if (change.bonus) s.side = { ...s.side, bonus: (s.side.bonus ?? 0) + change.bonus };
         recompute(s);
       }
+    }
+    for (const c of opts?.changes ?? []) {
+      if (minute !== c.minute + 1) continue;
+      for (const [s, change] of [[H, c.home], [A, c.away]] as const) {
+        if (!change) continue;
+        if (change.style) s.style = change.style;
+        if (change.bonus) s.side = { ...s.side, bonus: (s.side.bonus ?? 0) + change.bonus };
+        recompute(s);
+      }
+      if (c.homeEdge) homeEdge += c.homeEdge;
     }
     for (const [s, o, isHome] of [[H, A, true], [A, H, false]] as const) {
       if (!s.onPitch.length) continue;
@@ -403,7 +416,7 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
       away: team(A, awayLines),
       events: events.sort((a, b) => a.minute - b.minute),
       potm: all.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))[0]?.id,
-      homeEdge: Math.round(homeEdge * 10) / 10,
+      homeEdge: Math.round(startEdge * 10) / 10,
     };
     result.detail = detail;
   }

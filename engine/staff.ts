@@ -15,6 +15,7 @@ export const ROLE_LABEL: Record<StaffRole, string> = {
   obchodni: 'Obchodní ředitel',
   akademie: 'Šéf akademie',
   media: 'Tiskový mluvčí',
+  site: 'Správce sociálních sítí',
 };
 
 /** Kde je který člen vedení uložený u klubu. */
@@ -25,6 +26,7 @@ export const STAFF_KEY: Record<StaffRole, keyof ClubStaff> = {
   obchodni: 'commercialId',
   akademie: 'academyId',
   media: 'mediaId',
+  site: 'socialId',
 };
 
 /** K čemu pozice je (pro rozhraní). */
@@ -35,10 +37,11 @@ export const ROLE_PURPOSE: Record<StaffRole, string> = {
   obchodni: 'Zvyšuje příjmy od sponzorů a z merchandisingu (až 15 %).',
   akademie: 'Lepší dorostenci z akademie každé léto.',
   media: 'Tlumí mediální propady a drží vaši pověst u médií výš.',
+  site: 'Sám uhasí kauzy na sítích, přidává běžné příspěvky a zvedá dosah i počet sledujících.',
 };
 
 /** Nepovinní ředitelé, které si majitel může najmout navíc. */
-export const EXTRA_ROLES: StaffRole[] = ['financni', 'obchodni', 'akademie', 'media'];
+export const EXTRA_ROLES: StaffRole[] = ['financni', 'obchodni', 'akademie', 'media', 'site'];
 
 /** Schopnost člena vedení na dané pozici, nebo undefined, když pozice není obsazená. */
 export function staffAbility(state: GameState, role: StaffRole, clubId = state.owner.clubId): number | undefined {
@@ -78,6 +81,8 @@ export function roleEffect(role: StaffRole, ability: number): string {
       return `Dorostenci lepší o ${((ability - 40) / 10).toFixed(1)} bodu hodnocení i potenciálu`;
     case 'media':
       return 'Mediální propady o čtvrtinu menší, pověst u médií se drží výš';
+    case 'site':
+      return `Uhasí kauzy na sítích, dosah +${Math.round(ability / 5)} bodů, víc sledujících`;
     case 'trener':
       return 'Vede tým, vybírá sestavu a taktiku';
     case 'reditel':
@@ -489,7 +494,7 @@ export function refreshStaffPool(state: GameState, rng: Rng): void {
   for (const s of Object.values(state.staff)) {
     if (s.clubId === FREE && staffAge(s, state.season) > 68) delete state.staff[s.id];
   }
-  const want: Record<StaffRole, number> = { trener: 14, reditel: 10, financni: 6, obchodni: 6, akademie: 6, media: 6 };
+  const want: Record<StaffRole, number> = { trener: 14, reditel: 10, financni: 6, obchodni: 6, akademie: 6, media: 6, site: 5 };
   for (const role of Object.keys(want) as StaffRole[]) {
     let free = candidates(state, role).length;
     while (free < want[role]) {

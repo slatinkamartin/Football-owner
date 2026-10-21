@@ -1,6 +1,7 @@
 import { addDays } from './calendar';
+import { allFixtures } from './competitions';
 import { nextEuroMatch, type EuroMatch } from './europe';
-import { matchStakes, nextOwnFixture, type OwnFixture } from './matchday';
+import { matchStakes, type OwnFixture } from './matchday';
 import type { GameState } from './types';
 import { clubLabel } from './world';
 
@@ -71,10 +72,18 @@ function fromEuro(e: EuroMatch): BigMatch {
 export function upcomingBigMatch(state: GameState, days = 7): BigMatch | undefined {
   const limit = addDays(state.date, days);
   const out: BigMatch[] = [];
-  const next = nextOwnFixture(state);
-  if (next && next.fixture.date <= limit) {
-    const b = fromFixture(state, next);
-    if (b) out.push(b);
+  const own = state.owner.clubId;
+  // Všechny vlastní zápasy v okně (velký zápas může přijít i po jiném, běžném zápase).
+  const mine = allFixtures(state)
+    .filter((x) => !x.fixture.result && x.fixture.date > state.date && x.fixture.date <= limit && (x.fixture.homeId === own || x.fixture.awayId === own))
+    .sort((a, b) => (a.fixture.date < b.fixture.date ? -1 : 1));
+  for (const x of mine) {
+    const home = x.fixture.homeId === own;
+    const b = fromFixture(state, { fixture: x.fixture, name: x.name, cup: x.cup, home, opponentId: home ? x.fixture.awayId : x.fixture.homeId });
+    if (b) {
+      out.push(b);
+      break;
+    }
   }
   const euro = nextEuroMatch(state);
   if (euro && euro.date <= limit) out.push(fromEuro(euro));

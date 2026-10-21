@@ -78,8 +78,10 @@ import { createSideGoals, seasonFfp, seasonRating, settleSideGoals, sideGoalsTic
 import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
 import { afterOwnMatch, halftimeAdjust, nextOwnFixture, pendingPrematch, planEffect, type OwnFixture } from './matchday';
+import { applyBigMatchPlan, bigMatchWeekStarted, dailyBigMatch, euroMatchTomorrow, liveChanges } from './matchexperience'; // W1
 import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyRivalOwners } from './league';
 import { dailyRivals } from './rivals';
+import { dailySocial } from './social'; // W2: sociální sítě a krok po zápase
 import { ownerRatingTick, seasonOwnerRatings } from './ownerRating';
 import { milestoneToday, nextMilestone } from './milestones';
 import { aiForeignSignings, monthlyForeign, refreshForeignMarket, returnLoans, weeklyForeign } from './foreign';
@@ -92,6 +94,7 @@ import { fillFromRoster, rostersByClub, type RosterRow } from './rosters';
 import { seasonAchievements, weeklyAchievements } from './achievements'; // W3
 import { challengesTick, createChallenges, settleChallenges } from './challenges'; // W3
 import { monthlyLongEffects, weeklyBigDecisions } from './bigdecisions'; // W3
+import { awayTripEdge, dailyFans } from './fans'; // W3: fanoušci průběžně
 
 export const START_SEASON = 2026;
 const MAX_SQUAD = 26;
@@ -729,6 +732,8 @@ function playMatchesOn(state: GameState, rng: Rng): void {
     const involvesOwner = f.homeId === ownId || f.awayId === ownId;
     // Plán majitele (taktika, prémie, levné vstupné, choreo) platí jen pro jeho zápas.
     const plan = involvesOwner ? planEffect(state, f) : { bonus: 0, ticketFactor: 1, homeEdge: 0 };
+    if (involvesOwner) applyBigMatchPlan(state, f, plan); // W1: lístky, kotel a choreo velkého zápasu
+    if (involvesOwner) plan.homeEdge -= awayTripEdge(state, f); // W3: výjezd fanoušků ubere domácím výhodu
     const ticketPrice = home.policy.ticketPrice;
     if (plan.ticketFactor !== 1) home.policy.ticketPrice = Math.round(ticketPrice * plan.ticketFactor);
     // Kotel: bojkot nebo nadšení mění návštěvu i domácí prostředí.
@@ -753,6 +758,7 @@ function playMatchesOn(state: GameState, rng: Rng): void {
         detail: comp ? comp.id === ownCompId : involvesOwner,
         homeEdge: homeAdvantage(home, attendance, capacity) * (ownHome ? pitchFactor(home, damaged) : damaged ? 0.6 : 1) + plan.homeEdge + ultras.homeEdge + (sector?.homeEdge ?? 0),
         halftime: half ? (ownHome ? { home: half } : { away: half }) : undefined,
+        changes: involvesOwner ? liveChanges(state, f) : undefined, // W1: body zlomu velkého zápasu
       },
     );
     // Držitelé permanentek už zaplatili předem.
@@ -1062,6 +1068,9 @@ function processDay(state: GameState, rng: Rng): void {
   playMatchesOn(state, rng);
   afterMatchday(state, rng);
   dailyRivals(state); // W2: vedení soupeřů
+  dailyBigMatch(state); // W1: týden velkého zápasu a vyúčtování
+  dailySocial(state); // W2: sítě, po zápase, paměť rivality (po vyúčtování velkého zápasu, kvůli momentům)
+  dailyFans(state); // W3: fanouškovská rada, ankety, výjezdy, oslavy
   for (const comp of Object.values(state.competitions)) {
     if (comp.format === 'nadstavba' && !comp.groups && comp.reservedDates && baseSeasonDone(comp)) startGroups(state, comp, rng);
   }
@@ -1134,6 +1143,7 @@ export function advanceUntil(prev: GameState, target: PlayTarget): { state: Game
   let fixtureId: string | undefined;
   let reason: string | undefined;
   const prematchAtStart = !!pendingPrematch(state);
+  const bigAtStart = state.bigMatch?.id; // W1
   const deadlineAtStart = !!deadlineDay(state);
   for (let i = 0; i < 400 && !state.gameOver; i++) {
     const played = stepDay(state, rng, own);
@@ -1164,6 +1174,11 @@ export function advanceUntil(prev: GameState, target: PlayTarget): { state: Game
     }
     if (stops.milestone && !deadlineAtStart && deadlineDay(state)) {
       reason = 'Deadline day: poslední tři dny přestupního okna, hra jde po dnech';
+      break;
+    }
+    const bigWeek = bigMatchWeekStarted(state, bigAtStart); // W1
+    if (stops.decision && bigWeek) {
+      reason = bigWeek;
       break;
     }
     const prematch = pendingPrematch(state);
@@ -1222,10 +1237,15 @@ export function advanceStep(prev: GameState): { state: GameState; reason?: strin
   const offers = new Set(state.market.offers.map((o) => o.id));
   const injured = new Set(squadOf(state, own).filter((p) => p.injuredUntil && p.injuredUntil >= state.date).map((p) => p.id));
   const deadlineAtStart = !!deadlineDay(state);
+  const bigAtStart = state.bigMatch?.id; // W1
   let reason: string | undefined;
   for (let i = 0; i < plan.days && !state.gameOver; i++) {
     stepDay(state, rng, own);
-    if (ownMatchTomorrow(state)) break;
+    const bigWeek = bigMatchWeekStarted(state, bigAtStart); // W1: zastavit jen na začátku týdne velkého zápasu
+    if (ownMatchTomorrow(state) || euroMatchTomorrow(state) || bigWeek) {
+      reason = bigWeek;
+      break;
+    }
     if (stops.milestone && milestoneToday(state)) break;
     const fresh = state.events.find((e) => !events.has(e.id));
     if (stops.decision && fresh) {

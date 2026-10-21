@@ -284,9 +284,10 @@ export function startEurope(state: GameState, rng: Rng): void {
     const slot = own.entry === 'LM' ? 0 : own.entry === 'EL' ? 1 : 2;
     const opp = addQualifyingTie(state, rng, run, own.entry, slot);
     const first = run.matches[0];
+    noteDraw(state, first.stage, [opp]);
     addNews(state, {
       kind: 'sezona',
-      title: `Los předkola: ${opp.name} (${opp.country})`,
+      title: 'Los předkola je hotový',
       text: `Hrajete o ligovou fázi: ${EUROPE_LABEL[own.entry]}. První zápas ${formatShortDate(first.date)} ${first.home ? 'doma' : 'venku'}. Šance na postup podle síly kádru asi ${Math.round(leaguePhaseChance(europeStrength(state, own.clubId), own.entry) * 100)} %. Kdo vypadne, má ještě šanci v nižší soutěži.`,
     });
   }
@@ -445,13 +446,13 @@ function playMatch(state: GameState, rng: Rng, run: EuroRun, m: EuroMatch): void
     const leg2 = run.matches.find((x) => x.tie === m.tie && x.leg === 2);
     if (leg2) planTie(state, rng, run, m, leg2);
   }
-  const [own, opp] = m.planned ? [m.planned.own, m.planned.opp] : simScore(rng, s, m.opponent.rating, m.home, m.neutral);
+  const [own, opp] = m.planned ? [m.planned.own, m.planned.opp] : simScore(rng, s + prepEdge(state, m), m.opponent.rating, m.home, m.neutral);
   const result: EuroMatchResult = { own, opp, scorers: pickScorers(state, rng, own), oppMinutes: minutes(rng, opp) };
   const venue = europeVenueFactor(club);
   if (m.home && !m.neutral) {
     // Evropský večer: vyprodáno a dražší vstupenky.
     result.attendance = club.stadium.capacity;
-    result.gate = Math.round(result.attendance * club.policy.ticketPrice * 2.5 * venue);
+    result.gate = Math.round(result.attendance * club.policy.ticketPrice * 2.5 * venue * prepTicket(state, m));
     book(state, run.clubId, 'vstupne', result.gate, `Evropský večer: ${club.shortName} – ${m.opponent.name} (vyprodáno)`);
   } else if (m.neutral) {
     result.attendance = 60_000;
@@ -482,6 +483,33 @@ function playMatch(state: GameState, rng: Rng, run: EuroRun, m: EuroMatch): void
   // Únava: středa/čtvrtek a hned víkend.
   for (const p of squadOf(state, run.clubId).sort((a, b) => b.overall - a.overall).slice(0, 14)) p.fitness = Math.max(50, p.fitness - 8);
   matchNews(state, run, m);
+}
+
+/** W1: příprava evropského večera (lístky, kotel, choreo) mírně posune domácí prostředí. */
+function prepEdge(state: GameState, m: EuroMatch): number {
+  const bm = state.bigMatch;
+  // Výjezd fanoušků na venkovní evropský zápas (W3: state.fans.trip) trochu pomůže i venku.
+  const trip = state.fans?.trip;
+  if (!m.home && !m.neutral && trip?.matchId === m.id) return trip.choice === 'vlak' ? 0.8 : trip.choice === 'autobusy' ? 0.4 : 0;
+  if (!m.home || m.neutral || bm?.id !== m.id) return 0;
+  const p = bm.prep ?? {};
+  const choreo = p.choreo === 'zaplatit' ? 1 : p.choreo === 'zakaz' ? -0.3 : 0.4;
+  const alloc = p.alloc === 'kotel' ? 0.5 : p.alloc === 'rodiny' ? -0.2 : 0;
+  const tickets = p.tickets === 'lidove' ? 0.3 : p.tickets === 'zdrazit' ? -0.2 : 0;
+  return choreo + alloc + tickets;
+}
+
+/** W1: vstupné evropského večera podle volby lístků (zdražit / lidové, plný příděl hostům). */
+function prepTicket(state: GameState, m: EuroMatch): number {
+  const bm = state.bigMatch;
+  if (!m.home || m.neutral || bm?.id !== m.id) return 1;
+  const p = bm.prep ?? {};
+  return (p.tickets === 'zdrazit' ? 1.35 : p.tickets === 'lidove' ? 0.75 : 1) * (p.guests === 'plny' ? 1.03 : 1);
+}
+
+/** W1: zapíše los pro kartu s postupným odkrytím soupeře. */
+function noteDraw(state: GameState, stage: string, opponents: EuroOpponent[]): void {
+  state.euroDraw = { date: state.date, stage, opponents: opponents.map((o) => ({ ...o })) };
 }
 
 function scoreLine(state: GameState, run: EuroRun, m: EuroMatch): string {
@@ -554,9 +582,10 @@ function startLeaguePhase(state: GameState, rng: Rng, run: EuroRun, comp: Europe
   order.forEach((x, i) => {
     run.matches.push({ id: newMatchId(state, run), date: freeDate(state, dates[i]), comp, stage: `Ligová fáze ${COMP_GEN[comp]}, ${i + 1}. kolo`, home: i % 2 === 0 ? firstHome : !firstHome, opponent: x.o });
   });
+  noteDraw(state, `Ligová fáze ${COMP_GEN[comp]}`, order.map((x) => x.o));
   addNews(state, {
     kind: 'sezona',
-    title: `Los ligové fáze ${COMP_GEN[comp]}`,
+    title: `Los ligové fáze ${COMP_GEN[comp]} je hotový`,
     text: `Soupeři: ${order.map((x) => `${x.o.name} (${x.o.country})`).join(', ')}. Za každou výhru prémie UEFA ${mil(PRIZE_WIN[comp])}, za remízu ${mil(PRIZE_DRAW[comp])}. Domácí zápasy budou vyprodané.`,
   });
 }
@@ -572,7 +601,8 @@ function addKnockoutTie(state: GameState, rng: Rng, run: EuroRun, round: number)
     addTie(state, run, comp, `${KO_ROUNDS[round]} ${COMP_GEN[comp]}`, [first, addDays(first, 7)], opponent, round === 0 ? false : rng.chance(0.5));
   }
   const m = run.matches[run.matches.length - (round === 4 ? 1 : 2)];
-  addNews(state, { kind: 'info', title: `Los: ${KO_ROUNDS[round]} ${COMP_GEN[comp]} – ${opponent.name}`, text: `Soupeř: ${opponent.name} (${opponent.country}). ${round === 4 ? 'Finále se hraje na neutrální půdě' : 'První zápas'} ${formatShortDate(m.date)}.` });
+  noteDraw(state, `${KO_ROUNDS[round]} ${COMP_GEN[comp]}`, [opponent]);
+  addNews(state, { kind: 'info', title: `Los: ${KO_ROUNDS[round]} ${COMP_GEN[comp]}`, text: `Soupeř: ${opponent.name} (${opponent.country}). ${round === 4 ? 'Finále se hraje na neutrální půdě' : 'První zápas'} ${formatShortDate(m.date)}.` });
 }
 
 /** Kolo jara, ve kterém klub je (0 = play-off … 4 = finále). */
@@ -594,7 +624,8 @@ function afterMatch(state: GameState, rng: Rng, run: EuroRun, m: EuroMatch): voi
     if (next && slot <= 2) {
       const opp = addQualifyingTie(state, rng, run, next, Math.max(slot, next === 'EL' ? 1 : 2));
       run.comp = next;
-      addNews(state, { kind: 'info', title: `Druhá šance: play-off ${COMP_GEN[next]} proti ${opp.name}`, text: `Po vyřazení pokračujete v nižší soutěži. Soupeř: ${opp.name} (${opp.country}).` });
+      noteDraw(state, `Play-off ${COMP_GEN[next]}`, [opp]);
+      addNews(state, { kind: 'info', title: `Druhá šance: los play-off ${COMP_GEN[next]}`, text: `Po vyřazení pokračujete v nižší soutěži. Soupeř: ${opp.name} (${opp.country}).` });
     } else {
       run.phase = 'konec';
     }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   advanceDays,
   allFixtures,
@@ -7,7 +7,18 @@ import {
   clubLabel,
   coachAcceptChance,
   goalChance,
-  liveFirstHalf,
+  BIG_MATCH_LABEL,
+  crowdBase,
+  crowdLevel,
+  finalWhistle,
+  goalCry,
+  matchIntro,
+  MAX_LIVE_DECISIONS,
+  recordLiveChoice,
+  scheduledMoments,
+  vabankMoment,
+  type BigMatchKind,
+  type LiveMoment,
   matchBonusAmount,
   matchStakes,
   nextOwnFixture,
@@ -17,13 +28,13 @@ import {
   workload,
   type ActionResult,
   type GameState,
-  type LiveHalf,
   type MatchEvent,
   type MatchPlan,
 } from '../../engine';
 import { Badge } from '../components';
 import { useNav } from '../nav';
 import { money } from '../format';
+import { BigMatchBanner, CrowdMeter } from './BigMatch';
 
 const daysBetween = (a: string, b: string) => Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000);
 
@@ -41,6 +52,7 @@ export function MatchPrep({ game, onChange, onLive, compact }: { game: GameState
   const accept = Math.round(coachAcceptChance(game) * 100);
   const w = workload(game);
   const days = daysBetween(game.date, next.fixture.date);
+  const bigHome = next.home && game.bigMatch?.id === next.fixture.id && !game.bigMatch.settled;
   return (
     <div className="match-prep">
       {!compact && (
@@ -74,7 +86,8 @@ export function MatchPrep({ game, onChange, onLive, compact }: { game: GameState
           <input type="checkbox" checked={!!plan.bonus} onChange={(e) => apply(setMatchPlan(game, { bonus: e.target.checked ? matchBonusAmount(game) : 0 }))} />
           <span>Mimořádná prémie za výhru {money(matchBonusAmount(game))} (vyšší nasazení)</span>
         </label>
-        {next.home && (
+        {bigHome && <p className="muted small">Vstupné, kotel a choreo nastavujete na kartě velkého zápasu na Přehledu.</p>}
+        {next.home && !bigHome && (
           <div className="prep-row">
             <span>Akce pro fanoušky</span>
             <div className="segmented">
@@ -114,11 +127,13 @@ export function MatchDialog({ game, onChange, onClose, onResult, onLive }: { gam
   const home = next.home ? ownName : oppName;
   const away = next.home ? oppName : ownName;
   const edge = scout.ownStrength - scout.strength;
+  const big = game.bigMatch?.id === next.fixture.id && !game.bigMatch.settled;
   return (
     <div className="overlay" onClick={onClose}>
       <div className="card dialog match-dialog" role="dialog" aria-modal="true" aria-label="Zápas" onClick={(e) => e.stopPropagation()}>
         <span className="muted small">Zítra · {next.name} · {next.home ? 'doma' : 'venku'}</span>
         <h2>{home} – {away}</h2>
+        <BigMatchBanner game={game} fixtureId={next.fixture.id} />
 
         <h3>Soupeř</h3>
         <div className="scout-grid">
@@ -160,7 +175,7 @@ export function MatchDialog({ game, onChange, onClose, onResult, onLive }: { gam
 
         <div className="match-choice">
           <button onClick={onResult}>Jen výsledek<span>Zápas se odehraje hned, uvidíte souhrn.</span></button>
-          <button className="primary" onClick={onLive}>Sledovat zápas<span>Přenos s rozhodnutím o poločase.</span></button>
+          <button className="primary" onClick={onLive}>Sledovat zápas<span>{big ? 'Přenos s kotlem, poločasem a rozhodnutími v klíčových chvílích.' : 'Přenos s rozhodnutím o poločase.'}</span></button>
         </div>
         <button className="linkbtn" onClick={onClose}>Zatím zavřít</button>
       </div>
@@ -183,20 +198,27 @@ function eventText(game: GameState, e: MatchEvent): string {
   return name;
 }
 
+type LiveStop = { key: string; minute: number; kind: 'pulka' } | { key: string; minute: number; kind: 'moment'; moment: LiveMoment };
+
 /**
- * Živý přenos: první poločas (náhled), rozhodnutí o poločase, pak skutečný zápas a druhý poločas.
+ * Živý přenos. Zápas se přehraje na kopii hry; v bodech zlomu (poločas, u velkých zápasů navíc
+ * sporný verdikt, pyro nebo vabank v 75. minutě) se volba zapíše a zbytek zápasu se přehraje znovu.
+ * Do bodu zlomu je zápas stejný (stejná náhoda), volba platí od další minuty, takže rozhodnutí je poctivé.
  * Když zápas není zítra, hra se k němu nejdřív posune.
  */
 export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameState; onChange: (g: GameState) => void; onClose: () => void; onSummary: (fixtureId: string) => void }) {
-  const [stage, setStage] = useState<'prvni' | 'pulka' | 'druhy' | 'konec'>('prvni');
-  const [half, setHalf] = useState<LiveHalf | undefined>();
-  const [base, setBase] = useState<GameState | undefined>();
-  const [shown, setShown] = useState(0);
-  const [second, setSecond] = useState<MatchEvent[]>([]);
-  const [final, setFinal] = useState<[number, number] | undefined>();
+  const [eve, setEve] = useState<GameState | undefined>();
+  const [work, setWork] = useState<GameState | undefined>();
+  const [sim, setSim] = useState<GameState | undefined>();
   const [fixtureId, setFixtureId] = useState<string | undefined>();
+  const [minute, setMinute] = useState(0);
+  const [pause, setPause] = useState<LiveStop | undefined>();
+  const [done, setDone] = useState<string[]>([]);
+  const [notes, setNotes] = useState<{ minute: number; text: string; cls?: string }[]>([]);
+  const [finished, setFinished] = useState(false);
+  const feedRef = useRef<HTMLUListElement>(null);
 
-  // Posun na den před zápasem a náhled prvního poločasu.
+  // Posun na den před zápasem a přehrání zápasu na kopii.
   useEffect(() => {
     const next = nextOwnFixture(game);
     if (!next) {
@@ -204,82 +226,150 @@ export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameSt
       return;
     }
     const d = daysBetween(game.date, next.fixture.date);
-    const eve = d > 1 ? advanceDays(game, d - 1).state : game;
-    if (eve !== game) onChange(eve);
-    const h = liveFirstHalf(eve);
-    if (!h) {
+    const e = d > 1 ? advanceDays(game, d - 1).state : game;
+    if (e !== game) onChange(e);
+    const played = advanceDays(e, 1).state;
+    const f = allFixtures(played).find((x) => x.fixture.id === next.fixture.id)?.fixture;
+    if (!f?.result) {
       onClose();
       return;
     }
-    setBase(eve);
-    setHalf(h);
+    setEve(e);
+    setWork(e);
+    setSim(played);
+    setFixtureId(f.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const list = stage === 'prvni' || stage === 'pulka' ? half?.events ?? [] : second;
+  const own = game.owner.clubId;
+  const fixture = sim && fixtureId ? allFixtures(sim).find((x) => x.fixture.id === fixtureId)?.fixture : undefined;
+  const events = fixture?.result?.detail?.events ?? [];
+  const bm = eve?.bigMatch?.id === fixtureId && !eve?.bigMatch?.settled ? work?.bigMatch : undefined;
+  const moments = eve && bm ? scheduledMoments(eve, bm) : [];
+  const ownHome = fixture?.homeId === own;
+  const goalsBy = (club: string, upTo: number) => events.filter((e) => e.type === 'gol' && e.clubId === club && e.minute <= upTo).length;
+
+  const stops: LiveStop[] = [{ key: 'pulka', minute: 45, kind: 'pulka' }];
+  for (const m of moments) stops.push({ key: m.kind, minute: m.minute, kind: 'moment', moment: m });
+  if (bm && fixture && moments.length < MAX_LIVE_DECISIONS) {
+    const opp = ownHome ? fixture.awayId : fixture.homeId;
+    if (goalsBy(own, 75) < goalsBy(opp, 75) || done.includes('vabank')) stops.push({ key: 'vabank', minute: 75, kind: 'moment', moment: vabankMoment() });
+  }
+  const stopAt = (m: number) => stops.find((s) => s.minute === m && !done.includes(s.key));
+
+  // Hodiny přenosu: po minutách, u gólu delší pauza, v bodě zlomu zastaví.
   useEffect(() => {
-    if (stage !== 'prvni' && stage !== 'druhy') return;
-    if (shown >= list.length) {
-      const t = setTimeout(() => setStage(stage === 'prvni' ? 'pulka' : 'konec'), 600);
-      return () => clearTimeout(t);
+    if (!sim || pause || finished) return;
+    const stop = stopAt(minute);
+    if (stop) {
+      setPause(stop);
+      if (stop.kind === 'moment') setNotes((n) => [...n, { minute, text: `${stop.moment.title}: ${stop.moment.text}`, cls: 'moment' }]);
+      return;
     }
-    const t = setTimeout(() => setShown(shown + 1), 650);
+    if (minute >= 90) {
+      setFinished(true);
+      onChange(sim);
+      return;
+    }
+    const goal = events.some((e) => e.minute === minute && e.type === 'gol');
+    const t = setTimeout(() => setMinute(minute + 1), goal ? 1100 : minute === 0 ? 900 : 60);
     return () => clearTimeout(t);
-  }, [stage, shown, list.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim, minute, pause, finished]);
 
-  if (!base || !half) return null;
-  const goals = (evs: MatchEvent[], club: string) => evs.filter((e) => e.type === 'gol' && e.clubId === club).length;
-  const visible = list.slice(0, shown);
-  const homeScore = stage === 'prvni' ? goals(visible, half.homeId) : stage === 'pulka' ? half.homeGoals : final && stage === 'konec' ? final[0] : half.homeGoals + goals(visible, half.homeId);
-  const awayScore = stage === 'prvni' ? goals(visible, half.awayId) : stage === 'pulka' ? half.awayGoals : final && stage === 'konec' ? final[1] : half.awayGoals + goals(visible, half.awayId);
+  useEffect(() => {
+    const el = feedRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [minute, notes.length, pause]);
 
-  const decide = (choice: 'drzet' | 'riskovat' | 'branit') => {
-    const planned = setHalftime(base, choice).state;
-    const played = advanceDays(planned, 1).state;
-    onChange(played);
-    const f = allFixtures(played).find((x) => x.fixture.id === half.fixtureId)?.fixture;
-    setFixtureId(f?.id);
-    setSecond((f?.result?.detail?.events ?? []).filter((e) => e.minute > 45));
-    setFinal(f?.result ? [f.result.homeGoals, f.result.awayGoals] : undefined);
-    setShown(0);
-    setStage('druhy');
+  if (!eve || !work || !sim || !fixture) return null;
+
+  const decide = (stop: LiveStop, choice: string, label: string) => {
+    const next = stop.kind === 'pulka' ? setHalftime(work, choice as 'drzet' | 'riskovat' | 'branit').state : recordLiveChoice(work, stop.moment.kind, stop.minute, choice);
+    setWork(next);
+    setSim(advanceDays(next, 1).state);
+    setDone((d) => [...d, stop.key]);
+    setNotes((n) => [...n, { minute: stop.minute, text: stop.kind === 'pulka' ? `Vzkaz do kabiny: ${label}.` : `Rozhodli jste: ${label}.`, cls: 'decision' }]);
+    setPause(undefined);
   };
+  const skip = () => {
+    // Zbytek zápasu s výchozími volbami.
+    setDone(stops.map((s) => s.key));
+    setPause(undefined);
+    setMinute(90);
+  };
+
+  const visible = events.filter((e) => e.minute <= minute);
+  // Skóre po i-tém zobrazeném gólu (pro komentář): góly v pořadí událostí.
+  const ownGoalsBy = (_m: number, idx: number, mine: boolean) => visible.slice(0, idx + 1).filter((e) => e.type === 'gol' && (e.clubId === own) === mine).length;
+  const homeScore = goalsBy(fixture.homeId, minute);
+  const awayScore = goalsBy(fixture.awayId, minute);
+  const gf = ownHome ? homeScore : awayScore;
+  const ga = ownHome ? awayScore : homeScore;
+  const intro = bm ? matchIntro(work, bm) : [];
+  const pyro = moments.find((m) => m.kind === 'pyro');
+  const level = crowdLevel(
+    crowdBase(eve, bm, ownHome),
+    visible.filter((e) => e.type === 'gol').map((e) => ({ minute: e.minute, own: e.clubId === own })),
+    minute,
+    pyro && ownHome ? [{ minute: pyro.minute, delta: 14 }] : [],
+  );
+  const feed = [
+    ...visible.map((e, i) => ({ minute: e.minute, order: 1, key: `e${i}`, node: (
+      <li key={`e${i}`} className={e.type === 'gol' ? `goal ${e.clubId === own ? 'own-goal' : 'opp-goal'}` : ''}>
+        <span className="tl-min">{e.minute}'</span> {eventText(eve, e)}
+        {e.type === 'gol' && bm && <span className="cry">{goalCry(bm, e.clubId === own, e.minute, ownGoalsBy(e.minute, i, true), ownGoalsBy(e.minute, i, false))}</span>}
+      </li>
+    ) })),
+    ...notes.map((n, i) => ({ minute: n.minute, order: 2, key: `n${i}`, node: <li key={`n${i}`} className={n.cls}><span className="tl-min">{n.minute}'</span> {n.text}</li> })),
+  ].sort((a, b) => a.minute - b.minute || a.order - b.order);
+  const phase = finished ? 'Konec zápasu' : pause?.kind === 'pulka' ? 'Poločas' : minute === 0 ? 'Nástup týmů' : `${minute}. minuta`;
 
   return (
     <div className="overlay">
-      <div className="card dialog live-match" role="dialog" aria-modal="true" aria-label="Živý přenos">
+      <div className={`card dialog live-match ${bm ? `big-live kind-${bm.kind}` : ''}`} role="dialog" aria-modal="true" aria-label="Živý přenos">
+        {bm && <span className="bm-kicker center">{BIG_MATCH_LABEL[bm.kind as BigMatchKind] ?? 'Velký zápas'} · {bm.competition}</span>}
         <div className="scoreboard">
-          <span className="sb-team">{clubLabel(base, half.homeId)}</span>
-          <span className="sb-score">{homeScore}:{awayScore}</span>
-          <span className="sb-team">{clubLabel(base, half.awayId)}</span>
+          <span className="sb-team">{clubLabel(eve, fixture.homeId)}</span>
+          <span className="sb-score" key={`${homeScore}-${awayScore}`}>{homeScore}:{awayScore}</span>
+          <span className="sb-team">{clubLabel(eve, fixture.awayId)}</span>
         </div>
-        <p className="muted small center">{stage === 'prvni' ? '1. poločas' : stage === 'pulka' ? 'Poločas' : stage === 'druhy' ? '2. poločas' : 'Konec zápasu'}</p>
-        <ul className="plain live-feed">
-          {(stage === 'druhy' || stage === 'konec' ? [...(half.events ?? []), ...visible] : visible).map((e, i) => (
-            <li key={i} className={e.type === 'gol' ? 'goal' : ''}><span className="tl-min">{e.minute}'</span> {eventText(base, e)}</li>
-          ))}
-          {stage === 'prvni' && !visible.length && <li className="muted">Zápas začal…</li>}
+        <p className="muted small center">{phase}</p>
+        <CrowdMeter level={level} label={ownHome ? 'Kotel' : 'Vaši fanoušci'} />
+        <ul className="plain live-feed" ref={feedRef}>
+          {intro.map((t, i) => <li key={`i${i}`} className="intro">{t}</li>)}
+          {!intro.length && <li className="muted">Zápas začal…</li>}
+          {feed.map((x) => x.node)}
+          {finished && bm && <li className="final">{finalWhistle(bm, gf, ga)}</li>}
         </ul>
-        {stage === 'pulka' && (
+        {pause?.kind === 'pulka' && (
           <>
             <h3>Co vzkážete trenérovi do kabiny?</h3>
             <div className="decision-options">
-              <button onClick={() => decide('drzet')}>Nic neměnit<span>Tým hraje dál podle plánu.</span></button>
-              <button onClick={() => decide('riskovat')}>Víc riskovat<span>Útočněji a s větším nasazením: víc šancí, ale i gólů do vlastní sítě.</span></button>
-              <button onClick={() => decide('branit')}>Bránit výsledek<span>Zatáhnout se a hlídat skóre.</span></button>
+              <button onClick={() => decide(pause, 'drzet', 'nic neměnit')}>Nic neměnit<span>Tým hraje dál podle plánu.</span></button>
+              <button onClick={() => decide(pause, 'riskovat', 'víc riskovat')}>Víc riskovat<span>Útočněji a s větším nasazením: víc šancí, ale i gólů do vlastní sítě.</span></button>
+              <button onClick={() => decide(pause, 'branit', 'bránit výsledek')}>Bránit výsledek<span>Zatáhnout se a hlídat skóre.</span></button>
             </div>
             <p className="muted small">Trenér vzkaz přijme podle toho, jak vám věří.</p>
           </>
         )}
-        {stage === 'konec' && (
+        {pause?.kind === 'moment' && (
+          <div className="live-moment">
+            <h3>{pause.moment.title}</h3>
+            <div className="decision-options">
+              {pause.moment.options.map((o) => (
+                <button key={o.id} className={o.id === pause.moment.def ? 'default' : ''} onClick={() => decide(pause, o.id, o.label.toLowerCase())}>{o.label}<span>{o.hint}</span></button>
+              ))}
+            </div>
+          </div>
+        )}
+        {finished && (
           <div className="buttons">
-            {fixtureId && <button className="primary" onClick={() => onSummary(fixtureId)}>Souhrn zápasu ›</button>}
+            <button className="primary" onClick={() => onSummary(fixture.id)}>Souhrn zápasu ›</button>
             <button onClick={onClose}>Zavřít</button>
           </div>
         )}
-        {(stage === 'prvni' || stage === 'druhy') && (
-          <button className="linkbtn" onClick={() => setShown(list.length)}>Přeskočit ›</button>
-        )}
+        {!finished && !pause && <button className="linkbtn" onClick={skip}>Přeskočit na konec ›</button>}
       </div>
     </div>
   );
