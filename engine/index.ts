@@ -52,3 +52,4 @@ export * from './bigmatch';
 export * from './social'; // W2
 export * from './fans'; // W3
 export * from './matchexperience'; // W1
+export * from './facts';
