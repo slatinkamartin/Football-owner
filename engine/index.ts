@@ -48,3 +48,4 @@ export * from './ownerRating';
 export * from './achievements';
 export * from './challenges';
 export * from './bigdecisions';
+export * from './bigmatch';

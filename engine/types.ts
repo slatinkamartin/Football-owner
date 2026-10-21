@@ -1107,6 +1107,8 @@ export interface GameState {
   planDismissed?: string[];
   /** Hra začala se skutečnými soupiskami z databáze. */
   realRosters?: boolean;
+  /** Probíhající velký zápas (týden přípravy až reakce po zápase), viz engine/bigmatch.ts. */
+  bigMatch?: BigMatchState;
   pulse?: PulseState;
   settings?: GameSettings;
   /** Zahraniční skauting a vyhlédnutí hráči. */
@@ -1173,4 +1175,19 @@ export interface GameState {
   /** W3: dlouhodobé efekty velkých rozhodnutí a plánování nabídek (engine/bigdecisions.ts). */
   longEffects?: import('./bigdecisions').LongEffect[];
   bigDecisions?: import('./bigdecisions').BigDecisionsState;
+}
+
+/** Stav velkého zápasu: příprava v týdnu před ním a reakce po něm. Pole doplňují moduly přípravy, přenosu a sítí. */
+export interface BigMatchState {
+  id: string;
+  date: string;
+  kind: string;
+  /** Volby majitele v přípravě (lístky, choreo, bezpečnost, …). */
+  prep?: Record<string, string | number | boolean>;
+  /** Napětí před zápasem 0–100 (roste s blížícím se termínem a událostmi). */
+  hype?: number;
+  /** Co se stalo v zápase (pro reakci po zápase a sociální sítě). */
+  moments?: string[];
+  /** Hotové kroky po zápase (děkovačka, příspěvek…). */
+  after?: Record<string, string>;
 }
