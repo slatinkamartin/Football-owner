@@ -61,6 +61,18 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.27: situace, diskuze a příspěvky z reálného dění
+
+- **Situace z dat:** každé rozhodnutí má konkrétní příčinu ve hře a cituje ji.
+  - Katalog 26 situací, například útočník bez gólu, chyby brankáře, červená karta, série bez výhry, gól odchovance, agent hráče ve formě, sporný verdikt nebo zranění bez náhrady.
+  - Náhodné situace bez příčiny jsou přepsané nebo vyřazené. Kauzy mimo hřiště se o skutečných hráčích nevymýšlejí.
+- **Tempo:** nejvýš jedno rozhodnutí týdně, při nastavení „Drama“ dvě. Přednost mají situace z dění na hřišti.
+- **Sliby majitele:** sliby (minuty pro mladé, posila, podpora trenéra, podpis smlouvy…) se měří a vyhodnocují; karta „Sliby majitele“ v záložce Majitel.
+- **Konkrétní texty:** zprávy po zápase se střelci a minutami, komentáře vymyšlených fanoušků s povahami (optimista, kritik, statistik, pamětník, kotel), příspěvky klubu podle výsledku.
+- **Fórum fanoušků:** vlákna, která vznikají a končí podle dat; do každého můžete jednou vstoupit odpovědí.
+- **Tisková konference:** po výrazném zápase 2–3 otázky novinářů ze skutečného dění, odpovědi s dopadem a výroky, které si hra pamatuje.
+- **Navazující příběhy:** titulky navazují na dřívější kritiku, výroky a sliby, například „Kdo říkal, že Černý nedává góly?“.
+
 ### Novinky verze 0.26: velké zápasy, fanoušci a sociální sítě
 
 - **Velký zápas** (derby, Evropa, souboj o čelo, o záchranu, pohár od čtvrtfinále, baráž):

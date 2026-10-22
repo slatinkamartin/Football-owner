@@ -1,3 +1,4 @@
+import { decisionBudgetLeft } from './situations';
 import { addDays, seasonLabel } from './calendar';
 import { allFixtures } from './competitions';
 import { europeRun } from './europe';
@@ -15,6 +16,8 @@ import { upcomingBigMatch, type BigMatch, type BigMatchKind } from './bigmatch';
 import type { GameEvent, GameState, Player } from './types';
 import { computeTable } from './standings';
 import { addNews, clamp, clubLabel, competitionOf, FREE, hash01, isForeign, plural, tierOf } from './world';
+import { freshOwnMatch, matchFacts, type OwnMatchFacts, type SeasonFacts } from './facts'; // R2
+import { clubPostText, factHeadlines, factVoices, lastName, ordWin, pickVoices, seasonFactsCached, type Persona } from './fanvoice'; // R2
 
 /**
  * Sociální sítě klubu a majitele, krok „Po zápase“ a paměť rivality.
@@ -39,6 +42,8 @@ export interface SocialComment {
   /** Vymyšlená přezdívka fanouška. */
   name: string;
   text: string;
+  /** R2: povaha fanouška (optimista, kritik, statistik, pamětník, kotel). */
+  persona?: Persona;
 }
 
 export interface SocialPost {
@@ -88,6 +93,8 @@ export interface PostMatchPending {
   /** Příjem z dresů hrdiny (připíše se při potvrzení). */
   jerseys: number;
   moments: string[];
+  /** R2: návrhy textů příspěvků z faktů zápasu (podle id volby). */
+  texts?: Record<string, string>;
 }
 
 export interface SocialState {
@@ -177,7 +184,17 @@ const COMMENTS: Record<'pos' | 'neg' | 'mix', string[]> = {
   mix: ['Hlavně držet spolu.', 'Uvidíme v neděli.', 'Mohlo to bejt lepší, mohlo to bejt horší.', 'Aspoň že jsme byli slyšet.', 'Chce to klid.', 'Zajímavý...', 'Komentáře jsou zase zábava 😅', 'Kdy bude nový dres?'],
 };
 
-function comments(state: GameState, key: string, mood: SocialPost['mood'], n = 3): SocialComment[] {
+/** R2: kontext komentářů – fakta zápasu/sezóny, nebo vlastní věty podle povah. */
+interface PostContext {
+  m?: OwnMatchFacts;
+  s?: SeasonFacts;
+  lines?: Partial<Record<Persona, string[]>>;
+}
+
+function comments(state: GameState, key: string, mood: SocialPost['mood'], n = 3, ctx?: PostContext): SocialComment[] {
+  // R2: komentáře vymyšlených fanoušků citují, co se opravdu stalo (střelci, minuty, karty, tabulka).
+  const facts = ctx?.lines ? pickVoices(state, key, ctx.lines, mood, n) : factVoices(state, key, mood, ctx?.m, ctx?.s, n);
+  if (facts.length >= 2) return facts.map((v) => ({ name: v.name, text: v.text, persona: v.persona }));
   const out: SocialComment[] = [];
   const used = new Set<number>();
   for (let i = 0; i < n; i++) {
@@ -190,11 +207,18 @@ function comments(state: GameState, key: string, mood: SocialPost['mood'], n = 3
   return out;
 }
 
-function addPost(state: GameState, author: string, text: string, mood: SocialPost['mood'], boost = 1): SocialPost {
+/** R2: fakta pro komentáře – čerstvý zápas (do 2 dnů) a sezóna. */
+function defaultContext(state: GameState): PostContext {
+  const m = freshOwnMatch(state, 2);
+  const s = m || state.date.slice(5) >= '08-01' || state.date.slice(5) <= '06-15' ? seasonFactsCached(state) : undefined;
+  return { m, s };
+}
+
+function addPost(state: GameState, author: string, text: string, mood: SocialPost['mood'], boost = 1, ctx?: PostContext): SocialPost {
   const s = ensure(state);
   const id = `sp${++state.nextId}`;
   const likes = Math.max(5, Math.round(s.followers * (s.reach / 100) * 0.35 * boost * (0.6 + hash01(`${state.seed}-${id}-likes`) * 0.8)));
-  const post: SocialPost = { id, date: state.date, author, text, likes, comments: comments(state, id, mood), mood };
+  const post: SocialPost = { id, date: state.date, author, text, likes, comments: comments(state, id, mood, 3, ctx ?? defaultContext(state)), mood };
   s.posts = [post, ...s.posts].slice(0, 12);
   return post;
 }
@@ -367,7 +391,24 @@ const KIND_LOC: Record<PostMatchKind, string> = {
 
 const PAPERS = ['Fotbalový zpravodaj', 'Večerní listy', 'Tribuna online'];
 
-function headlines(state: GameState, kind: PostMatchKind, res: 'V' | 'R' | 'P', r: OwnResult, hero: PostMatchPending['hero'], moments: string[]): PostMatchPending['headlines'] {
+/** R2: fakta o zápasu podle id (domácí soutěže; evropské zápasy fakta nemají). */
+function matchById(state: GameState, id: string): OwnMatchFacts | undefined {
+  if (id.startsWith('eu-')) return undefined;
+  const x = allFixtures(state).find((f) => f.fixture.id === id);
+  return x ? matchFacts(state, x.fixture, x.name) : undefined;
+}
+
+function headlines(state: GameState, kind: PostMatchKind, res: 'V' | 'R' | 'P', r: OwnResult, hero: PostMatchPending['hero'], moments: string[], mf?: OwnMatchFacts, sf?: SeasonFacts): PostMatchPending['headlines'] {
+  const base = baseHeadlines(state, kind, res, r, hero, moments);
+  // R2: druhý (a bez momentu z přenosu i třetí) titulek z faktů: střelec a minuta, červená, série, tabulka, xG.
+  const facts = mf && !(r.pens && r.gf === r.ga) ? factHeadlines(mf, sf, kind) : [];
+  if (facts[0]) base[1] = { ...base[1], title: facts[0] };
+  const hasMoment = base[2].title.startsWith('Moment zápasu');
+  if (facts[1] && !hasMoment) base[2] = { ...base[2], title: facts[1] };
+  return base;
+}
+
+function baseHeadlines(state: GameState, kind: PostMatchKind, res: 'V' | 'R' | 'P', r: OwnResult, hero: PostMatchPending['hero'], moments: string[]): PostMatchPending['headlines'] {
   const us = own(state).shortName;
   const a = analyse(r);
   const loc = KIND_LOC[kind];
@@ -423,12 +464,15 @@ function createPostMatch(state: GameState, bm: BigMatch, r: OwnResult): void {
   // souboje o čelo a o záchranu) jen při výhře nebo prohře a nejvýš jednou za 4 týdny. Jinak jen titulky ve zprávách.
   const always = bm.kind === 'derby' || bm.kind === 'baraz';
   if (!always && ((s.lastPostMatch && addDays(s.lastPostMatch, 28) > state.date) || res === 'R')) {
-    const h = headlines(state, bm.kind, res, r, hero, moments);
+    const mf0 = matchById(state, bm.id);
+    const h = headlines(state, bm.kind, res, r, hero, moments, mf0, mf0 ? seasonFactsCached(state) : undefined);
     addNews(state, { kind: 'info', title: `Titulky po zápase: ${h[0].title}`, text: h.slice(1).map((x) => `${x.paper}: ${x.title}`).join(' · '), fixtureId: bm.id.startsWith('eu-') ? undefined : bm.id });
     return;
   }
   const k = scale(state) * (bm.kind === 'derby' || bm.kind === 'evropa' ? 1.3 : 1);
   const jerseys = hero ? round(k * 240_000 * (hero.goals >= 2 ? 1.5 : 1), 1_000) : 0;
+  const mf = matchById(state, bm.id);
+  const sf = mf ? seasonFactsCached(state) : undefined;
   s.pending = {
     id: bm.id,
     date: state.date,
@@ -439,13 +483,35 @@ function createPostMatch(state: GameState, bm: BigMatch, r: OwnResult): void {
     score: r.score,
     opponentName: r.opponentName,
     opponentId: r.opponentId && state.clubs[r.opponentId] ? r.opponentId : undefined,
-    headlines: headlines(state, bm.kind, res, r, hero, moments),
+    headlines: headlines(state, bm.kind, res, r, hero, moments, mf, sf),
     hero,
     jerseys,
     moments,
+    texts: postTexts(res, r, mf, sf),
   };
   s.lastPostMatch = state.date;
   if (res === 'V') setHashtag(state, bm.kind === 'derby' ? 'DerbyJeNaše' : bm.kind === 'evropa' ? `${tagOf(state)}VEvropě` : `${tagOf(state)}Slaví`);
+}
+
+/** R2: návrhy příspěvků po velkém zápase z faktů (střelci, série, tabulka). */
+function postTexts(res: 'V' | 'R' | 'P', r: OwnResult, mf?: OwnMatchFacts, sf?: SeasonFacts): Record<string, string> {
+  const sc = r.score;
+  const out: Record<string, string> = {};
+  if (mf) {
+    out.oslava = clubPostText(mf, sf);
+    out.podekovani =
+      res === 'P'
+        ? `Díky, že jste s námi i po ${mf.gf}:${mf.ga}${mf.home ? '' : ' na výjezdu'}. Zvedneme se${sf && sf.winless >= 3 ? ' – série bez výhry musí skončit' : ''}.`
+        : `Díky za neskutečnou podporu! ${sc}${mf.scorers.length ? ` (${mf.scorers.map((x) => `${lastName(x.name)} ${x.minute}.`).join(', ')})` : ''}`;
+    out.omluva = `Omlouváme se za ${mf.gf}:${mf.ga}${mf.reds.length ? ' i za zbytečnou červenou' : ''}. Takhle se reprezentovat nechceme.`;
+    out.rypnuti = res === 'V' ? `${r.opponentName}? Tak zase příště 😉 ${mf.gf}:${mf.ga}${mf.lateDecider?.own ? ` (a ta ${mf.lateDecider.minute}. minuta!)` : ''}` : `Body napůl, ale hlasitější jsme byli my. ${sc}`;
+  } else {
+    out.oslava = `VÍTĚZSTVÍ! ${sc} 💪`;
+    out.podekovani = res === 'P' ? `Díky, že jste s námi i v těžkých chvílích. Zvedneme se. (${sc})` : `Díky za neskutečnou podporu! ${sc}`;
+    out.omluva = `Omlouváme se. Takhle se reprezentovat nechceme. (${sc})`;
+    out.rypnuti = res === 'V' ? `${r.opponentName}? Tak zase příště 😉 ${sc}` : `Body napůl, ale hlasitější jsme byli my. ${sc}`;
+  }
+  return out;
 }
 
 function createTrophyStep(state: GameState, text: string): void {
@@ -483,10 +549,17 @@ export interface PostMatchChoice {
   id: string;
   label: string;
   hint: string;
+  /** R2: návrh textu příspěvku z faktů zápasu. */
+  text?: string;
 }
 
 /** Volby kroku po zápase: co udělá majitel a jaký příspěvek klub zveřejní. */
 export function postMatchOptions(state: GameState, p: PostMatchPending): { steps: PostMatchChoice[]; defaultStep: string; posts: PostMatchChoice[]; defaultPost: string } {
+  const withText = <T extends { steps: PostMatchChoice[]; posts: PostMatchChoice[] }>(o: T): T => ({ ...o, posts: o.posts.map((x) => (p.texts?.[x.id] ? { ...x, text: p.texts[x.id] } : x)) });
+  return withText(postMatchOptionsBase(state, p));
+}
+
+function postMatchOptionsBase(state: GameState, p: PostMatchPending): { steps: PostMatchChoice[]; defaultStep: string; posts: PostMatchChoice[]; defaultPost: string } {
   const rival = !!p.opponentId;
   const k = state.social?.tone === 'kontroverzni' ? ' (váš kontroverzní tón: víc sledujících)' : '';
   if (p.result === 'P') {
@@ -561,7 +634,7 @@ function applyPostMatch(state: GameState, p: PostMatchPending, step: string, pos
   if (po === 'oslava') {
     grow(state, 0.03);
     fans(state, 2);
-    addPost(state, us, p.kind === 'trofej' ? `🏆 ${p.label}! Děkujeme všem, kdo s námi věřili. ${trendingHashtag(state) ?? ''}`.trim() : `VÍTĚZSTVÍ! ${p.score} 💪 ${trendingHashtag(state) ?? ''}`.trim(), 'pos', 1.6);
+    addPost(state, us, p.kind === 'trofej' ? `🏆 ${p.label}! Děkujeme všem, kdo s námi věřili. ${trendingHashtag(state) ?? ''}`.trim() : `${p.texts?.oslava ?? `VÍTĚZSTVÍ! ${p.score} 💪`} ${trendingHashtag(state) ?? ''}`.trim(), 'pos', 1.6);
   } else if (po === 'podekovani') {
     grow(state, 0.01);
     fans(state, 2);
@@ -569,12 +642,12 @@ function applyPostMatch(state: GameState, p: PostMatchPending, step: string, pos
       changeUltras(state, 2);
       for (const c of own(state).sponsors ?? []) changeSponsorRelation(state, c.slot, 1);
     }
-    addPost(state, us, p.result === 'P' ? `Díky, že jste s námi i v těžkých chvílích. Zvedneme se. (${p.score})` : `Díky za neskutečnou podporu! ${p.score}`, p.result === 'P' ? 'mix' : 'pos', 1.1);
+    addPost(state, us, p.texts?.podekovani ?? (p.result === 'P' ? `Díky, že jste s námi i v těžkých chvílích. Zvedneme se. (${p.score})` : `Díky za neskutečnou podporu! ${p.score}`), p.result === 'P' ? 'mix' : 'pos', 1.1);
   } else if (po === 'omluva') {
     fans(state, 3);
     changeUltras(state, 2);
     teamMorale(state, -1);
-    addPost(state, us, `Omlouváme se. Takhle se reprezentovat nechceme. (${p.score})`, 'mix', 1.2);
+    addPost(state, us, p.texts?.omluva ?? `Omlouváme se. Takhle se reprezentovat nechceme. (${p.score})`, 'mix', 1.2);
   } else if (po === 'rypnuti') {
     const bonus = state.social?.tone === 'kontroverzni' ? 1.5 : 1;
     grow(state, (win ? 0.06 : 0.03) * bonus);
@@ -582,7 +655,7 @@ function applyPostMatch(state: GameState, p: PostMatchPending, step: string, pos
     league(state, -2);
     if (p.opponentId) touchRival(state, p.opponentId, -10, 8, 'rýpnutí na sítích po zápase');
     setHashtag(state, win ? `${tagOf(state)}Vládne` : 'PříštěUvidíte');
-    addPost(state, us, win ? `${opp}? Tak zase příště 😉 ${p.score}` : `Body napůl, ale hlasitější jsme byli my. ${p.score}`, 'mix', 2);
+    addPost(state, us, p.texts?.rypnuti ?? (win ? `${opp}? Tak zase příště 😉 ${p.score}` : `Body napůl, ale hlasitější jsme byli my. ${p.score}`), 'mix', 2);
     out.push('Rýpnutí se šíří sítěmi, vedení soupeře zuří.');
   } else {
     if (p.result === 'P') fans(state, -1);
@@ -612,7 +685,8 @@ export function resolvePostMatch(prev: GameState, step?: string, post?: string):
 // ---------- Situace ze sítí ----------
 
 function canAsk(state: GameState, template: string): boolean {
-  return !state.owner.ousted && !state.gameOver && state.events.length < 4 && !state.events.some((e) => e.template === template);
+  // Situace ze sítí se počítají do týdenního limitu rozhodnutí (přednost mají situace z dění na hřišti).
+  return !state.owner.ousted && !state.gameOver && state.events.length < 4 && !state.events.some((e) => e.template === template) && decisionBudgetLeft(state) > 0;
 }
 
 function pushEvent(state: GameState, template: string, body: Omit<GameEvent, 'id' | 'template' | 'date'>, info: NonNullable<SocialState['eventInfo']>[string]): GameEvent {
@@ -797,11 +871,28 @@ function leakChance(state: GameState, playerId: string): number {
   return clamp((a.style === 'chamtivy' ? 0.35 : 0.15) + (50 - a.relation) / 250, 0.05, 0.6);
 }
 
-function resolveSigning(state: GameState, e: GameEvent, info: { playerId?: string }, option: string): string {
+/** R2: komentáře fanoušků k nové posile (poslední sezóna hráče, cena, post). */
+function signingLines(p: Player | undefined, fee: number): PostContext {
+  if (!p) return {};
+  const last = p.career?.[p.career.length - 1];
+  const pos: Record<string, string> = { GK: 'do brány', DF: 'do obrany', MF: 'do středu pole', FW: 'do útoku' };
+  return {
+    lines: {
+      optimista: [`Vítej, ${p.lastName}! Přesně tohle jsme ${pos[p.position] ?? ''} potřebovali.`],
+      kritik: fee > 0 ? [`${mil(fee)} za ${p.lastName}? Uvidíme na hřišti.`] : [`Zadarmo? Doufám, že to není důvod, proč ho nikdo jiný nechtěl.`],
+      statistik: last ? [`${p.lastName} loni: ${plural(last.apps, 'zápas', 'zápasy', 'zápasů')}, ${plural(last.goals, 'gól', 'góly', 'gólů')}.`] : [],
+      ultras: [`${p.lastName}, kotel tě vítá! Ukaž srdce.`],
+      pametnik: ['Posily přicházejí a odcházejí, klub zůstává.'],
+    },
+  };
+}
+
+function resolveSigning(state: GameState, e: GameEvent, info: { playerId?: string; fee?: number }, option: string): string {
   const sc = scale(state);
   const p = info.playerId ? state.players[info.playerId] : undefined;
   const name = p ? `${p.firstName} ${p.lastName}` : 'nová posila';
   const us = own(state).shortName;
+  const ctx = signingLines(p, info.fee ?? 0);
   if (option === 'video') {
     book(state, state.owner.clubId, 'ostatni', -(e.amount ?? 0), `Video s ohlášením posily: ${name}`);
     const leaked = roll(state, `leak-${e.id}`) < leakChance(state, info.playerId ?? '');
@@ -811,7 +902,7 @@ function resolveSigning(state: GameState, e: GameEvent, info: { playerId?: strin
     fans(state, leaked ? 1 : 3);
     grow(state, leaked ? 0.02 : 0.04);
     setHashtag(state, `Vítej${tagOf(state)}`);
-    addPost(state, us, `3… 2… 1… Vítej, ${name}! 🎬`, 'pos', leaked ? 1 : 2.2);
+    addPost(state, us, `3… 2… 1… Vítej, ${name}! 🎬`, 'pos', leaked ? 1 : 2.2, ctx);
     if (leaked) {
       if (info.playerId) changeAgentRelation(state, info.playerId, -6);
       media(state, -1);
@@ -822,7 +913,7 @@ function resolveSigning(state: GameState, e: GameEvent, info: { playerId?: strin
   book(state, state.owner.clubId, 'fanshop', round(sc * 120_000, 1_000), `Dresy nové posily: ${name}`);
   fans(state, 1);
   grow(state, 0.01);
-  addPost(state, us, `Novou posilou je ${name}. Vítej!`, 'pos', 1);
+  addPost(state, us, `Novou posilou je ${name}. Vítej!`, 'pos', 1, ctx);
   return 'Klasické ohlášení, fanoušci posilu přivítali.';
 }
 
@@ -895,6 +986,29 @@ function checkPrices(state: GameState): void {
 
 const ROUTINE_POSTS = ['Zákulisí tréninku: dnes se makalo 💪', 'Mládež klubu zase o krok dál. Jsme hrdí!', 'Nová kolekce ve fanshopu je venku.', 'Pozvánka na další domácí zápas. Přijďte nás hnát!', 'Hráči navštívili dětské oddělení nemocnice.', 'Den v kabině: kdo je největší vtipálek týmu?'];
 
+/** R2: běžné příspěvky správce sítí z faktů sezóny (nejvýš dva, nejzajímavější první). */
+export function factRoutinePosts(state: GameState): string[] {
+  const md = state.date.slice(5);
+  if (md > '06-15' && md < '08-01') return [];
+  const sf = seasonFactsCached(state);
+  if (sf.played < 2) return [];
+  const out: string[] = [];
+  if (sf.streak.kind === 'V' && sf.streak.length >= 3) out.push(`${ordWin(sf.streak.length)}! Díky, že nás ženete. 💚`);
+  if (sf.position && sf.points !== undefined) out.push(`Tabulka po ${plural(sf.played, 'zápasu', 'zápasech', 'zápasech')}: ${sf.position}. místo, ${plural(sf.points, 'bod', 'body', 'bodů')}. Jdeme dál!`);
+  if (sf.topScorer && sf.topScorer.goals >= 2) out.push(`${sf.topScorer.name} vede klubové střelce: ${plural(sf.topScorer.goals, 'gól', 'góly', 'gólů')} v sezóně. ⚽`);
+  if (sf.youthMinutes >= 180) out.push(`Mladí do 21 let odehráli za posledních pět zápasů ${sf.youthMinutes} minut. Akademie žije!`);
+  return out.slice(0, 2);
+}
+
+/** R2: se správcem sítí klub po každém domácím soutěžním zápase zveřejní příspěvek z faktů. */
+function matchdayPost(state: GameState, r: OwnResult): void {
+  if (socialManager(state) === undefined || state.social?.pending?.id === r.id) return;
+  const mf = matchById(state, r.id);
+  if (!mf) return;
+  const sf = seasonFactsCached(state);
+  addPost(state, own(state).shortName, clubPostText(mf, sf, trendingHashtag(state) ?? ''), mf.outcome === 'V' ? 'pos' : mf.outcome === 'P' ? 'neg' : 'mix', 1, { m: mf, s: sf });
+}
+
 function monthlySocial(state: GameState): void {
   const s = ensure(state);
   const club = own(state);
@@ -919,7 +1033,9 @@ function monthlySocial(state: GameState): void {
     for (const r of topRivals(state, 2)) touchRival(state, r.clubId, -3, 2);
   }
   if (ab !== undefined) {
-    for (let i = 0; i < 2; i++) addPost(state, 'správce sítí', ROUTINE_POSTS[Math.floor(roll(state, `rutina${i}`) * ROUTINE_POSTS.length)], 'pos', 0.8);
+    // R2: správce sítí píše hlavně o tom, co se děje (tabulka, střelci, série, mladí); zbytek rutina.
+    const facts = factRoutinePosts(state);
+    for (let i = 0; i < 2; i++) addPost(state, 'správce sítí', facts[i] ?? ROUTINE_POSTS[Math.floor(roll(state, `rutina${i}`) * ROUTINE_POSTS.length)], 'pos', 0.8);
   }
   s.history = [...s.history, { date: state.date, followers: s.followers }].slice(-12);
   const prev = s.history.length > 1 ? s.history[s.history.length - 2].followers : 0;
@@ -952,7 +1068,10 @@ export function dailySocial(state: GameState): void {
   if (today.some((r) => outcome(r) === 'P')) {
     const comp = competitionOf(state, state.owner.clubId);
     const form = comp ? computeTable(comp, state).find((x) => x.clubId === state.owner.clubId)?.form ?? [] : [];
-    if (form.length >= 4 && form.slice(-4).every((f) => f === 'P') && roll(state, 'serie') < 0.5) backlash(state, 'jine', 'Čtyři porážky v řadě. Na sítích se množí výzvy k odchodu trenéra i vedení.');
+    if (form.length >= 4 && form.slice(-4).every((f) => f === 'P') && roll(state, 'serie') < 0.5) {
+      const sf = seasonFactsCached(state);
+      backlash(state, 'jine', `${sf.streak.kind === 'P' && sf.streak.length >= 4 ? `${sf.streak.length}. porážka v řadě` : 'Čtyři porážky v řadě'}, skóre posledních tří zápasů ${sf.last3.gf}:${sf.last3.ga}${sf.position ? `, ${sf.position}. místo` : ''}. Na sítích se množí výzvy k odchodu trenéra i vedení.`);
+    }
   }
   // Velký zápas, který se hrál dnes.
   const bm = s.watch && s.watch.date === state.date ? s.watch : undefined;
@@ -974,6 +1093,7 @@ export function dailySocial(state: GameState): void {
   checkTransfers(state);
   checkPrices(state);
   maybePlayerPost(state);
+  for (const r of today) matchdayPost(state, r); // R2
   if (s.pending && s.pending.until <= state.date) applyPostMatch(state, s.pending, '', '', true);
   if (state.date.endsWith('-01')) monthlySocial(state);
   ensureCandidates(state);

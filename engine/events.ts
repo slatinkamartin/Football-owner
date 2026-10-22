@@ -6,7 +6,6 @@ import { fine, fineFactor, greyAction, league, media } from './grey';
 import { campaignCost, clubValuation, confidenceVote, distributableProfit, payDividend, satisfy, shareholderConfidence } from './ownership';
 import { executeTransfer, playerValue as playerValueOf } from './transfers';
 import { coachOf, goalTarget, ownPosition, type ActionResult } from './staff';
-import { computeTable } from './standings';
 import type { Club, GameEvent, GameState, Player, Position } from './types';
 import { addNews, clamp, competitionOf, FOREIGN_PREFIX, tierOf } from './world';
 import { difficultyCostFactor, dramaFactor, maxOpenEvents } from './settings';
@@ -19,6 +18,9 @@ import { starsTemplates } from './stars';
 import { rivalTemplates } from './rivals';
 import { socialTemplates } from './social'; // W2: sociální sítě
 import { bigDecisionTemplates } from './bigdecisions';
+import { decisionBudgetLeft, decisionsLastWeek, situationTemplates } from './situations'; // R1: situace z dat a týdenní limit
+import { freshOwnMatch, matchesWord, seasonFacts } from './facts'; // R1
+import { ultrasOf } from './surroundings'; // R1
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -82,10 +84,7 @@ const month = (state: GameState) => Number(state.date.slice(5, 7));
 const squad = (state: GameState) => squadOf(state, state.owner.clubId);
 const keyPlayers = (state: GameState) => [...squad(state)].sort((a, b) => b.overall - a.overall).slice(0, 14);
 const pName = (p: Player) => `${p.firstName} ${p.lastName}`;
-const ownForm = (s: GameState) => {
-  const comp = competitionOf(s, s.owner.clubId);
-  return comp ? computeTable(comp, s).find((r) => r.clubId === s.owner.clubId)?.form ?? [] : [];
-};
+const injured = (s: GameState) => squad(s).filter((p) => p.injuredUntil && p.injuredUntil > s.date);
 /** Dobrý hráč jiného klubu ze stejné soutěže, kterého by šlo neoficiálně oslovit. */
 function tappingTarget(s: GameState): Player | undefined {
   const comp = competitionOf(s, s.owner.clubId);
@@ -112,6 +111,8 @@ export const TEMPLATES: Record<string, Template> = {
   ...ultrasTemplates(),
   // W1: letní nabídka z velké ligy za hvězdu (engine/stars.ts).
   ...starsTemplates(),
+  // R1: situace z dat (engine/situations.ts, vznikají den po zápase z faktů, nikdy náhodně).
+  ...situationTemplates(),
   // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
   'tiskovka-zapas': {
     weight: () => 0,
@@ -125,7 +126,10 @@ export const TEMPLATES: Record<string, Template> = {
       const amount = round(1_500_000 * costScale(s), 100_000);
       return {
         title: 'Trenér chce zimní soustředění v Turecku',
-        text: `Dva týdny v teple, kvalitní hřiště a přípravné zápasy se silnými soupeři. Stojí to ${mil(amount)}.`,
+        text: `${(() => {
+          const f = seasonFacts(s);
+          return f.position ? `Tým přezimuje na ${f.position}. místě s ${f.points ?? 0} body. ` : '';
+        })()}Dva týdny v teple, kvalitní hřiště a přípravné zápasy se silnými soupeři. Stojí to ${mil(amount)}.`,
         amount,
         defaultOption: 'doma',
         options: [
@@ -147,7 +151,8 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   noc: {
-    weight: (s) => (squad(s).length > 10 ? 1.2 : 0),
+    // R1: vyřazeno – vymyšlený prohřešek skutečného hráče mimo hřiště bez příčiny v datech (jen pro staré uložené hry).
+    weight: () => 0,
     create: (s, rng) => {
       const p = rng.pick(squad(s).filter((x) => playerAge(x, s.season) < 30));
       if (!p) return null;
@@ -185,12 +190,8 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   serie: {
-    weight: (s) => {
-      const comp = competitionOf(s, s.owner.clubId);
-      if (!comp) return 0;
-      const row = computeTable(comp, s).find((r) => r.clubId === s.owner.clubId);
-      return row && row.form.slice(-3).join('') === 'VVV' ? 4 : 0;
-    },
+    // R1: nahrazeno situací z dat sit-serie (cituje skóre série, volba s podmíněnou prémií).
+    weight: () => 0,
     create: (s) => {
       const amount = round(bonusPerPoint(ownClub(s)) * 3);
       return {
@@ -216,12 +217,14 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   regenerace: {
-    weight: (s) => (ownClub(s).facilities.medical <= 2 ? 1 : 0.2),
+    // R1: jen když je v kádru opravdu hodně zraněných (příčina z dat), text je cituje.
+    weight: (s) => (ownClub(s).facilities.medical <= 3 && injured(s).length >= 3 ? 1 : 0),
     create: (s) => {
       const amount = round(2_000_000 * costScale(s), 100_000);
+      const hurt = injured(s);
       return {
-        title: 'Hráči si stěžují na zastaralou regeneraci',
-        text: 'Fyzioterapeut upozorňuje, že bez nového vybavení se hráči budou zraňovat častěji.',
+        title: `Hráči si stěžují na zastaralou regeneraci (${hurt.length} zranění)`,
+        text: `Zraněných je teď ${hurt.length}: ${hurt.slice(0, 4).map(pName).join(', ')}${hurt.length > 4 ? ' a další' : ''}. Fyzioterapeut upozorňuje, že s regenerací na úrovni ${ownClub(s).facilities.medical} z 5 se hráči budou zraňovat dál.`,
         amount,
         defaultOption: 'odlozit',
         options: [
@@ -244,7 +247,7 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   sazkovka: {
-    weight: (s) => (ownClub(s).sponsorDeal?.name.includes('sázk') ? 0 : 0.6),
+    weight: (s) => (ownClub(s).sponsorDeal?.name.includes('sázk') ? 0 : 0.4),
     create: (s) => {
       const amount = round(commercialMonthly(ownClub(s), tierOf(s, s.owner.clubId)) * 2, 100_000);
       return {
@@ -276,7 +279,7 @@ export const TEMPLATES: Record<string, Template> = {
     },
     create: (s) => ({
       title: 'Fanoušci protestují proti cenám vstupenek',
-      text: 'Na tribuně visí transparenty a fanklub vyzývá k bojkotu.',
+      text: `Vstupné ${ownClub(s).policy.ticketPrice} Kč je o ${Math.round((ownClub(s).policy.ticketPrice / defaultTicketPrice(tierOf(s, s.owner.clubId)) - 1) * 100)} % nad běžnou cenou (${defaultTicketPrice(tierOf(s, s.owner.clubId))} Kč). Na tribuně visí transparenty a fanklub vyzývá k bojkotu.`,
       defaultOption: 'ponechat',
       options: [
         { id: 'snizit', label: 'Vrátit běžnou cenu', hint: `Cena ${defaultTicketPrice(tierOf(s, s.owner.clubId))} Kč, nálada fanoušků +8` },
@@ -295,13 +298,18 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   pyro: {
-    weight: () => 0.6,
+    // R1: jen týden po domácím zápase a s napjatým vztahem ke kotli; text cituje zápas.
+    weight: (s) => {
+      const m = freshOwnMatch(s, 7);
+      return m && m.home && ultrasOf(s).relation < 60 ? 0.6 : 0;
+    },
     create: (s, rng) => {
       const amount = round(rng.int(100_000, 400_000), 10_000);
       const security = round(400_000 * costScale(s), 50_000);
+      const m = freshOwnMatch(s, 7);
       return {
         title: `Disciplinární komise: pokuta ${fmt(amount)} za pyrotechniku`,
-        text: `Fanoušci odpálili světlice na posledním domácím zápase. Přísnější pořadatelskou službu (asi ${fmt(security)} za sezónu navíc) nastavíte u stadionu.`,
+        text: `Fanoušci odpálili světlice na domácím zápase${m ? ` s ${m.opponentName} (${m.gf}:${m.ga})` : ''}. Přísnější pořadatelskou službu (asi ${fmt(security)} za sezónu navíc) nastavíte u stadionu.`,
         amount,
         defaultOption: 'zaplatit',
         // Pokuta není volba: zaplatí se rovnou a přijde jen zpráva.
@@ -420,7 +428,7 @@ export const TEMPLATES: Record<string, Template> = {
       if (!p) return null;
       return {
         title: `${pName(p)} chce odejít`,
-        text: 'Málo hraje a jeho agent tlačí na přestup.',
+        text: `V sezóně odehrál ${p.apps} ${p.apps === 1 ? 'zápas' : p.apps >= 2 && p.apps <= 4 ? 'zápasy' : 'zápasů'} a jeho nálada spadla na ${Math.round(p.morale)} ze 100. Agent tlačí na přestup.`,
         playerId: p.id,
         defaultOption: 'nic',
         options: [
@@ -474,12 +482,14 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   asistent: {
-    weight: (s) => (coachOf(s, s.owner.clubId) ? 0.5 : 0),
+    // R1: jen když tým ztrácí body (3+ zápasy bez výhry), text cituje bilanci.
+    weight: (s) => (coachOf(s, s.owner.clubId) && seasonFacts(s).winless >= 3 ? 0.8 : 0),
     create: (s) => {
       const amount = round(1_000_000 * Math.max(0.4, costScale(s)), 50_000);
+      const f = seasonFacts(s);
       return {
         title: 'Trenér chce dalšího asistenta',
-        text: 'Specialista na standardní situace by podle něj přinesl body navíc.',
+        text: `Tým je ${matchesWord(f.winless)} bez výhry (skóre posledních tří ${f.last3.gf}:${f.last3.ga}). Specialista na standardní situace by podle trenéra přinesl body navíc.`,
         amount,
         defaultOption: 'odmitnout',
         options: [
@@ -731,7 +741,7 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   charita: {
-    weight: () => 0.35,
+    weight: () => 0.2,
     create: (s) => {
       const amount = round(annualCosts(ownClub(s), tierOf(s, s.owner.clubId)) * 0.005, 50_000);
       return {
@@ -879,7 +889,8 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   tiskovka: {
-    weight: (s) => (ownForm(s).slice(-3).join('') === 'PPP' ? 3 : 0),
+    // R1: nahrazeno příběhem krize (stories.ts), situací sit-bez-vyhry a tiskovkou po zápase (R3).
+    weight: () => 0,
     create: () => ({
       title: 'Novináři chtějí slyšet, co bude dál',
       text: 'Tři prohry v řadě. Na tiskové konferenci padne otázka, jestli trenér přežije.',
@@ -909,10 +920,13 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   rozhovor: {
-    weight: () => 0.45,
-    create: () => ({
+    weight: () => 0.25,
+    create: (s) => ({
       title: 'Sportovní deník chce velký rozhovor',
-      text: 'Dvoustrana o vašich plánech s klubem. Jak budete mluvit?',
+      text: (() => {
+        const f = seasonFacts(s);
+        return `Dvoustrana o vašich plánech s klubem${f.position ? ` – tým je na ${f.position}. místě s ${f.points ?? 0} body, forma ${f.form.slice(-5).join(' ') || '–'}` : ''}. Jak budete mluvit?`;
+      })(),
       defaultOption: 'odmitnout',
       options: [
         { id: 'ambice', label: 'Mluvit o velkých ambicích', hint: 'Média +6, fanoušci +4, patrioti spokojenější, důvěra trenéra −3 (tlak)' },
@@ -938,7 +952,8 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   'kauza-hrac': {
-    weight: (s) => (squad(s).length > 12 ? 0.4 : 0),
+    // R1: vyřazeno – bulvár o soukromí skutečného hráče (soukromí; anonymní kauzy řeší engine/social.ts).
+    weight: () => 0,
     create: (s, rng) => {
       const p = rng.pick(keyPlayers(s));
       if (!p) return null;
@@ -973,7 +988,8 @@ export const TEMPLATES: Record<string, Template> = {
   },
 
   'svaz-spor': {
-    weight: (s) => (ownForm(s).slice(-1)[0] === 'P' ? 0.5 : 0),
+    // R1: nahrazeno situací sit-verdikt (vzniká jen ze skutečného sporného momentu zápasu, bigMatch.moments).
+    weight: () => 0,
     create: (s) => ({
       title: 'Sporný verdikt rozhodčího',
       text: 'V posledním zápase vám nebyl uznán gól a fanoušci zuří. Novináři čekají na vaši reakci.',
@@ -1176,6 +1192,8 @@ export function maybeCreateEvent(state: GameState, rng: Rng): void {
   const total = weighted.reduce((a, x) => a + x.w, 0);
   // Naléhavé situace (w ≥ 50) přijdou vždy, ostatní zhruba jednou za tři týdny (asi 16 za sezónu).
   const urgent = weighted.find((x) => x.w >= 50);
+  // R1: týdenní limit rozhodnutí. Náhodné situace přijdou jen v týdnu bez jiného rozhodnutí (přednost mají situace z dat).
+  if (!urgent && (decisionBudgetLeft(state) <= 0 || decisionsLastWeek(state) >= 1)) return;
   if (!urgent && !rng.chance(Math.min(0.4, total * 0.035 * dramaFactor(state)))) return;
   let pick = urgent?.id;
   if (!pick) {

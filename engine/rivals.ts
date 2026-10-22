@@ -9,6 +9,7 @@ import { squadOf } from './players';
 import { SLOT_LABEL } from './sponsors';
 import type { GameEvent, GameState, Negotiation, SponsorSlot } from './types';
 import { addNews, clamp, clubLabel, competitionOf, hash01, isForeign, transferWindow } from './world';
+import { decisionBudgetLeft } from './situations'; // R1: týdenní limit rozhodnutí
 
 /**
  * Majitelé soupeřů jako protivníci: každý klub má vedení s povahou, vztahem k vám a rivalitou.
@@ -226,7 +227,8 @@ function decay(state: GameState): void {
 }
 
 function canAsk(state: GameState, template: string): boolean {
-  return !state.owner.ousted && !state.gameOver && state.events.length < 4 && !state.events.some((e) => e.template === template);
+  // R1: výroky a lákání sponzorů soupeřů jsou rozhodnutí, respektují týdenní limit.
+  return !state.owner.ousted && !state.gameOver && state.events.length < 4 && !state.events.some((e) => e.template === template) && decisionBudgetLeft(state) > 0;
 }
 
 function pushEvent(state: GameState, template: string, clubId: string, body: Omit<GameEvent, 'id' | 'template' | 'date'>, slot?: SponsorSlot): void {

@@ -8,6 +8,7 @@ import { coachOf } from './staff';
 import { computeTable } from './standings';
 import type { CoachStyle, Cup, Fixture, GameEvent, GameState, MatchPlan } from './types';
 import { clamp, clubLabel, competitionOf, hash01, tierOf } from './world';
+import { resolvePressConference } from './press';
 
 /**
  * Zápasový den majitele: o co v zápase jde (sázka), příprava s trenérem a zásahy majitele,
@@ -259,87 +260,15 @@ export function afterOwnMatch(state: GameState, f: Fixture, cup?: Cup): void {
     club.fanMood = clamp(club.fanMood + extra, 0, 100);
     state.owner.media = clamp(state.owner.media + extra / 2, 0, 100);
   }
-  maybePressConference(state, f, stakes, gf, ga);
 }
 
 // ---------- Tisková konference ----------
-
-function maybePressConference(state: GameState, f: Fixture, stakes: Stake[], gf: number, ga: number): void {
-  if (state.events.some((e) => e.template === 'tiskovka-zapas') || state.owner.ousted) return;
-  // Nejvýš jedna tisková konference za tři týdny.
-  const last = state.eventLog?.['tiskovka-zapas'];
-  if (last && addDays(last, 21) > state.date) return;
-  const own = state.owner.clubId;
-  const red = f.result?.detail?.events.find((e) => e.clubId === own && (e.type === 'cervena' || e.type === 'druha-zluta'));
-  const controversy = gf + 1 === ga && hash01(`${f.id}-sporne`) < 0.2;
-  const big = Math.abs(gf - ga) >= 4;
-  // Po derby se tisková konference nesvolává (derby má vlastní dopad na fanoušky a média).
-  if (stakes.some((s) => s.key === 'derby')) return;
-  if (!red && !controversy && !big) return;
-  const verdict = gf > ga ? 'výhře' : gf < ga ? 'prohře' : 'remíze';
-  const score = `${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result!.homeGoals}:${f.result!.awayGoals}`;
-  const appeal = red ? Math.max(30_000, Math.round((annualCosts(state.clubs[own], tierOf(state, own)) * 0.0008) / 10_000) * 10_000) : 0;
-  const options: GameEvent['options'] = [
-    { id: 'chvala', label: 'Pochválit tým', hint: 'Morálka +3, média +1.' },
-    { id: 'kritika', label: 'Kritizovat výkon', hint: 'Morálka −4, důvěra trenéra −2, média +2 (tvrdý majitel).' },
-    { id: 'trener', label: 'Podpořit trenéra', hint: 'Důvěra trenéra +4.' },
-  ];
-  if (controversy || red || gf < ga) options.push({ id: 'rozhodci', label: 'Ohradit se proti rozhodčímu', hint: 'Fanoušci +3, vztah se svazem −4, asi 50% riziko pokuty.' });
-  if (red) options.push({ id: 'odvolani', label: `Odvolat se proti trestu (${mil(appeal)})`, hint: 'Asi 40% šance, že se trest zkrátí o zápas.' });
-  state.events.push({
-    id: `e${++state.nextId}`,
-    template: 'tiskovka-zapas',
-    date: state.date,
-    expires: addDays(state.date, 4),
-    title: `Tisková konference po ${verdict}: ${score}`,
-    text: controversy ? 'V závěru nebyl uznán gól, který podle záznamu platit měl. Novináři čekají na vaši reakci.' : red ? 'Vyloučení ovlivnilo zápas. Novináři se ptají na disciplínu i na sudí.' : 'Výrazný výsledek, novináři chtějí slyšet majitele.',
-    options,
-    defaultOption: gf >= ga ? 'chvala' : 'trener',
-    playerId: red?.playerId,
-    amount: appeal || undefined,
-  });
-  state.eventLog ??= {};
-  state.eventLog['tiskovka-zapas'] = state.date;
-}
+// Tiskovku po zápase vytváří engine/press.ts (dailyPress, otázky z fakt zápasu). Zde jen vyřízení
+// pro šablonu situace „tiskovka-zapas“ v engine/events.ts.
 
 /** Vyřízení tiskové konference (volá se ze situací k rozhodnutí). */
-export function resolvePress(state: GameState, e: GameEvent, option: string, deps: { media: (s: GameState, d: number) => void; league: (s: GameState, d: number) => void; fine: (s: GameState, base: number, note: string) => number }): string {
-  const own = state.owner.clubId;
-  const team = (d: number) => squadOf(state, own).forEach((p) => (p.morale = clamp(p.morale + d, 0, 100)));
-  if (option === 'chvala') {
-    team(3);
-    deps.media(state, 1);
-    return 'Hráči slyšeli pochvalu, kabina je spokojená.';
-  }
-  if (option === 'kritika') {
-    team(-4);
-    state.owner.trust.trener = clamp(state.owner.trust.trener - 2, 0, 100);
-    deps.media(state, 2);
-    return 'Tvrdá slova se nesla médii. Hráči jsou dotčení.';
-  }
-  if (option === 'trener') {
-    state.owner.trust.trener = clamp(state.owner.trust.trener + 4, 0, 100);
-    return 'Trenér ocenil podporu.';
-  }
-  if (option === 'rozhodci') {
-    state.clubs[own].fanMood = clamp(state.clubs[own].fanMood + 3, 0, 100);
-    deps.league(state, -4);
-    if (hash01(`${e.id}-pokuta`) < 0.5) {
-      const amount = deps.fine(state, 150_000, 'Pokuta za výroky o rozhodčím');
-      return `Fanoušci tleskají, svaz udělil pokutu ${mil(amount)}.`;
-    }
-    return 'Fanoušci tleskají, svaz tentokrát přimhouřil oko.';
-  }
-  if (option === 'odvolani') {
-    book(state, own, 'ostatni', -(e.amount ?? 0), 'Odvolání proti trestu');
-    const p = e.playerId ? state.players[e.playerId] : undefined;
-    if (p && p.suspension > 0 && hash01(`${e.id}-odvolani`) < 0.4) {
-      p.suspension -= 1;
-      return `Odvolání uspělo, ${p.firstName} ${p.lastName} má trest kratší o zápas.`;
-    }
-    return 'Odvolání neuspělo.';
-  }
-  return '';
+export function resolvePress(state: GameState, e: GameEvent, option: string, _deps?: unknown): string {
+  return resolvePressConference(state, e, option);
 }
 
 // ---------- Zátěž ----------

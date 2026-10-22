@@ -53,3 +53,8 @@ export * from './social'; // W2
 export * from './fans'; // W3
 export * from './matchexperience'; // W1
 export * from './facts';
+export * from './press'; // R3
+export * from './narrative'; // R3
+export * from './forum'; // R2
+export * from './fanvoice'; // R2
+export * from './situations'; // R1

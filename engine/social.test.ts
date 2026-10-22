@@ -30,6 +30,8 @@ describe('sociální sítě a krok po zápase', () => {
     const opts = postMatchOptions(after, p);
     expect(opts.steps.length).toBeGreaterThanOrEqual(2);
     expect(opts.posts.map((x) => x.id)).toContain('nic');
+    // R2: návrhy příspěvků z faktů zápasu (skóre) jsou vidět předem.
+    expect(opts.posts.filter((x) => x.id !== 'nic').every((x) => !!x.text && /\d+:\d+/.test(x.text))).toBe(true);
     const r = resolvePostMatch(after, opts.steps[0].id, opts.posts[0].id);
     expect(r.ok).toBe(true);
     expect(pendingPostMatch(r.state)).toBeUndefined();

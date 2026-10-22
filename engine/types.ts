@@ -667,6 +667,8 @@ export interface GameEvent {
   amount?: number;
   /** Krok příběhu sezóny. */
   storyId?: string;
+  /** R1: data situace z faktů (soupeř, skóre, pozice…), aby se rozhodnutí mohlo odkázat na skutečné dění. */
+  data?: Record<string, string | number>;
 }
 
 // ---------- Příběhy, tlak, nastavení ----------
@@ -1113,6 +1115,10 @@ export interface GameState {
   bigMatch?: BigMatchState;
   /** W2: sociální sítě, krok po zápase a paměť rivality (engine/social.ts). */
   social?: import('./social').SocialState;
+  /** R2: fanouškovské fórum – vlákna z dat a odpovědi majitele (engine/forum.ts). */
+  forum?: import('./forum').ForumState;
+  /** R1: situace z dat, sliby majitele s měřítkem a týdenní limit rozhodnutí (engine/situations.ts). */
+  situations?: import('./situations').SituationsState;
   /** W1: poslední los evropských pohárů klubu majitele (karta s odkrytím). */
   euroDraw?: EuroDrawState;
   pulse?: PulseState;
@@ -1183,6 +1189,10 @@ export interface GameState {
   bigDecisions?: import('./bigdecisions').BigDecisionsState;
   /** W3: fanoušci průběžně – rada, ankety, výjezdy, oslavy (engine/fans.ts). */
   fans?: import('./fans').FansState;
+  /** R3: tisková konference po zápase (engine/press.ts). */
+  press?: import('./press').PressState;
+  /** R3: výroky a navazující příběhy (engine/narrative.ts). */
+  narrative?: import('./narrative').NarrativeState;
 }
 
 /** Stav velkého zápasu: příprava v týdnu před ním a reakce po něm. Pole doplňují moduly přípravy, přenosu a sítí. */

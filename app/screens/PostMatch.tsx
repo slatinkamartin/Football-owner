@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BIG_MATCH_LABEL, formatShortDate, pendingPostMatch, postMatchOptions, resolvePostMatch, type GameState, type SocialPost } from '../../engine';
+import { BIG_MATCH_LABEL, PERSONA_LABEL, formatShortDate, pendingPostMatch, postMatchOptions, resolvePostMatch, type GameState, type SocialPost } from '../../engine';
 import { money } from '../format';
 
 /**
@@ -75,6 +75,7 @@ export function PostMatch({ game, onChange }: { game: GameState; onChange: (g: G
           {opts.posts.map((o) => (
             <button key={o.id} className={`choice ${post === o.id ? 'selected' : ''}`} aria-pressed={post === o.id} onClick={() => setPicked({ id: pending.id, step, post: o.id })}>
               <strong>{o.label}</strong>
+              {o.text && <em className="post-preview">„{o.text}“</em>}
               <span>{o.hint}</span>
             </button>
           ))}
@@ -102,7 +103,8 @@ export function PostView({ post, compact }: { post: SocialPost; compact?: boolea
       <ul className="plain social-comments">
         {post.comments.slice(0, compact ? 2 : 3).map((c, i) => (
           <li key={i} className="small">
-            <span className="muted">{c.name}</span> {c.text}
+            <span className="muted">{c.name}</span>
+            {c.persona && <span className="persona-tag">{PERSONA_LABEL[c.persona]}</span>} {c.text}
           </li>
         ))}
       </ul>

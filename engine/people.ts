@@ -7,6 +7,7 @@ import { playerName, weakestPosition } from './transfers';
 import { signSponsor } from './sponsors';
 import type { Club, GameEvent, GameState, Player, Position } from './types';
 import { addNews, clamp, FREE, hash01, tierOf, transferWindow } from './world';
+import { matchesWord, seasonFacts } from './facts'; // R1
 
 /**
  * Lidé v klubu: žádosti hráčů, požadavky trenéra, sliby (které se kontrolují), přetahování
@@ -127,7 +128,8 @@ export function peopleTemplates(h: PeopleHelpers): Record<string, Template> {
     },
 
     'zadost-volno': {
-      weight: (s) => (squad(s).length >= 20 ? 0.4 : 0),
+      // R1: vyřazeno – soukromá rodinná záležitost skutečného hráče bez příčiny v datech hry (jen dohrání starých uložených her).
+      weight: () => 0,
       create: (s, rng) => {
         const p = rng.pick(ranked(s).slice(0, 18));
         if (!p) return null;
@@ -190,7 +192,8 @@ export function peopleTemplates(h: PeopleHelpers): Record<string, Template> {
     },
 
     'pozadavek-posila': {
-      weight: (s) => (coachOf(s, s.owner.clubId) && transferWindow(s.date) && !(s.promises ?? []).some((x) => x.kind === 'posila' && !x.done) ? 1 : 0),
+      // R1: jen s příčinou v datech – v létě před prvními zápasy, nebo když tým nevyhrává (2+ zápasy bez výhry).
+      weight: (s) => (coachOf(s, s.owner.clubId) && transferWindow(s.date) && !(s.promises ?? []).some((x) => x.kind === 'posila' && !x.done) && ((f) => f.form.length === 0 || f.winless >= 2)(seasonFacts(s)) ? 1 : 0),
       create: (s) => {
         const coach = coachOf(s, s.owner.clubId);
         if (!coach) return null;
@@ -198,7 +201,10 @@ export function peopleTemplates(h: PeopleHelpers): Record<string, Template> {
         const label = { GK: 'brankáře', DF: 'obránce', MF: 'záložníka', FW: 'útočníka' }[position];
         return {
           title: `Trenér chce posilu: ${label}`,
-          text: `${coach.firstName} ${coach.lastName} tvrdí, že na pozici ${label} tým ztrácí body. Chce hráče lepšího než ${bar}.`,
+          text: `${coach.firstName} ${coach.lastName} tvrdí, že na pozici ${label} tým ztrácí body: nejslabší hráč základní sestavy tam má hodnocení ${bar}${(() => {
+            const f = seasonFacts(s);
+            return f.form.length ? ` a tým je ${matchesWord(f.winless)} bez výhry (${f.form.slice(-f.winless).join(', ')})` : '';
+          })()}. Chce hráče lepšího než ${bar}.`,
           amount: bar,
           defaultOption: 'odmitnout',
           options: [

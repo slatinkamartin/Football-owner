@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatShortDate, resolveEvent, type GameState } from '../../engine';
 import { Notice } from '../components';
 import { PlayerLink } from '../nav';
+import { PressConferenceCard } from './Press'; // R3
 
 /** Situace, na které čeká odpověď majitele. */
 export function Decisions({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
@@ -14,7 +15,7 @@ export function Decisions({ game, onChange }: { game: GameState; onChange: (g: G
       <h2>Čeká na vaše rozhodnutí</h2>
       <Notice message={message} />
       <ul className="plain">
-        {game.events.map((e) => (
+        {game.events.map((e) => e.template === 'tiskovka-zapas' && game.press?.current?.eventId === e.id ? <PressConferenceCard key={e.id} game={game} event={e} onChange={onChange} onMessage={setMessage} /> : (
           <li key={e.id} className="decision">
             <div className="row-between">
               <strong>{e.title}</strong>

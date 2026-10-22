@@ -78,10 +78,13 @@ import { createSideGoals, seasonFfp, seasonRating, settleSideGoals, sideGoalsTic
 import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
 import { afterOwnMatch, halftimeAdjust, nextOwnFixture, pendingPrematch, planEffect, type OwnFixture } from './matchday';
+import { dailyPress } from './press'; // R3
 import { applyBigMatchPlan, bigMatchWeekStarted, dailyBigMatch, euroMatchTomorrow, liveChanges } from './matchexperience'; // W1
 import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyRivalOwners } from './league';
 import { dailyRivals } from './rivals';
 import { dailySocial } from './social'; // W2: sociální sítě a krok po zápase
+import { dailyForum } from './forum'; // R2: fórum fanoušků
+import { resultFactLine } from './fanvoice'; // R2: fakta do zprávy o výsledku
 import { ownerRatingTick, seasonOwnerRatings } from './ownerRating';
 import { milestoneToday, nextMilestone } from './milestones';
 import { aiForeignSignings, monthlyForeign, refreshForeignMarket, returnLoans, weeklyForeign } from './foreign';
@@ -94,6 +97,7 @@ import { fillFromRoster, rostersByClub, type RosterRow } from './rosters';
 import { seasonAchievements, weeklyAchievements } from './achievements'; // W3
 import { challengesTick, createChallenges, settleChallenges } from './challenges'; // W3
 import { monthlyLongEffects, weeklyBigDecisions } from './bigdecisions'; // W3
+import { dailySituations } from './situations'; // R1: situace z dat, sliby, týdenní limit
 import { awayTripEdge, dailyFans } from './fans'; // W3: fanoušci průběžně
 
 export const START_SEASON = 2026;
@@ -792,7 +796,7 @@ function playMatchesOn(state: GameState, rng: Rng): void {
     addNews(state, {
       kind: 'vysledek',
       title: `${verdict}: ${clubLabel(state, f.homeId)} – ${clubLabel(state, f.awayId)} ${f.result.homeGoals}:${f.result.awayGoals}`,
-      text: `${name}, ${roundLabel}. Návštěva ${attendance.toLocaleString('cs-CZ')} diváků.${xg}`,
+      text: `${name}, ${roundLabel}. Návštěva ${attendance.toLocaleString('cs-CZ')} diváků.${xg}${resultFactLine(state, f, name)}`, // R2
       fixtureId: f.id,
     });
     // Pozici v tabulce zapíše až po odehrání všech zápasů dne (jinak je graf o kolo pozadu).
@@ -1070,7 +1074,10 @@ function processDay(state: GameState, rng: Rng): void {
   dailyRivals(state); // W2: vedení soupeřů
   dailyBigMatch(state); // W1: týden velkého zápasu a vyúčtování
   dailySocial(state); // W2: sítě, po zápase, paměť rivality (po vyúčtování velkého zápasu, kvůli momentům)
+  dailyForum(state); // R2: fanouškovské fórum z dat
   dailyFans(state); // W3: fanouškovská rada, ankety, výjezdy, oslavy
+  dailySituations(state, rng); // R1: situace z dat den po zápase, sliby majitele
+  dailyPress(state); // R3: navazující příběhy a tisková konference po zápase
   for (const comp of Object.values(state.competitions)) {
     if (comp.format === 'nadstavba' && !comp.groups && comp.reservedDates && baseSeasonDone(comp)) startGroups(state, comp, rng);
   }

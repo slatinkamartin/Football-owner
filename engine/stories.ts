@@ -10,6 +10,8 @@ import { computeTable } from './standings';
 import { playerName, playerValue } from './transfers';
 import type { GameEvent, GameState, Story, StoryKind } from './types';
 import { addNews, clamp, competitionOf, FOREIGN_PREFIX, hash01, transferWindow } from './world';
+import { seasonFacts } from './facts'; // R1
+import { decisionBudgetLeft } from './situations'; // R1: týdenní limit rozhodnutí
 
 /**
  * Příběhy sezóny: dějové linky na několik týdnů. Každý krok je situace k rozhodnutí,
@@ -88,6 +90,8 @@ function recent(state: GameState, kind: StoryKind): boolean {
 
 function tryStart(state: GameState, kind: StoryKind, roll: number): boolean {
   if (recent(state, kind) || activeStories(state).some((s) => s.kind === kind)) return false;
+  // R1: příběh je rozhodnutí – respektuje týdenní limit (hodnocení po podzimu je termínované, to přijde vždy).
+  if (kind !== 'hodnoceni' && decisionBudgetLeft(state) <= 0) return false;
   const f = dramaFactor(state);
   const club = own(state);
   if (kind === 'krize') {
@@ -95,10 +99,11 @@ function tryStart(state: GameState, kind: StoryKind, roll: number): boolean {
     if (!row || row.form.slice(-3).join('') !== 'PPP' || roll > 0.8 * f) return false;
     const coach = coachOf(state, club.id);
     const story = startStory(state, 'krize', 'Krize: tři prohry v řadě');
-    story.log.push('Tým prohrál tři zápasy po sobě, fanoušci jsou nervózní.');
+    const sf = seasonFacts(state);
+    story.log.push(`Tým prohrál tři zápasy po sobě (skóre ${sf.last3.gf}:${sf.last3.ga}), fanoušci jsou nervózní.`);
     ask(state, story, {
       title: 'Krize: tři prohry v řadě',
-      text: `Média spekulují o konci trenéra${coach ? ` ${coach.firstName} ${coach.lastName}` : ''}. Jak se k tomu postavíte? Rozhodnutí se vyhodnotí po dalších třech ligových zápasech.`,
+      text: `Tři prohry v řadě, skóre ${sf.last3.gf}:${sf.last3.ga}${sf.position ? `, ${sf.position}. místo` : ''}. Média spekulují o konci trenéra${coach ? ` ${coach.firstName} ${coach.lastName}` : ''}. Jak se k tomu postavíte? Rozhodnutí se vyhodnotí po dalších třech ligových zápasech.`,
       defaultOption: 'mlcet',
       options: [
         { id: 'podpora', label: 'Veřejně podpořit trenéra', hint: 'Důvěra trenéra +6. Když se tým nezlepší, padá to i na vás (média −6).' },
@@ -110,14 +115,17 @@ function tryStart(state: GameState, kind: StoryKind, roll: number): boolean {
   }
   if (kind === 'hvezda') {
     const m = Number(state.date.slice(5, 7));
-    if (![3, 4, 5, 11, 12].includes(m) || roll > 0.06 * f) return false;
-    const star = [...squad(state)].sort((a, b) => b.overall - a.overall).slice(0, 3).find((p) => p.overall >= 62 && state.season - p.birthYear <= 29 && !p.loan);
+    // R1: jen hráč, který opravdu září (průměrná známka 7+ z aspoň 8 zápasů nebo 8+ gólů); text cituje čísla.
+    if (![3, 4, 5, 11, 12].includes(m) || roll > 0.15 * f) return false;
+    const avg = (p: { ratingSum: number; ratingCount: number }) => (p.ratingCount ? p.ratingSum / p.ratingCount : 0);
+    const star = [...squad(state)].sort((a, b) => b.overall - a.overall).slice(0, 5).find((p) => p.overall >= 62 && state.season - p.birthYear <= 29 && !p.loan && ((p.ratingCount >= 8 && avg(p) >= 7) || p.goals >= 8));
     if (!star) return false;
+    const stat = `průměrná známka ${avg(star).toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} z ${star.ratingCount} zápasů, ${star.goals} gólů`;
     const story = startStory(state, 'hvezda', `${playerName(star)} chce do zahraničí`, { playerId: star.id });
-    story.log.push(`${playerName(star)} dal přes agenta najevo, že chce odejít do silnější ligy.`);
+    story.log.push(`${playerName(star)} (${stat}) dal přes agenta najevo, že chce odejít do silnější ligy.`);
     ask(state, story, {
       title: `${playerName(star)} chce do zahraničí`,
-      text: 'Agent tvrdí, že o hráče stojí kluby z ciziny. Hráč čeká, jak se zachováte.',
+      text: `Po výkonech v této sezóně (${stat}) agent tvrdí, že o hráče stojí kluby z ciziny. Hráč čeká, jak se zachováte.`,
       playerId: star.id,
       defaultOption: 'odmitnout',
       options: [
@@ -136,7 +144,7 @@ function tryStart(state: GameState, kind: StoryKind, roll: number): boolean {
     story.log.push('Novináři píšou o chaosu v klubu a ptají se, kam majitel klub vede.');
     ask(state, story, {
       title: 'Média: „V klubu vládne chaos“',
-      text: 'Kritické články se množí. Jak zareagujete?',
+      text: `${pos && pos.played ? `Tým je po ${pos.played} kolech na ${pos.position}. místě (cíl do ${pos.target}.). ` : ''}Kritické články se množí, pověst v médiích je ${Math.round(state.owner.media)} ze 100. Jak zareagujete?`,
       defaultOption: 'ignorovat',
       options: [
         { id: 'tiskovka', label: 'Svolat tiskovou konferenci', hint: 'Když klub v dalších 4 týdnech boduje (aspoň 1,3 bodu na zápas), média +6; jinak −3.' },
@@ -175,13 +183,14 @@ function tryStart(state: GameState, kind: StoryKind, roll: number): boolean {
     if (room.morale >= 45 || roll > 0.3 * f) return false;
     const core = [...squad(state)].sort((a, b) => b.overall - a.overall).slice(0, 8);
     if (core.length < 2) return false;
-    const a = core[Math.floor(hash01(`${state.date}a`) * core.length)];
-    const b = core.find((p) => p.id !== a.id)!;
+    // R1: spor vzniká z dat – nejnespokojenější opora proti hráči stejné pozice s víc starty.
+    const a = [...core].sort((x, y) => x.morale - y.morale || hash01(`${state.date}${x.id}`) - hash01(`${state.date}${y.id}`))[0];
+    const b = squad(state).filter((p) => p.id !== a.id && p.position === a.position).sort((x, y) => y.apps - x.apps)[0] ?? core.find((p) => p.id !== a.id)!;
     const story = startStory(state, 'kabina', `Spor v kabině: ${playerName(a)} × ${playerName(b)}`, { playerId: a.id, data: { other: b.id } });
-    story.log.push(`${playerName(a)} a ${playerName(b)} se pohádali na tréninku, kabina se dělí na dva tábory.`);
+    story.log.push(`${playerName(a)} (nálada ${Math.round(a.morale)}, ${a.apps} startů) a ${playerName(b)} (${b.apps} startů) se pohádali na tréninku o místo v sestavě, kabina se dělí na dva tábory.`);
     ask(state, story, {
       title: `Hádka v kabině: ${playerName(a)} × ${playerName(b)}`,
-      text: 'Spor dvou opor se přenáší do celé kabiny. Kdo ho vyřeší?',
+      text: `Nálada v kabině je ${Math.round(room.morale)} ze 100. ${playerName(a)} (${a.apps} startů, nálada ${Math.round(a.morale)}) se na tréninku pohádal s ${playerName(b)} (${b.apps} startů) o místo v sestavě a spor se přenáší do celé kabiny. Kdo ho vyřeší?`,
       playerId: a.id,
       defaultOption: 'trener',
       options: [

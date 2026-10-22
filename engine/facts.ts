@@ -268,3 +268,76 @@ export function seasonFacts(state: GameState): SeasonFacts {
 export function matchesWord(n: number): string {
   return `${n} ${n === 1 ? 'zápas' : n < 5 ? 'zápasy' : 'zápasů'}`;
 }
+
+// --- R2: výkon hráče od data a poslední venkovní výhra (fórum, komentáře) ---
+
+/** Výkon hráče klubu majitele v zápasech od data (např. posila od příchodu). */
+export function playerSpell(state: GameState, playerId: string, since: string): { apps: number; goals: number; minutes: number; avgRating?: number } {
+  const own = state.owner.clubId;
+  let apps = 0;
+  let goals = 0;
+  let minutes = 0;
+  let sum = 0;
+  let rated = 0;
+  for (const { f } of ownFixtures(state)) {
+    if (f.date < since) continue;
+    const r = f.result!;
+    const side = f.homeId === own ? r.detail?.home : r.detail?.away;
+    const l = [...(side?.lineup ?? []), ...(side?.bench ?? [])].find((x) => x.id === playerId && x.minutes > 0);
+    if (!l) continue;
+    apps++;
+    minutes += l.minutes;
+    if (l.rating !== undefined) {
+      sum += l.rating;
+      rated++;
+    }
+    goals += r.scorers.filter((s) => s.playerId === playerId && s.clubId === own).length;
+  }
+  return { apps, goals, minutes, avgRating: rated ? Math.round((sum / rated) * 10) / 10 : undefined };
+}
+
+/** Datum poslední venkovní výhry klubu majitele v sezóně (undefined = letos venku nevyhrál). */
+export function lastAwayWin(state: GameState): string | undefined {
+  const list = ownFixtures(state).filter((x) => x.f.date >= `${state.season}-07-01`);
+  for (let i = list.length - 1; i >= 0; i--) {
+    const m = matchFacts(state, list[i].f, list[i].name);
+    if (m && !m.home && m.outcome === 'V') return m.date;
+  }
+  return undefined;
+}
+
+/** Inkasované góly klubu majitele v posledních N zápasech. */
+export function goalsAgainstLast(state: GameState, n: number): number {
+  return ownFixtures(state)
+    .slice(-n)
+    .reduce((a, x) => a + (x.f.homeId === state.owner.clubId ? x.f.result!.awayGoals : x.f.result!.homeGoals), 0);
+}
+
+// --- R1: měřítka slibů majitele (engine/situations.ts) ---
+
+/** Odehrané zápasy klubu majitele po datu `after` (bez něj) až do dneška. */
+export function ownMatchesSince(state: GameState, after: string): OwnMatchFacts[] {
+  return ownFixtures(state)
+    .filter((x) => x.f.date > after && x.f.date <= state.date)
+    .map((x) => matchFacts(state, x.f, x.name)!)
+    .filter(Boolean);
+}
+
+/** Odehrané minuty po datu `after`: jednoho hráče (`playerId`), nebo všech vlastních hráčů do `maxAge` let. */
+export function minutesSince(state: GameState, after: string, opts: { playerId?: string; maxAge?: number }): number {
+  const own = state.owner.clubId;
+  let total = 0;
+  for (const { f } of ownFixtures(state)) {
+    if (f.date <= after || f.date > state.date) continue;
+    const side = f.homeId === own ? f.result?.detail?.home : f.result?.detail?.away;
+    for (const l of [...(side?.lineup ?? []), ...(side?.bench ?? [])]) {
+      if (opts.playerId) {
+        if (l.id === opts.playerId) total += l.minutes;
+        continue;
+      }
+      const p = state.players[l.id];
+      if (p && p.clubId === own && opts.maxAge !== undefined && playerAge(p, state.season) <= opts.maxAge) total += l.minutes;
+    }
+  }
+  return total;
+}

@@ -1,5 +1,7 @@
 import { OwnerRatingCard, RivalsCard } from './OwnerRivals';
 import { SocialCard } from './Social'; // W2
+import { PressMemoryCard } from './Press'; // R3
+import { PromisesCard } from './Promises'; // R1
 import { BusinessCard, CityCard, HallOfFame, UltrasCard } from './OwnerExtras';
 import { OwnerW3Cards } from './LongEffects'; // W3
 import { useState } from 'react';
@@ -62,6 +64,8 @@ export function Owner({ game, onChange }: Props) {
         <RivalsCard game={game} />
       </div>
       <SocialCard game={game} onResult={apply} />{/* W2 */}
+      <PressMemoryCard game={game} />{/* R3 */}
+      <PromisesCard game={game} />{/* R1 */}
 
       <div className="grid two">
         <BusinessCard game={game} onResult={apply} />
