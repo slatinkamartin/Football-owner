@@ -98,7 +98,7 @@ function storyNow(game: GameState, s: Story): { when: string; todo: string; prog
     const def = event?.options.find((o) => o.id === event.defaultOption)?.label;
     return {
       when: event ? `rozhodněte do ${formatShortDate(event.expires)}` : 'čeká na vaše rozhodnutí',
-      todo: `Vyberte jednu z možností v kartě „Čeká na vaše rozhodnutí“ nahoře na Přehledu.${def ? ` Když nerozhodnete, platí „${def}“.` : ''}`,
+      todo: `Vyberte jednu z možností ve schránce rozhodnutí na domově Týden.${def ? ` Když nerozhodnete, platí „${def}“.` : ''}`,
     };
   }
   const comp = competitionOf(game, game.owner.clubId);

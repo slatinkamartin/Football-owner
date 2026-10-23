@@ -336,10 +336,12 @@ export function checkPromises(state: GameState): void {
       const signed = squad(state).find((x) => !p.known?.includes(x.id) && x.position === p.position && x.overall >= (p.bar ?? 0));
       if (signed) {
         p.done = 'splneno';
+        p.resolved = state.date; // V4
         state.owner.trust.trener = clamp(state.owner.trust.trener + 6, 0, 100);
         addNews(state, { kind: 'info', title: `Slib trenérovi splněn: ${playerName(signed)}`, text: 'Trenér dostal posilu, kterou chtěl. Důvěra trenéra +6.' });
       } else if (state.date > p.until) {
         p.done = 'poruseno';
+        p.resolved = state.date; // V4
         state.owner.trust.trener = clamp(state.owner.trust.trener - 10, 0, 100);
         addNews(state, { kind: 'varovani', title: 'Slib trenérovi porušen', text: 'Okno se zavřelo a slíbená posila nepřišla. Důvěra trenéra −10.' });
       }
@@ -348,10 +350,14 @@ export function checkPromises(state: GameState): void {
       const club = own(state);
       if (club.policy.transferBudget < (p.value ?? 0) * 0.9) {
         p.done = 'poruseno';
+        p.resolved = state.date; // V4
         const role = p.role as 'trener' | 'reditel';
         state.owner.trust[role] = clamp(state.owner.trust[role] - 15, 0, 100);
         addNews(state, { kind: 'varovani', title: 'Porušený slib z pohovoru', text: `Při najímání padl slib rozpočtu na přestupy aspoň ${mil(p.value ?? 0)}. Důvěra ${role === 'trener' ? 'trenéra' : 'ředitele'} −15.` });
-      } else if (state.date > p.until) p.done = 'splneno';
+      } else if (state.date > p.until) {
+        p.done = 'splneno';
+        p.resolved = state.date; // V4
+      }
     }
   }
   state.promises = (state.promises ?? []).filter((p) => !p.done || p.until > addDays(state.date, -60));

@@ -203,6 +203,11 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
     return true;
   };
 
+  const missedPenalty = (s: SideState, p: Player, minute: number, note: string) => {
+    s.stats.pensMissed = (s.stats.pensMissed ?? 0) + 1;
+    events.push({ minute: Math.min(minute, 90), type: 'penalta-mimo', clubId: s.side.id, playerId: p.id, note });
+  };
+
   const sendOff = (s: SideState, p: Player, minute: number) => {
     s.onPitch = s.onPitch.filter((x) => x !== p);
     s.logs.get(p.id)!.off = minute;
@@ -267,8 +272,11 @@ export function simulateMatch(rng: Rng, home: MatchSide, away: MatchSide, attend
           s.stats.onTarget += 1;
           o.stats.saves += 1;
           log.shotsOnTarget += 1;
-        } else if (rng.chance(0.6)) {
-          s.stats.corners += 1;
+          if (penalty) missedPenalty(s, shooter, minute, 'chytil brankář');
+        } else {
+          // V4: neproměněná penalta se zapíše jako událost (bez další náhody, simulace se nemění).
+          if (penalty) missedPenalty(s, shooter, minute, 'mimo branku');
+          if (rng.chance(0.6)) s.stats.corners += 1;
         }
       }
 

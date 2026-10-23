@@ -61,6 +61,38 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.28: týden majitele, nové rozhraní a cesta poháry
+**Hratelnost – víc než klikání od zápasu k zápasu**
+- **Agenda týdne:** 3 akce týdně (od 3. úrovně majitele 4) – porada s trenérem, oběd se sponzorem, cesta za hráčem, rozhovor pro média, návštěva tréninku, schůzka s postavou, krok projektu. Každá má hned viditelný výsledek „před → po“; nevyužité akce v pondělí propadnou.
+- **Rádce „Co teď“:** nejvýš 3 doporučení z dat s odkazem tam, kde se to dělá. **Rutina:** ředitelé mohou nevyužité akce vyplnit za polovičního účinku a drobná rozhodnutí řešit výchozí volbou.
+- **Postavy jako kontakty:** trenér, sportovní ředitel, kapitán (skutečný hráč – jen fotbalová témata), vůdce kotle, starosta, hlavní sponzor a agenti opor. Nálada, vztah, potřeby a paměť rozhovorů; dobrý vztah odemyká možnosti, špatný je zavírá. Postavy jsou vymyšlené (kromě kapitána ze soupisky).
+- **Strategické projekty sezóny:** z ~6 nabídek vyberete 1–3; kroky plníte výsledky i agendou, za splnění odměna, za nesplnění ztráta pověsti.
+- **Lov posil:** cíle ze sledovaných hráčů, skautská cesta zpřesní odhad, konkurence roste k uzávěrce, osobní schůzka dá slevu.
+- **Tréninkový plán:** zaměření, intenzita a mladí – trenér plán přijme podle důvěry, plán se projeví na síle, kondici, zraněních a rozvoji.
+- **Úrovně majitele (6):** odemykají lepší sponzory, 4. akci, zahraniční cesty, lepší zaměstnance a vyšší odměny projektů.
+- **Souhrn týdne:** animovaná karta na konci týdne – co jste udělali, výsledky, změny čísel.
+
+**Rozhraní**
+- Domovská obrazovka **Týden** a 6 hlavních záložek (Týden, Tým, Trh, Klub, Peníze, Liga) + Hra pod ozubeným kolem; staré odkazy vedou na nová místa.
+- **Mobil:** spodní lišta s odznakem rozhodnutí, plovoucí tlačítko posunu na palec.
+- **Stav klubu ve 4 číslech** (sport, finance, fanoušci, vztahy) s trendem a důvody.
+- **Schránka rozhodnutí:** všechna čekající rozhodnutí na jednom místě, podle termínu a s tím, co se stane bez volby.
+- **Barvy klubu** (s hlídaným kontrastem), erb, **zápasový den na celou obrazovku** se stadionem v barvách domácích, **průvodce prvních týdnů**, jednotné ikony a **tmavý režim** (podle systému nebo ručně v Hra › Vzhled a nápověda).
+
+**Poháry a Evropa (Liga › Pohár a Evropa)**
+- Cesta pohárem jako pruh kol se stavem, skóre, prémiemi a šancí na každé kolo; pavouk domácího poháru.
+- Evropa: předkola s „padáky“ (LM → EL → KL), tabulka ligové fáze 36 týmů se zónami, karty soupeřů, jarní pavouk. Výsledky ostatních týmů ligové fáze hra dopočítává ze síly (simulují se jen vaše zápasy) – stránka to uvádí.
+- Prémie a šance na postup do dalších fází, náhled losu, odznak v hlavičce, animace postupu/vyřazení, historie pohárů.
+- **Karta sezóny** ke sdílení (obrázek PNG ke stažení).
+
+**Další**
+- **Evropské zápasy naplno:** hrají se minutu po minutě se skutečnou sestavou, s poločasovým rozhodnutím i vabankem v 75. minutě, s detailem zápasu; texty fanoušků, tiskovky a fóra reagují i na Evropu. Předkola už nemají předem určený výsledek.
+- **Neproměněné penalty** se zaznamenávají (detail, přenos, texty, situace „penalta“).
+- Starší sliby z rozhovorů jsou na kartě **Sliby majitele**.
+- **Baráž vítězů skupin ČFL** (dva zápasy v červnu) o postup do 2. ligy.
+- **Cena klubu:** v nové hře se u klubů ukazuje hodnota; v kariéře se klub platí z osobních peněz majitele.
+- Soupisky ČFL a MSFL zůstávají generované.
+
 ### Novinky verze 0.27: situace, diskuze a příspěvky z reálného dění
 
 - **Situace z dat:** každé rozhodnutí má konkrétní příčinu ve hře a cituje ji.

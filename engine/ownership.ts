@@ -62,6 +62,18 @@ export function clubValuation(state: GameState): number {
   return Math.max(5_000_000, Math.round(value / 1_000_000) * 1_000_000);
 }
 
+/**
+ * V4: hodnota libovolného klubu (pro kupní cenu před začátkem hry). Bez dluhů a staveb (na začátku
+ * žádné nejsou), hotovost podle zadané částky (startovní peníze klubu podle obtížnosti).
+ */
+export function clubValuationOf(state: GameState, clubId: string, cash: number): number {
+  const club = state.clubs[clubId];
+  const squad = squadOf(state, clubId).reduce((a, p) => a + playerValue(state, p), 0);
+  const brand = 2_000_000 * Math.pow(1.06, club.reputation - 50) * (tierOf(state, clubId) === 1 ? 3 : 1);
+  const value = squad * 0.6 + club.stadium.capacity * 15_000 + brand + Math.max(0, cash);
+  return Math.max(5_000_000, Math.round(value / 1_000_000) * 1_000_000);
+}
+
 export function othersShare(state: GameState): number {
   return state.shareholders.reduce((a, s) => a + s.share, 0);
 }

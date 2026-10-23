@@ -371,7 +371,7 @@ function startBigMatch(state: GameState, up: BigMatch): void {
   if (up.home) {
     const d = ticketDemand(state, bm);
     parts.push(`Předprodej: ${demandText(d)}.`);
-    parts.push('Lístky, choreo a bezpečnost nastavíte na kartě odpočtu na Přehledu (jinak platí výchozí volby).');
+    parts.push('Lístky, choreo a bezpečnost nastavíte na kartě odpočtu na domově Týden (jinak platí výchozí volby).');
   }
   addNews(state, { kind: 'info', title: `Začíná týden: ${kind.toLowerCase()} ${pairing(state, up)}`, text: parts.join(' ') });
 }
@@ -428,7 +428,7 @@ export function bigMatchWeekStarted(state: GameState, prevId: string | undefined
   const bm = state.bigMatch;
   if (!bm || bm.id === prevId || bm.started !== state.date || bm.lastStop !== state.date || bm.settled) return undefined;
   const kind = BIG_MATCH_LABEL[bm.kind as BigMatchKind] ?? 'Velký zápas';
-  return `Začíná týden: ${kind.toLowerCase()} ${pairing(state, bm)}. Přípravu najdete na Přehledu.`;
+  return `Začíná týden: ${kind.toLowerCase()} ${pairing(state, bm)}. Přípravu najdete na domově Týden.`;
 }
 
 /** Evropský zápas klubu majitele, který se hraje zítra (hra stojí na jeho předvečeru). */
@@ -653,7 +653,8 @@ function ownResult(state: GameState, bm: BigMatchState): OwnResult | undefined {
   if (e) {
     if (!e.result) return undefined;
     const goals = [...e.result.scorers.map((s) => ({ minute: s.minute, own: true, playerId: s.playerId })), ...e.result.oppMinutes.map((m) => ({ minute: m, own: false }))].sort((a, b) => a.minute - b.minute);
-    return { gf: e.result.own, ga: e.result.opp, goals, reds: 0 };
+    const reds = (e.result.match?.detail?.events ?? []).filter((x) => x.clubId === own && (x.type === 'cervena' || x.type === 'druha-zluta')).length; // V4
+    return { gf: e.result.own, ga: e.result.opp, goals, reds };
   }
   const f = allFixtures(state).find((x) => x.fixture.id === bm.id)?.fixture;
   if (!f?.result) return undefined;

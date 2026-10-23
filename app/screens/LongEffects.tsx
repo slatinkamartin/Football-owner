@@ -50,7 +50,7 @@ export function AchievementsSummaryCard({ game }: { game: GameState }) {
         <span className="small"><strong>{count.unlocked}</strong> z {count.total}{count.gold ? ` · zlatých ${count.gold}` : ''}</span>
       </div>
       {recent.length === 0 ? (
-        <p className="muted small">Zatím žádný. Přehled všech odznaků najdete v záložce Hra.</p>
+        <p className="muted small">Zatím žádný. Přehled všech odznaků najdete v Klub › Odznaky.</p>
       ) : (
         <ul className="plain small">
           {recent.map(([id, r]) => {
@@ -64,7 +64,7 @@ export function AchievementsSummaryCard({ game }: { game: GameState }) {
           })}
         </ul>
       )}
-      <p className="muted small">Všechny odznaky a co je k nim potřeba: záložka Hra › Úspěchy.</p>
+      <p className="muted small">Všechny odznaky a co je k nim potřeba: Klub › Odznaky.</p>
     </section>
   );
 }

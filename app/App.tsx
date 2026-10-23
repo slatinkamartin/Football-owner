@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { careerFrom, clubLabel, markReportSeen, markScenarioSeen, scenarioDef, toggleWatch, advanceDays, advanceStep, nextStep, ownMatchTomorrow, settingsOf, pulseAfterAction, competitionOf, currentPhase, daysUntil, formatDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type GameState, type Milestone } from '../engine';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { allFixtures, careerFrom, clubLabel, competitionOf, computeTable, markReportSeen, markScenarioSeen, scenarioDef, toggleWatch, advanceDays, advanceStep, nextStep, ownMatchTomorrow, settingsOf, pulseAfterAction, currentPhase, daysUntil, formatDate, formatShortDate, milestoneToday, nextMilestone, ownerBlocked, seasonLabel, startNegotiation, type ActionResult, type GameState, type Milestone } from '../engine';
 import { money } from './format';
 import { deleteGame, loadGame, saveCareer, saveGame } from './storage';
 import { SeasonReportView } from './screens/Report';
 import { Finance, type FinanceTab } from './screens/Finance';
 import { GameMenu } from './screens/GameMenu';
-import { AchievementToast } from './screens/Achievements'; // W3
+import { AchievementsCard, AchievementToast } from './screens/Achievements'; // W3
 import { PostMatch } from './screens/PostMatch'; // W2
 import { MatchDetail } from './screens/MatchDetail';
 import { ClubCard } from './screens/ClubCard';
@@ -13,7 +13,7 @@ import { PlayerCard } from './screens/PlayerCard';
 import { NavContext, Sheet, type ModalRef } from './nav';
 import { Matches } from './screens/Matches';
 import { NewGame } from './screens/NewGame';
-import { Overview } from './screens/Overview';
+import { ClubHistoryCard, OwnerSummary, PositionChart, ScenarioCard, ToDo } from './screens/Overview';
 import { LiveMatch, MatchDialog } from './screens/MatchPrep';
 import { EuroLive, EuroMatchDialog } from './screens/BigMatch'; // W1
 import { bigMatchWeekStarted, euroMatchTomorrow } from '../engine'; // W1
@@ -24,25 +24,115 @@ import { Squad } from './screens/Squad';
 import { Stadium } from './screens/Stadium';
 import { Transfers } from './screens/Transfers';
 import { Tables } from './screens/Tables';
+import { Notice } from './components';
+import { PulsePanel } from './screens/Briefing';
+import { FansCard } from './screens/Fans';
+import { ForumCard } from './screens/Forum';
+import { SocialCard } from './screens/Social';
+import { PressMemoryCard } from './screens/Press';
+import { CityCard, UltrasCard } from './screens/OwnerExtras';
+import { AgentsCard } from './screens/MarketExtras';
+import { ForeignMarket } from './screens/ForeignMarket';
+import { SideGoalsCard } from './screens/finance/Extras';
+import { ChallengesCard } from './screens/Challenges';
+import { EuropeSection, EuropeStarsCard } from './screens/EuropeExtras';
+import { SeasonCard } from './screens/SeasonCard'; // V3
+import { forumThreads, lastWeekSummary, planAgendaAction, projectOffers, weekAgenda } from '../engine';
+import { AdvisorCard, AgendaCard, RoutineCard } from './screens/Agenda'; // V1
+import { TrainingCard } from './screens/Training'; // V1
+import { HuntCard } from './screens/Hunt'; // V1
+import { OwnerLevelCard, ProjectsCard } from './screens/Projects'; // V1
+import { CupBadge, CupBracket, CupHistory, CupProgressCard, DrawPreview, EuropeLeagueTable } from './screens/CupViews'; // V3
+import { Week, type StepInfo, type WeekSlots } from './screens/Week';
+import { Contacts } from './screens/Contacts';
+import { GuideTip, startGuide, useGuide } from './screens/Guide';
+import { AppearanceCard } from './screens/Appearance';
+import { WeekEndCard, type WeekEndData } from './screens/WeekEnd';
+import { MatchdayStage } from './screens/Matchday';
+import { Icon } from './icons';
+import { Crest, SubTabs, type SubTab } from './ui';
+import { DEFAULT_SUB, MAIN_TABS, resolveTarget, type KlubSub, type LigaSub, type MainTab, type SubTabId, type TrhSub, type TymSub } from './navmap';
+import { applyClubColors, applyThemePref, clearClubColors, isDark, loadThemePref, saveThemePref, type ThemePref } from './theme';
 
-type Tab = 'prehled' | 'tabulky' | 'zapasy' | 'kadr' | 'prestupy' | 'vedeni' | 'majitel' | 'stadion' | 'finance' | 'hra';
+/** Pondělí týdne (týden = pondělí–neděle). */
+function weekStart(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const dow = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - dow);
+  return d.toISOString().slice(0, 10);
+}
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'prehled', label: 'Přehled' },
+/** Záložní shrnutí týdne (když engine nemá vlastní): výsledky a změny čísel mezi dvěma stavy. */
+function basicWeekSummary(prev: GameState, next: GameState): WeekEndData {
+  const own = next.owner.clubId;
+  const results = allFixtures(next)
+    .filter((x) => x.fixture.result && x.fixture.date > prev.date && x.fixture.date <= next.date && (x.fixture.homeId === own || x.fixture.awayId === own))
+    .map((x) => `${x.name}: ${clubLabel(next, x.fixture.homeId)} – ${clubLabel(next, x.fixture.awayId)} ${x.fixture.result!.homeGoals}:${x.fixture.result!.awayGoals}`);
+  const pos = (g: GameState) => {
+    const comp = competitionOf(g, own);
+    return comp ? computeTable(comp, g).findIndex((r) => r.clubId === own) + 1 : 0;
+  };
+  const bal = next.clubs[own].finance.balance - prev.clubs[own].finance.balance;
+  const deltas: WeekEndData['deltas'] = [
+    { label: 'Zůstatek', value: `${bal >= 0 ? '+' : '−'}${money(Math.abs(bal))}` },
+    { label: 'Fanoušci', value: Math.round(next.clubs[own].fanMood - prev.clubs[own].fanMood) },
+    { label: 'Důvěra trenéra', value: Math.round(next.owner.trust.trener - prev.owner.trust.trener) },
+  ];
+  if (results.length) deltas.splice(1, 0, { label: 'Pozice', value: pos(prev) - pos(next) });
+  const fresh = next.news.filter((n) => n.date > prev.date && n.kind !== 'vysledek').slice(0, 3).map((n) => n.title);
+  const mon = weekStart(prev.date);
+  const sun = new Date(`${mon}T00:00:00Z`);
+  sun.setUTCDate(sun.getUTCDate() + 6);
+  return { title: `Konec týdne ${formatShortDate(mon)}–${formatShortDate(sun.toISOString().slice(0, 10))}`, lines: [...results, ...fresh], deltas };
+}
+
+/** Karta s vlastní zprávou o výsledku akce (pro karty, které vracejí ActionResult). */
+function WithResult({ game, onChange, children }: { game: GameState; onChange: (g: GameState) => void; children: (apply: (r: ActionResult) => void) => ReactNode }) {
+  const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
+  const apply = (r: ActionResult) => {
+    if (r.state !== game) onChange(r.state);
+    setMessage({ text: r.message, ok: r.ok });
+  };
+  return (
+    <>
+      <Notice message={message?.text ?? null} ok={message?.ok} />
+      {children(apply)}
+    </>
+  );
+}
+
+const TYM_TABS: SubTab<TymSub>[] = [
+  { id: 'kadr', label: 'Kádr' },
+  { id: 'trenink', label: 'Trénink' },
+  { id: 'vedeni', label: 'Vedení' },
+  { id: 'postavy', label: 'Postavy' },
+];
+const TRH_TABS: SubTab<TrhSub>[] = [
+  { id: 'prestupy', label: 'Přestupy' },
+  { id: 'lov', label: 'Lov a skauting' },
+  { id: 'agenti', label: 'Agenti' },
+  { id: 'zahranici', label: 'Zahraničí' },
+];
+const KLUB_TABS: SubTab<KlubSub>[] = [
+  { id: 'stadion', label: 'Stadion' },
+  { id: 'fanousci', label: 'Fanoušci' },
+  { id: 'forum', label: 'Fórum' },
+  { id: 'site', label: 'Sítě a média' },
+  { id: 'majitel', label: 'Majitel' },
+  { id: 'projekty', label: 'Projekty a cíle' },
+  { id: 'odznaky', label: 'Odznaky' },
+];
+const LIGA_TABS: SubTab<LigaSub>[] = [
   { id: 'tabulky', label: 'Tabulky' },
   { id: 'zapasy', label: 'Zápasy' },
-  { id: 'kadr', label: 'Kádr' },
-  { id: 'prestupy', label: 'Přestupy' },
-  { id: 'vedeni', label: 'Vedení' },
-  { id: 'majitel', label: 'Majitel' },
-  { id: 'stadion', label: 'Stadion' },
-  { id: 'finance', label: 'Finance' },
-  { id: 'hra', label: 'Hra' },
+  { id: 'pohary', label: 'Pohár a Evropa' },
+  { id: 'historie', label: 'Historie' },
 ];
 
 export function App() {
   const [game, setGame] = useState<GameState | null | undefined>(undefined);
-  const [tab, setTab] = useState<Tab>('prehled');
+  const [tab, setTab] = useState<MainTab>('tyden');
+  const [subs, setSubs] = useState<Partial<Record<MainTab, SubTabId>>>(DEFAULT_SUB);
 
   const [outdated, setOutdated] = useState(false);
   const [modals, setModals] = useState<ModalRef[]>([]);
@@ -53,6 +143,12 @@ export function App() {
   const [live, setLive] = useState(false);
   const [matchOpen, setMatchOpen] = useState(false);
   const [liveEuro, setLiveEuro] = useState(false); // W1: evropský přenos
+  const [theme, setTheme] = useState<ThemePref>(() => loadThemePref());
+  const [systemTick, setSystemTick] = useState(0);
+  const [weekEnd, setWeekEnd] = useState<WeekEndData | null>(null);
+  const [, setGuideTick] = useState(0);
+  /** Stav na začátku týdne (pro shrnutí konce týdne). */
+  const weekSnap = useRef<GameState | null>(null);
   const openModal = (m: ModalRef) => setModals((stack) => [...stack.filter((x) => !(x.type === m.type && x.id === m.id)), m]);
   const setOpenMatch = (id: string | null) => (id ? openModal({ type: 'match', id }) : setModals([]));
 
@@ -63,9 +159,26 @@ export function App() {
     });
   }, []);
 
+  // B12: tmavý režim podle systému nebo ručně; B7: barvy klubu jako CSS proměnné.
+  useEffect(() => {
+    applyThemePref(theme);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const on = () => setSystemTick((n) => n + 1);
+    mq?.addEventListener?.('change', on);
+    return () => mq?.removeEventListener?.('change', on);
+  }, [theme]);
+  const clubColors = game ? game.clubs[game.owner.clubId]?.colors : undefined;
+  const colorKey = clubColors?.join(',');
+  useEffect(() => {
+    if (clubColors) applyClubColors(clubColors, isDark(theme));
+    else clearClubColors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colorKey, theme, systemTick]);
+
+  const sub = subs[tab];
   useEffect(() => {
     window.scrollTo(0, 0);
-  }, [tab, game === null]);
+  }, [tab, sub, game === null]);
 
   // Výška horní lišty: okna s kartami začínají pod ní, takže při posunu zajíždějí pod lištu.
   const headRef = useRef<HTMLDivElement>(null);
@@ -88,6 +201,14 @@ export function App() {
     void saveGame(next);
   };
 
+  /** Přejít na záložku/podzáložku (nové i staré cíle odkazů). */
+  const go = useCallback((target: string, subTarget?: string) => {
+    const t = resolveTarget(target, subTarget);
+    if (t.main === 'penize') setFinanceTab((f) => ({ tab: (t.sub as FinanceTab) ?? 'prehled', n: f.n + 1 }));
+    else if (t.sub) setSubs((s) => ({ ...s, [t.main]: t.sub }));
+    setTab(t.main);
+  }, []);
+
   // Při nové nebo nahrané hře zavřít všechna okna, ať se nic nepřenese do jiné hry.
   const resetView = () => {
     setLive(false);
@@ -97,17 +218,19 @@ export function App() {
     setMilestone(null);
     setStopReason(null);
     setNotice(null);
+    setWeekEnd(null);
   };
 
   const startOver = async () => {
     await deleteGame();
     resetView();
-    setTab('prehled');
+    setTab('tyden');
     setGame(null);
   };
 
   const nav = {
     open: openModal,
+    go,
     watch: (playerId: string) => {
       if (game) update(toggleWatch(game, playerId).state);
     },
@@ -117,12 +240,14 @@ export function App() {
       if (r.state !== game) update(r.state);
       setNotice(r.ok ? null : r.message);
       setModals([]);
-      setTab('prestupy');
+      go('trh/prestupy');
     },
   };
 
+  const guide = useGuide(game ?? ({ seed: -1, date: '2000-01-01' } as GameState));
+
   if (game === undefined) return <div className="loading">Načítám…</div>;
-  if (game === null) return <NewGame outdatedSave={outdated} onStart={(g) => { setTab('prehled'); update(g); }} />;
+  if (game === null) return <NewGame outdatedSave={outdated} onStart={(g) => { startGuide(g); setTab('tyden'); setSubs(DEFAULT_SUB); update(g); }} />;
 
   const club = game.clubs[game.owner.clubId];
   const comp = competitionOf(game, club.id);
@@ -139,6 +264,13 @@ export function App() {
     update(next);
     const m = milestoneToday(next);
     if (showMilestones && m && next.date !== game.date && !next.gameOver) setMilestone(m);
+    // B8: přechod do nového týdne → krátké shrnutí.
+    if (!next.gameOver && weekStart(next.date) !== weekStart(game.date)) {
+      const from = weekSnap.current && weekStart(weekSnap.current.date) === weekStart(game.date) ? weekSnap.current : game;
+      const v1 = lastWeekSummary(next);
+      setWeekEnd(v1 && v1.week === weekStart(game.date) ? v1 : basicWeekSummary(from, next));
+      weekSnap.current = next;
+    } else if (!weekSnap.current) weekSnap.current = game;
   };
   // Jedno tlačítko: v předvečer zápasu otevře zápas, jinak posune hru k dalšímu zápasu, milníku nebo o týden.
   const onStep = () => {
@@ -149,7 +281,7 @@ export function App() {
     const r = advanceStep(game);
     advance(r.state, r.reason);
   };
-  const stepLabel = match ? 'Zápas ›' : euro ? 'Evropský zápas ›' : `${step.label} ›`;
+  const stepLabel = match ? 'Zápas' : euro ? 'Evropský zápas' : step.kind === 'tyden' ? 'Další týden' : step.label;
   const stepTitle = match
     ? `Zítra: ${clubLabel(game, match.fixture.homeId)} – ${clubLabel(game, match.fixture.awayId)} (${match.name})`
     : euro
@@ -161,6 +293,7 @@ export function App() {
         : step.kind === 'deadline'
           ? 'Deadline day: hra jde po dnech'
           : 'Posunout hru o týden';
+  const stepInfo: StepInfo = { label: `${stepLabel} ›`, title: stepTitle, match: !!(match || euro), disabled: !!game.gameOver, onStep };
   // Výroční zpráva se ukáže na začátku nové sezóny spolu s milníkem a výsledkem scénáře v jednom okně.
   const latest = game.seasonReports?.[0];
   const report = latest && !latest.seen && game.season > latest.season ? latest : undefined;
@@ -180,92 +313,260 @@ export function App() {
     }
     update(pulseAfterAction(game, next));
   };
+  const onChangeHome = (next: GameState) => update(pulseAfterAction(game, next));
+  const legacyGo = (t: string, s?: string) => go(t, s);
+
+  // Schůzka s postavou jde přes agendu týdne (spotřebuje jednu akci).
+  const agenda = weekAgenda(game);
+  const agendaLeft = Math.max(0, agenda.slots - agenda.used.filter((u) => !u.routine).length);
+  const meet = (id: string, topic: string): ActionResult => {
+    const r = planAgendaAction(game, 'postava', `${id}|${topic}`);
+    if (r.state !== game) managed(r.state);
+    return r;
+  };
+  const offers = projectOffers(game);
+
+  const weekKey = weekStart(game.date);
+  const slots: WeekSlots = {
+    agenda: <WithResult game={game} onChange={onChangeHome}>{(apply) => <AgendaCard game={game} onResult={apply} />}</WithResult>,
+    advisor: <WithResult game={game} onChange={onChangeHome}>{(apply) => <AdvisorCard game={game} onResult={apply} onNavigate={(t) => go(t)} />}</WithResult>,
+    cupBadge: <CupBadge game={game} onClick={() => go('liga/pohary')} />,
+    cupCard: <CupProgressCard game={game} onOpenMatch={setOpenMatch} onOpen={() => go('liga/pohary')} />,
+    inboxExtra: offers.length ? [{ id: 'projekty', title: 'Vyberte strategické projekty sezóny', text: `${offers.length} v nabídce, vyberte 1–3`, icon: 'projekt', link: 'klub/projekty', linkLabel: 'Vybrat' }] : [],
+    tips: {
+      agenda: <GuideTip guide={guide} id="agenda" />,
+      inbox: <GuideTip guide={guide} id="inbox" />,
+      step: <GuideTip guide={guide} id="step" />,
+    },
+  };
+
+  const subNav = (main: MainTab, tabs: SubTab<string>[]) => (
+    <SubTabs tabs={tabs} value={(subs[main] ?? DEFAULT_SUB[main]) as string} label={`Části: ${MAIN_TABS.find((m) => m.id === main)?.label ?? ''}`} onChange={(v) => setSubs((s) => ({ ...s, [main]: v as SubTabId }))} />
+  );
+
+  const eventsCount = game.events.length;
+
+  let content: ReactNode = null;
+  if (tab === 'tyden') {
+    content = <Week game={game} onChange={onChangeHome} onNavigate={(t) => go(t)} onOpenMatch={setOpenMatch} step={stepInfo} slots={slots} weekKey={weekKey} />;
+  } else if (tab === 'tym') {
+    const s = (subs.tym ?? 'kadr') as TymSub;
+    content = (
+      <>
+        {subNav('tym', TYM_TABS)}
+        {s === 'kadr' && <Squad game={game} onChange={managed} />}
+        {s === 'trenink' && <WithResult game={game} onChange={managed}>{(apply) => <TrainingCard game={game} onResult={apply} />}</WithResult>}
+        {s === 'vedeni' && (
+          <div className="stack">
+            <div className="grid two">
+              <ToDo game={game} onNavigate={(t) => go(t)} />
+              <WithResult game={game} onChange={managed}>{(apply) => <RoutineCard game={game} onResult={apply} />}</WithResult>
+            </div>
+            <People game={game} onChange={managed} />
+          </div>
+        )}
+        {s === 'postavy' && <Contacts game={game} onMeet={meet} meetLabel="Domluvit schůzku (akce agendy)" meetNote={agendaLeft ? `Schůzka spotřebuje jednu akci agendy tohoto týdne (zbývá ${agendaLeft} z ${agenda.slots}).` : 'Agenda tohoto týdne je vyčerpaná. Schůzku domluvíte od pondělí.'} />}
+      </>
+    );
+  } else if (tab === 'trh') {
+    const s = (subs.trh ?? 'prestupy') as TrhSub;
+    content = (
+      <>
+        {subNav('trh', TRH_TABS)}
+        {s === 'prestupy' && <Transfers game={game} onChange={managed} omit={['agenti', 'zahranici']} />}
+        {s === 'lov' && <WithResult game={game} onChange={managed}>{(apply) => <HuntCard game={game} onResult={apply} />}</WithResult>}
+        {s === 'agenti' && <AgentsCard game={game} />}
+        {s === 'zahranici' && <WithResult game={game} onChange={managed}>{(apply) => <ForeignMarket game={game} onChange={managed} onResult={apply} />}</WithResult>}
+      </>
+    );
+  } else if (tab === 'klub') {
+    const s = (subs.klub ?? 'stadion') as KlubSub;
+    content = (
+      <>
+        {subNav('klub', KLUB_TABS)}
+        {s === 'stadion' && <Stadium game={game} onChange={managed} />}
+        {s === 'fanousci' && (
+          <WithResult game={game} onChange={managed}>
+            {(apply) => (
+              <div className="grid two">
+                <FansCard game={game} onChange={managed} />
+                <UltrasCard game={game} />
+                <CityCard game={game} onResult={apply} />
+                <PulsePanel game={game} />
+              </div>
+            )}
+          </WithResult>
+        )}
+        {s === 'forum' && (forumThreads(game).length ? <ForumCard game={game} onChange={managed} /> : <section className="card"><h2>Fórum fanoušků</h2><p className="muted">Fanoušci zatím nemají o čem diskutovat. Vlákna vznikají z výsledků, sestav a tabulky – po prvních zápasech se tu objeví.</p></section>)}
+        {s === 'site' && (
+          <WithResult game={game} onChange={managed}>
+            {(apply) => (
+              <div className="stack">
+                <SocialCard game={game} onResult={apply} />
+                <PressMemoryCard game={game} />
+              </div>
+            )}
+          </WithResult>
+        )}
+        {s === 'majitel' && (
+          <div className="stack">
+            <div className="grid two">
+              <OwnerLevelCard game={game} />
+              <OwnerSummary game={game} />
+            </div>
+            <Owner game={game} onChange={update} hide={['social', 'press', 'ultras', 'city']} />
+          </div>
+        )}
+        {s === 'projekty' && (
+          <div className="grid two">
+            <WithResult game={game} onChange={managed}>{(apply) => <ProjectsCard game={game} onResult={apply} />}</WithResult>
+            <ScenarioCard game={game} />
+            <SideGoalsCard game={game} onChange={managed} />
+            <ChallengesCard game={game} />
+          </div>
+        )}
+        {s === 'odznaky' && <div className="grid two"><AchievementsCard game={game} /></div>}
+      </>
+    );
+  } else if (tab === 'penize') {
+    content = <Finance key={financeTab.n} game={game} onChange={managed} initialTab={financeTab.tab} />;
+  } else if (tab === 'liga') {
+    const s = (subs.liga ?? 'tabulky') as LigaSub;
+    content = (
+      <>
+        {subNav('liga', LIGA_TABS)}
+        {s === 'tabulky' && (
+          <div className="stack">
+            <PositionChart game={game} />
+            <Tables game={game} />
+          </div>
+        )}
+        {s === 'zapasy' && <Matches game={game} onOpenMatch={setOpenMatch} />}
+        {s === 'pohary' && (
+          <div className="stack">
+            <CupProgressCard game={game} onOpenMatch={setOpenMatch} />
+            <DrawPreview game={game} />
+            <CupBracket game={game} onOpenMatch={setOpenMatch} />
+            <EuropeLeagueTable game={game} onOpenMatch={setOpenMatch} />
+            <EuropeSection game={game} onOpenMatch={setOpenMatch} />
+            <EuropeStarsCard game={game} onOpenMatch={setOpenMatch} />
+          </div>
+        )}
+        {s === 'historie' && (
+          <div className="stack">
+            <ClubHistoryCard game={game} />
+            <CupHistory game={game} />
+            {(game.seasonReports?.length ?? 0) > 0 && <SeasonCard game={game} season={game.seasonReports![0].season} />}
+          </div>
+        )}
+      </>
+    );
+  } else if (tab === 'hra') {
+    content = (
+      <div className="stack">
+        <AppearanceCard game={game} theme={theme} onTheme={(t) => { saveThemePref(t); setTheme(t); }} onGuide={() => setGuideTick((n) => n + 1)} />
+        <GameMenu game={game} onLoad={(g) => { resetView(); update(g); }} onNewGame={startOver} />
+      </div>
+    );
+  }
+
+  const selectMain = (id: MainTab) => {
+    if (id === 'penize') setFinanceTab({ tab: 'prehled', n: financeTab.n + 1 });
+    setTab(id);
+  };
 
   return (
     <NavContext.Provider value={nav}>
-    <div className="app">
+    <div className={`app tab-${tab}`}>
       <div className="sticky-head" ref={headRef}>
         <header className="topbar">
           <div className="topbar-club">
-            <span className="crest" style={{ background: club.colors[0], borderColor: club.colors[1] }} />
-            <div>
+            <button className="crest-btn" aria-label="Domů: Týden" onClick={() => setTab('tyden')}>
+              <Crest colors={club.colors} name={club.name} size={36} />
+            </button>
+            <div className="topbar-text">
               <div className="topbar-name">{club.name}</div>
               <div className="topbar-sub">
-                {formatDate(game.date, true)} · {comp?.name ?? 'mimo soutěž'} {seasonLabel(game.season)}
+                {formatDate(game.date, true)}<span className="hide-mobile"> · {comp?.name ?? 'mimo soutěž'} {seasonLabel(game.season)}</span>
               </div>
               <div className={`phase-chip phase-${phase.tone}`}>
-                <strong>{phase.label}</strong> {phase.detail}
-                {nm && nmDays <= 21 && <span className="next-milestone"> · do {nm.short} {nmDays} {nmDays === 1 ? 'den' : nmDays < 5 ? 'dny' : 'dní'}</span>}
-                {game.events.length > 0 && (
-                  <button className="linkbtn events-link" onClick={() => setTab('prehled')}>
-                    · rozhodnutí: {game.events.length}
+                <strong>{phase.label}</strong> <span className="hide-mobile">{phase.detail}</span>
+                {nm && nmDays <= 21 && <span className="next-milestone hide-mobile"> · do {nm.short} {nmDays} {nmDays === 1 ? 'den' : nmDays < 5 ? 'dny' : 'dní'}</span>}
+                {eventsCount > 0 && (
+                  <button className="linkbtn events-link" onClick={() => setTab('tyden')}>
+                    · rozhodnutí: {eventsCount}
                   </button>
                 )}
               </div>
             </div>
           </div>
           <div className="topbar-right">
+            <span className="topbar-cup hide-mobile"><CupBadge game={game} onClick={() => go('liga/pohary')} /></span>
             <div className={`topbar-balance ${club.finance.balance < 0 ? 'neg' : ''}`}>
               <span>Klub</span>
-              <strong>{money(club.finance.balance)}</strong>
+              <strong className="num">{money(club.finance.balance)}</strong>
             </div>
             <div className="advance">
               <button className={match || euro ? 'primary match-btn' : 'primary'} disabled={!!game.gameOver} title={stepTitle} onClick={onStep}>
-                {stepLabel}
+                {stepLabel} ›
               </button>
             </div>
+            <button className={`icon-btn game-btn${tab === 'hra' ? ' active' : ''}`} aria-label="Hra: menu, nastavení, záloha" title="Hra: menu, nastavení, záloha" onClick={() => setTab('hra')}>
+              <Icon name="hra" size={22} />
+            </button>
           </div>
         </header>
 
         <CalendarStrip game={game} />
-        <nav className="tabs">
-          {TABS.map((t) => (
-            <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => { if (t.id === 'finance') setFinanceTab({ tab: 'prehled', n: financeTab.n }); setTab(t.id); }}>
-              {t.label}
-              {t.id === 'majitel' && blocked && <span className="tab-dot" aria-label="odvolán" />}
+        <nav className="tabs main-tabs" aria-label="Hlavní záložky">
+          {MAIN_TABS.map((t) => (
+            <button key={t.id} className={tab === t.id ? 'active' : ''} aria-current={tab === t.id ? 'page' : undefined} onClick={() => selectMain(t.id)}>
+              <Icon name={t.icon} size={18} /> {t.label}
+              {t.id === 'tyden' && eventsCount > 0 && <span className="tab-count">{eventsCount}</span>}
+              {t.id === 'klub' && blocked && <span className="tab-dot" aria-label="odvolán" />}
             </button>
           ))}
+          <button className={`tab-hra${tab === 'hra' ? ' active' : ''}`} onClick={() => setTab('hra')}>
+            <Icon name="hra" size={18} /> Hra
+          </button>
         </nav>
       </div>
 
       <main>
-        {blocked && tab !== 'majitel' && (
+        {blocked && !(tab === 'klub' && subs.klub === 'majitel') && (
           <p className="warning banner">
-            {blocked} <button className="linkbtn" onClick={() => setTab('majitel')}>Cesty zpět ›</button>
+            {blocked} <button className="linkbtn" onClick={() => go('klub/majitel')}>Cesty zpět ›</button>
           </p>
         )}
-        {tab === 'prehled' && (
-          <Overview
-            game={game}
-            onChange={(next) => update(pulseAfterAction(game, next))}
-            onNavigate={(t, sub) => {
-              if (t === 'finance') setFinanceTab({ tab: sub ?? 'prehled', n: financeTab.n + 1 });
-              setTab(t);
-            }}
-            onOpenMatch={setOpenMatch}
-            onLive={() => setLive(true)}
-          />
-        )}
-        {tab === 'tabulky' && <Tables game={game} />}
-        {tab === 'zapasy' && <Matches game={game} onOpenMatch={setOpenMatch} />}
-        {tab === 'kadr' && <Squad game={game} onChange={managed} />}
-        {tab === 'prestupy' && <Transfers game={game} onChange={managed} />}
-        {tab === 'vedeni' && <People game={game} onChange={managed} />}
-        {tab === 'majitel' && <Owner game={game} onChange={update} />}
-        {tab === 'stadion' && <Stadium game={game} onChange={managed} />}
-        {tab === 'finance' && <Finance key={financeTab.n} game={game} onChange={managed} initialTab={financeTab.tab} />}
-        {tab === 'hra' && <GameMenu game={game} onLoad={(g) => { resetView(); update(g); }} onNewGame={startOver} />}
+        {content}
       </main>
+
+      {/* B3: mobilní spodní lišta a palcem dosažitelný posun hry */}
+      <nav className="bottom-bar" aria-label="Hlavní záložky (mobil)">
+        {MAIN_TABS.map((t) => (
+          <button key={t.id} className={tab === t.id ? 'active' : ''} aria-current={tab === t.id ? 'page' : undefined} onClick={() => selectMain(t.id)}>
+            <Icon name={t.icon} size={22} />
+            <span>{t.label}</span>
+            {t.id === 'tyden' && eventsCount > 0 && <span className="bb-badge">{eventsCount}</span>}
+          </button>
+        ))}
+      </nav>
+      {!live && !matchOpen && (
+        <button className={`step-fab primary${match || euro ? ' match-btn' : ''}`} disabled={!!game.gameOver} title={stepTitle} aria-label={stepTitle} onClick={onStep}>
+          <Icon name={match || euro ? 'play' : 'next'} size={20} /> <span>{stepLabel}</span>
+        </button>
+      )}
 
       <AchievementToast game={game} />
       {!live && !matchOpen && modals.length === 0 && !milestone && !report && !game.gameOver && <PostMatch game={game} onChange={update} />}{/* W2: krok po zápase */}
+      {weekEnd && !live && !matchOpen && !milestone && !report && <WeekEndCard data={weekEnd} onClose={() => setWeekEnd(null)} />}
       {stopReason && !milestone && (
         <div className="toast stop-toast" role="status">
           <strong>Zastaveno:</strong> {stopReason} <button className="linkbtn" onClick={() => setStopReason(null)}>Zavřít</button>
         </div>
       )}
 
-      {notice && (tab === 'prestupy' || blocked) && (
+      {notice && ((tab === 'trh') || blocked) && (
         <div className="toast" role="status">
           {notice} <button className="linkbtn" onClick={() => setNotice(null)}>Zavřít</button>
         </div>
@@ -284,16 +585,18 @@ export function App() {
       })()}
 
       {live && liveEuro && !game.gameOver && (
-        <EuroLive
-          game={game}
-          onChange={(g) => { update(g); setStopReason(bigMatchWeekStarted(g, game.bigMatch?.id) ?? null); }}
-          onClose={() => { setLive(false); setLiveEuro(false); }}
-          onSummary={(id) => {
-            setLive(false);
-            setLiveEuro(false);
-            setModals([{ type: 'match', id }]);
-          }}
-        />
+        <MatchdayStage game={game} kind="evropa">
+          <EuroLive
+            game={game}
+            onChange={(g) => { update(g); setStopReason(bigMatchWeekStarted(g, game.bigMatch?.id) ?? null); }}
+            onClose={() => { setLive(false); setLiveEuro(false); }}
+            onSummary={(id) => {
+              setLive(false);
+              setLiveEuro(false);
+              setModals([{ type: 'match', id }]);
+            }}
+          />
+        </MatchdayStage>
       )}
 
       {matchOpen && euro && !live && !game.gameOver && (
@@ -315,15 +618,17 @@ export function App() {
       )}
 
       {live && !liveEuro && !game.gameOver && (
-        <LiveMatch
-          game={game}
-          onChange={update}
-          onClose={() => setLive(false)}
-          onSummary={(id) => {
-            setLive(false);
-            setModals([{ type: 'match', id }]);
-          }}
-        />
+        <MatchdayStage game={game}>
+          <LiveMatch
+            game={game}
+            onChange={update}
+            onClose={() => setLive(false)}
+            onSummary={(id) => {
+              setLive(false);
+              setModals([{ type: 'match', id }]);
+            }}
+          />
+        </MatchdayStage>
       )}
 
       {matchOpen && match && !live && !game.gameOver && (
@@ -346,6 +651,7 @@ export function App() {
 
       {!live && !game.gameOver && modals.length === 0 && report && (
         <SeasonReportView report={report} onClose={closeReport}>
+          <SeasonCard game={game} season={report.season} compact />
           {game.scenario?.result && !game.scenario.result.seen && (
             <>
               <h3>Scénář: {scenarioDef(game.scenario.id).title} <span className="scenario-stars">{'★'.repeat(game.scenario.result.stars)}{'☆'.repeat(3 - game.scenario.result.stars)}</span></h3>
@@ -359,7 +665,7 @@ export function App() {
               {milestone.todo.length > 0 && (
                 <div className="milestone-todo">
                   {milestone.todo.map((x) => (
-                    <button key={x.label} onClick={() => { if (x.sub) setFinanceTab({ tab: x.sub, n: financeTab.n + 1 }); setTab(x.tab); closeReport(); }}>{x.label} ›</button>
+                    <button key={x.label} onClick={() => { legacyGo(x.tab, x.sub); closeReport(); }}>{x.label} ›</button>
                   ))}
                 </div>
               )}
@@ -391,7 +697,7 @@ export function App() {
                 <h3>Co teď udělat</h3>
                 <div className="milestone-todo">
                   {milestone.todo.map((t) => (
-                    <button key={t.label} onClick={() => { if (t.sub) setFinanceTab({ tab: t.sub, n: financeTab.n + 1 }); setTab(t.tab); setMilestone(null); }}>{t.label} ›</button>
+                    <button key={t.label} onClick={() => { legacyGo(t.tab, t.sub); setMilestone(null); }}>{t.label} ›</button>
                   ))}
                 </div>
               </>

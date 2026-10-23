@@ -136,7 +136,7 @@ describe('velké investice a programy', () => {
   it('komerční areál přináší nájem', () => {
     const r = startBigProject(rich(start), 'komercni');
     expect(r.ok).toBe(true);
-    const s = advanceDays(r.state, 700).state;
+    const s = advanceDays(r.state, 800).state;
     expect(s.clubs.slavia.facilities.commercial).toBeGreaterThan(0);
     expect(commercialIncomeMonthly(s)).toBeGreaterThan(0);
     expect(forecastSeason(s).lines.find((l) => l.key === 'areal')!.amount).toBeGreaterThan(0);

@@ -5,7 +5,9 @@ import { media } from './grey';
 import { squadOf } from './players';
 import type { Rng } from './rng';
 import { addTrophy } from './surroundings';
-import type { EuropeCompetition, EuropeEntry, GameState, Player } from './types';
+import type { EuropeCompetition, EuropeEntry, GameState, MatchResult, Player } from './types';
+import { euroMatchFacts, simulateEuroMatch } from './euromatch'; // V4
+import { matchFactLine } from './fanvoice'; // V4
 import { addNews, clamp, clubLabel } from './world';
 
 /**
@@ -131,6 +133,8 @@ export interface EuroMatchResult {
   prize?: number;
   /** Penalty (vy : soupeř). */
   penalties?: [number, number];
+  /** V4: celý zápas po minutách (sestavy, události, statistiky; vy jste domácí i na neutrální půdě). */
+  match?: MatchResult;
 }
 
 export interface EuroMatch {
@@ -145,7 +149,7 @@ export interface EuroMatch {
   tie?: number;
   leg?: 1 | 2;
   result?: EuroMatchResult;
-  /** Předkola: výsledek dvojzápasu je daný silou kádru při prvním zápase (skóre se odkryje v den zápasu). */
+  /** Starší uložené hry: předem daný výsledek předkola (nové zápasy se hrají po minutách, V4). */
   planned?: { own: number; opp: number; ownPens?: boolean };
 }
 
@@ -263,9 +267,9 @@ const QUAL_LEVELS: Record<EuropeCompetition, (1 | 2 | 3 | 4)[]> = { LM: [3, 4], 
 
 /** Dvojzápas předkola o ligovou fázi dané soutěže (k-tý termín). */
 function addQualifyingTie(state: GameState, rng: Rng, run: EuroRun, comp: EuropeCompetition, slot: number): EuroOpponent {
-  const p = leaguePhaseChance(europeStrength(state, run.clubId), comp);
-  // Soupeř odpovídá šanci: když je klub favorit, losuje slabšího a naopak.
-  const near = europeStrength(state, run.clubId) + (0.5 - p) * 10 + rng.normal(0, 1.5);
+  // V4: nasazení – silnější klub losuje slabšího soupeře; o postupu pak rozhodne poctivý dvojzápas.
+  const s = europeStrength(state, run.clubId);
+  const near = THRESHOLD[comp] - 0.6 * (s - THRESHOLD[comp]) + rng.normal(0, 1.5);
   const opponent = drawClub(rng, run, QUAL_LEVELS[comp], near);
   addTie(state, run, comp, `Play-off ${COMP_GEN[comp]}`, qualifyingSlots(run.season, comp)[slot], opponent, rng.chance(0.5));
   return opponent;
@@ -379,11 +383,6 @@ function expectedGoals(own: number, opp: number, home: boolean, neutral = false)
   return [1.3 * Math.exp(d), 1.3 * Math.exp(-d)];
 }
 
-function simScore(rng: Rng, own: number, opp: number, home: boolean, neutral = false): [number, number] {
-  const [a, b] = expectedGoals(own, opp, home, neutral);
-  return [Math.min(7, rng.poisson(a)), Math.min(7, rng.poisson(b))];
-}
-
 function minutes(rng: Rng, n: number): number[] {
   return Array.from({ length: n }, () => rng.int(1, 90)).sort((a, b) => a - b);
 }
@@ -413,25 +412,6 @@ function strengthOf(state: GameState, run: EuroRun): number {
   return europeStrength(state, run.clubId);
 }
 
-/** Předkola: výsledek dvojzápasu podle šance na ligovou fázi, skóre obou zápasů tomu odpovídá. */
-function planTie(state: GameState, rng: Rng, run: EuroRun, leg1: EuroMatch, leg2: EuroMatch): void {
-  const s = strengthOf(state, run);
-  const win = rng.chance(leaguePhaseChance(s, leg1.comp));
-  for (let i = 0; i < 300; i++) {
-    const a = simScore(rng, s, leg1.opponent.rating, leg1.home);
-    const b = simScore(rng, s, leg2.opponent.rating, leg2.home);
-    const own = a[0] + b[0];
-    const opp = a[1] + b[1];
-    if ((win && own >= opp) || (!win && own <= opp)) {
-      leg1.planned = { own: a[0], opp: a[1] };
-      leg2.planned = { own: b[0], opp: b[1], ownPens: own === opp ? win : undefined };
-      return;
-    }
-  }
-  leg1.planned = win ? { own: 1, opp: 0 } : { own: 0, opp: 1 };
-  leg2.planned = { own: 1, opp: 1 };
-}
-
 function penalties(rng: Rng, ownWins: boolean): [number, number] {
   const loser = rng.int(2, 4);
   const winner = loser + 1;
@@ -442,12 +422,16 @@ function penalties(rng: Rng, ownWins: boolean): [number, number] {
 function playMatch(state: GameState, rng: Rng, run: EuroRun, m: EuroMatch): void {
   const club = state.clubs[run.clubId];
   const s = strengthOf(state, run);
-  if (m.leg === 1 && run.phase === 'predkola' && !m.planned) {
-    const leg2 = run.matches.find((x) => x.tie === m.tie && x.leg === 2);
-    if (leg2) planTie(state, rng, run, m, leg2);
+  // V4: poctivý zápas po minutách (rozhodnutí v přenosu platí); starší uložené hry s předem daným výsledkem dohrají postaru.
+  let result: EuroMatchResult;
+  if (m.planned) {
+    const { own: o, opp: x } = m.planned;
+    result = { own: o, opp: x, scorers: pickScorers(state, rng, o), oppMinutes: minutes(rng, x) };
+  } else {
+    const sim = simulateEuroMatch(state, rng, run, m, prepEdge(state, m));
+    result = { own: sim.own, opp: sim.opp, scorers: sim.scorers, oppMinutes: sim.oppMinutes, match: sim.match };
   }
-  const [own, opp] = m.planned ? [m.planned.own, m.planned.opp] : simScore(rng, s + prepEdge(state, m), m.opponent.rating, m.home, m.neutral);
-  const result: EuroMatchResult = { own, opp, scorers: pickScorers(state, rng, own), oppMinutes: minutes(rng, opp) };
+  const { own, opp } = result;
   const venue = europeVenueFactor(club);
   if (m.home && !m.neutral) {
     // Evropský večer: vyprodáno a dražší vstupenky.
@@ -480,8 +464,9 @@ function playMatch(state: GameState, rng: Rng, run: EuroRun, m: EuroMatch): void
     club.reputation = clamp(club.reputation + (strong ? 0.2 : 0.08), 1, 99);
     club.fanMood = clamp(club.fanMood + 1, 0, 100);
   }
-  // Únava: středa/čtvrtek a hned víkend.
-  for (const p of squadOf(state, run.clubId).sort((a, b) => b.overall - a.overall).slice(0, 14)) p.fitness = Math.max(50, p.fitness - 8);
+  // Únava: u zápasu po minutách ji spočítá simulace (odehrané minuty), u starších her odhadem.
+  if (!result.match) for (const p of squadOf(state, run.clubId).sort((a, b) => b.overall - a.overall).slice(0, 14)) p.fitness = Math.max(50, p.fitness - 8);
+  if (state.matchPlan?.fixtureId === m.id) state.matchPlan = undefined;
   matchNews(state, run, m);
 }
 
@@ -522,9 +507,12 @@ function matchNews(state: GameState, run: EuroRun, m: EuroMatch): void {
   const r = m.result!;
   const outcome = r.own > r.opp ? 'výhra' : r.own === r.opp ? 'remíza' : 'prohra';
   const scorers = r.scorers.map((x) => `${state.players[x.playerId]?.lastName ?? '?'} ${x.minute}.`).join(', ');
+  // V4: fakta ze zápasu (střelci, penalty, karty, otočka, hráč zápasu), stejně jako u domácích zápasů.
+  const facts = euroMatchFacts(state, m);
+  const xg = r.match?.detail ? ` xG ${(m.home || m.neutral ? r.match.detail.home.xg : r.match.detail.away.xg).toFixed(1)} : ${(m.home || m.neutral ? r.match.detail.away.xg : r.match.detail.home.xg).toFixed(1)}.` : '';
   const parts = [
-    `${m.stage}, ${outcome}.`,
-    scorers ? `Góly: ${scorers}.` : '',
+    `${m.stage}, ${outcome}.${xg}`,
+    facts ? matchFactLine(facts) : scorers ? `Góly: ${scorers}.` : '',
     r.gate ? `Vyprodáno, ${r.attendance!.toLocaleString('cs-CZ')} diváků, vstupné ${mil(r.gate)}.` : '',
     r.prize ? `Prémie UEFA ${mil(r.prize)}.` : '',
   ];
@@ -534,6 +522,13 @@ function matchNews(state: GameState, run: EuroRun, m: EuroMatch): void {
     text: parts.filter(Boolean).join(' '),
     fixtureId: m.id,
   });
+  // V4: zranění a vyloučení vlastních hráčů v Evropě.
+  for (const e of r.match?.detail?.events ?? []) {
+    const p = e.clubId === run.clubId ? state.players[e.playerId] : undefined;
+    if (!p) continue;
+    if (e.type === 'zraneni') addNews(state, { kind: 'varovani', title: `Zranění v Evropě: ${p.firstName} ${p.lastName}`, text: `${e.note}. Mimo hru do ${p.injuredUntil?.split('-').reverse().join('. ')}.`, fixtureId: m.id, playerId: p.id });
+    if (e.type === 'cervena' || e.type === 'druha-zluta') addNews(state, { kind: 'info', title: `Červená karta v Evropě: ${p.firstName} ${p.lastName}`, text: 'Trest platí jen pro evropské poháry, v lize může hrát.', fixtureId: m.id, playerId: p.id });
+  }
 }
 
 /** Součet dvojzápasu z pohledu klubu majitele. */
@@ -733,4 +728,19 @@ export function lastEuroMatch(state: GameState): EuroMatch | undefined {
 /** Popisek dosaženého výsledku pro historii (např. „osmifinále Evropské ligy“). */
 export function europeBestLabel(e: EuropeEntry): string {
   return e.best ?? (e.result === 'predkola' ? EUROPE_LABEL.predkola : `ligová fáze: ${EUROPE_LABEL[e.result]}`);
+}
+
+// ---------- V3: údaje pro zobrazení (pavouk, tabulka ligové fáze, šance) – jen čtení ----------
+
+/** Konstanty evropských soutěží pro zobrazení a odhady v engine/cupview.ts. */
+export const EURO_VIEW = { LEAGUE_PHASE, QUALIFYING, NEXT, LEAGUE_POTS, KO_LEVELS, KO_ROUNDS, KO_ROUNDS_GEN, KO_PRIZE, PRIZE_WIN, PRIZE_DRAW, COMP_GEN } as const;
+
+/** Očekávané góly evropského zápasu (vy, soupeř) – pro odhad šancí. */
+export function euroExpectedGoals(own: number, opp: number, home: boolean, neutral = false): [number, number] {
+  return expectedGoals(own, opp, home, neutral);
+}
+
+/** Kolo jara zápasu (0 = play-off … 4 = finále). */
+export function euroKoRound(m: EuroMatch): number {
+  return koRound(m);
 }

@@ -1,4 +1,4 @@
-import { allFixtures } from './competitions';
+import { liveFixture } from './euromatch'; // V4
 import { matchesWord, ownMatchesSince, seasonFacts, type OwnMatchFacts } from './facts';
 import { forumMemory } from './forum';
 import { media } from './grey';
@@ -124,8 +124,7 @@ const zapasy = (n: number) => (n === 0 ? 'ani jeden zápas' : n === 1 ? 'jediný
 
 /** Hrál hráč v daném zápase? */
 export function playedIn(state: GameState, fixtureId: string, playerId: string): boolean {
-  const x = allFixtures(state).find((y) => y.fixture.id === fixtureId);
-  const d = x?.fixture.result?.detail;
+  const d = liveFixture(state, fixtureId)?.result?.detail; // V4: i evropské zápasy
   if (!d) return false;
   return [...d.home.lineup, ...d.home.bench, ...d.away.lineup, ...d.away.bench].some((l) => l.id === playerId && l.minutes > 0);
 }

@@ -224,6 +224,69 @@ export function seasonPromises(state: GameState): OwnerPledge[] {
   return (state.situations?.promises ?? []).filter((p) => p.made >= `${state.season}-07-01` || p.status === 'bezi');
 }
 
+// ---------- V4: starší sliby (engine/people.ts state.promises) přes jedno API ----------
+
+const POS_GEN: Record<Position, string> = { GK: 'brankáře', DF: 'obránce', MF: 'záložníka', FW: 'útočníka' };
+
+/** Starší slib z pohovoru nebo situace (posila trenérovi, rozpočet na přestupy) ve tvaru OwnerPledge. */
+export function legacyPledge(_state: GameState, p: NonNullable<GameState['promises']>[number]): OwnerPledge {
+  const role = p.role === 'reditel' ? 'řediteli' : 'trenérovi';
+  const text =
+    p.kind === 'posila'
+      ? `Posila na post ${p.position ? POS_GEN[p.position] : 'hráče'} (aspoň síla ${Math.round(p.bar ?? 0)}) pro trenéra`
+      : `Rozpočet na přestupy aspoň ${Math.round((p.value ?? 0) / 100_000) / 10} mil. Kč (slib ${role} z pohovoru)`;
+  return {
+    id: p.id,
+    kind: `starsi-${p.kind}`,
+    text,
+    metric: 'manual',
+    target: 1,
+    until: p.until,
+    made: p.made,
+    position: p.position,
+    known: p.known,
+    stake: 'trener',
+    weight: 1,
+    source: 'pohovor',
+    status: p.done ?? 'bezi',
+    resolved: p.done ? (p.resolved ?? p.until) : undefined,
+  };
+}
+
+/** Stav staršího slibu (posila: zda už přišla, rozpočet: aktuální výše). */
+function legacyStatus(state: GameState, p: NonNullable<GameState['promises']>[number], pledge: OwnerPledge): PromiseProgress {
+  const daysLeft = Math.max(0, daysBetween(state.date, p.until));
+  if (p.kind === 'posila') {
+    const signed = squad(state).find((x) => !p.known?.includes(x.id) && x.position === p.position && x.overall >= (p.bar ?? 0));
+    return { status: pledge.status, current: signed ? 1 : 0, target: 1, progress: signed ? 1 : 0, daysLeft, label: signed ? `Přišel ${pName(signed)}` : `Zatím nikdo, zbývá ${daysLeft} dní` };
+  }
+  const budget = own(state).policy.transferBudget;
+  const need = (p.value ?? 0) * 0.9;
+  return { status: pledge.status, current: budget, target: need, progress: need > 0 ? clamp(budget / need, 0, 1) : 1, daysLeft, label: `Rozpočet na přestupy ${fmt(budget)} (musí zůstat aspoň ${fmt(need)})` };
+}
+
+export interface PledgeView {
+  pledge: OwnerPledge;
+  status: PromiseProgress;
+  /** Starší slib z pohovoru (people.ts), ne z engine/situations.ts. */
+  legacy?: boolean;
+}
+
+/** Všechny sliby majitele pro kartu „Sliby majitele“: běžící (nejbližší termín první) a nedávno vyhodnocené. */
+export function ownerPledges(state: GameState): { active: PledgeView[]; done: PledgeView[] } {
+  const views: PledgeView[] = [
+    ...seasonPromises(state).map((p) => ({ pledge: p, status: promiseStatus(state, p) })),
+    ...(state.promises ?? []).map((p) => {
+      const pledge = legacyPledge(state, p);
+      return { pledge, status: legacyStatus(state, p, pledge), legacy: true };
+    }),
+  ];
+  return {
+    active: views.filter((v) => v.pledge.status === 'bezi').sort((a, b) => (a.pledge.until < b.pledge.until ? -1 : 1)),
+    done: views.filter((v) => v.pledge.status !== 'bezi').sort((a, b) => ((a.pledge.resolved ?? a.pledge.until) < (b.pledge.resolved ?? b.pledge.until) ? 1 : -1)),
+  };
+}
+
 /** Stav slibu podle dat hry (nemění stav). */
 export function promiseStatus(state: GameState, p: OwnerPledge): PromiseProgress {
   const daysLeft = Math.max(0, daysBetween(state.date, p.until));
@@ -427,6 +490,7 @@ interface Candidate {
 const SIT_COOLDOWN: Record<string, number> = {
   sucho: 35, brankar: 40, cervena: 21, 'bez-vyhry': 45, odchovanec: 45, 'zraneni-okno': 30, agent: 40, verdikt: 30, venku: 60,
   jistota: 365, 'novy-trener': 60, hattrick: 30, debakl: 30, otocka: 21, serie: 40, sebeuspokojeni: 60, stridani: 35, 'pozdni-gol': 45,
+  penalta: 45, // V4
   nejhorsi: 30, 'mladi-minuty': 90, pad: 45, 'zraneni-zapas': 45, xg: 30, 'bez-golu': 45, obrana: 45, skok: 30,
 };
 const GROUP_COOLDOWN = 21;
@@ -522,6 +586,25 @@ function collect(s: GameState, m: OwnMatchFacts | undefined, f: SeasonFacts): Ca
             ],
           }),
         });
+    }
+    // V4: neproměněná penalta v zápase bez výhry.
+    const mp = m.missedPenalty;
+    if (mp && m.outcome !== 'V' && s.players[mp.playerId]?.clubId === s.owner.clubId) {
+      const fact = `${mp.name} neproměnil v ${mp.minute}. minutě penaltu (${mp.saved ? 'chytil ji brankář' : 'mimo branku'}; ${res})`;
+      c.push({
+        id: 'penalta', key: `penalta:${m.fixtureId}`, severity: 40 + (m.outcome === 'P' ? 6 : 0) + (big ? 10 : 0), fact,
+        build: () => ({
+          title: `Neproměněná penalta: ${mp.name}`,
+          text: `${fact}. Fanoušci na sítích řeší, kdo má penalty kopat, a hráč je po zápase zdrcený. Trenér čeká, jestli se k tomu vyjádříte.`,
+          playerId: mp.playerId,
+          defaultOption: 'trener',
+          options: [
+            { id: 'podrzet', label: 'Veřejně hráče podržet', hint: 'Morálka hráče +8, média −1' },
+            { id: 'exekutor', label: 'Požádat trenéra o jiného exekutora', hint: 'Morálka hráče −6, důvěra trenéra −2, fanoušci +2' },
+            { id: 'trener', label: 'Nechat to na trenérovi', hint: 'Důvěra trenéra +1, morálka hráče −2' },
+          ],
+        }),
+      });
     }
     if (m.outcome === 'P' && m.ga - m.gf >= 3) {
       const fact = `Prohra ${res}`;
@@ -992,6 +1075,25 @@ const RESOLVERS: Record<string, Resolver> = {
     }
     morale(s, p.id, -3);
     trust(s, 1);
+    return 'Trenér si to s hráčem vyřeší sám.';
+  },
+  penalta: (s, e, o) => {
+    // V4: po neproměněné penaltě.
+    const p = e.playerId ? s.players[e.playerId] : undefined;
+    if (!p || p.clubId !== s.owner.clubId) return 'Hráč už v klubu není.';
+    if (o === 'podrzet') {
+      morale(s, p.id, 8);
+      media(s, -1);
+      return `Majitel se za ${pName(p)} veřejně postavil. Hráč se oklepal.`;
+    }
+    if (o === 'exekutor') {
+      morale(s, p.id, -6);
+      trust(s, -2);
+      fans(s, 2);
+      return `Penalty bude kopat někdo jiný. ${pName(p)} to nese těžce, trenér nemá rád zásahy do kabiny.`;
+    }
+    trust(s, 1);
+    morale(s, p.id, -2);
     return 'Trenér si to s hráčem vyřeší sám.';
   },
   hattrick: (s, e, o) => {

@@ -9,6 +9,7 @@ import { computeTable } from './standings';
 import type { CoachStyle, Cup, Fixture, GameEvent, GameState, MatchPlan } from './types';
 import { clamp, clubLabel, competitionOf, hash01, tierOf } from './world';
 import { resolvePressConference } from './press';
+import { trainingMatchBonus } from './training'; // V1
 
 /**
  * Zápasový den majitele: o co v zápase jde (sázka), příprava s trenérem a zásahy majitele,
@@ -190,11 +191,11 @@ export interface PlanEffect {
 /** Jak plán majitele ovlivní jeho stranu v zápase. */
 export function planEffect(state: GameState, f: Fixture): PlanEffect {
   const plan = state.matchPlan;
-  const none = { bonus: 0, ticketFactor: 1, homeEdge: 0 };
+  const none = { bonus: trainingMatchBonus(state, f), ticketFactor: 1, homeEdge: 0 }; // V1: plán tréninku
   if (!plan || plan.fixtureId !== f.id) return none;
   const home = f.homeId === state.owner.clubId;
   const accepted = plan.coachAccepted !== false;
-  let bonus = 0;
+  let bonus = trainingMatchBonus(state, f); // V1
   if (plan.bonus) bonus += 1;
   if (plan.visit) bonus += state.owner.trust.trener >= 50 ? 0.5 : -0.5;
   if (plan.rotate && accepted) bonus -= 1.5;
@@ -215,11 +216,12 @@ export function halftimeAdjust(state: GameState, f: Fixture): { style?: CoachSty
   return plan.halftime === 'riskovat' ? { style: 'utocny', bonus: 0.6 } : { style: 'defenzivni', bonus: 0.3 };
 }
 
-export function setHalftime(prev: GameState, choice: NonNullable<MatchPlan['halftime']>): ActionResult {
-  const next = nextOwnFixture(prev);
-  if (!next) return { state: prev, ok: false, message: 'Žádný zápas.' };
+export function setHalftime(prev: GameState, choice: NonNullable<MatchPlan['halftime']>, fixtureId?: string): ActionResult {
+  // V4: fixtureId = konkrétní zápas (např. evropský), jinak příští domácí.
+  const id = fixtureId ?? nextOwnFixture(prev)?.fixture.id;
+  if (!id) return { state: prev, ok: false, message: 'Žádný zápas.' };
   const state = structuredClone(prev);
-  const plan: MatchPlan = state.matchPlan?.fixtureId === next.fixture.id ? state.matchPlan : { fixtureId: next.fixture.id };
+  const plan: MatchPlan = state.matchPlan?.fixtureId === id ? state.matchPlan : { fixtureId: id };
   plan.halftime = choice;
   state.matchPlan = plan;
   return { state, ok: true, message: '' };

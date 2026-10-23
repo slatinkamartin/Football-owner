@@ -58,3 +58,12 @@ export * from './narrative'; // R3
 export * from './forum'; // R2
 export * from './fanvoice'; // R2
 export * from './situations'; // R1
+export * from './cupview'; // V3
+export * from './agenda'; // V1
+export * from './advisor'; // V1
+export * from './characters'; // V1
+export * from './projects'; // V1
+export * from './training'; // V1
+export * from './ownerlevel'; // V1
+export * from './hunt'; // V1
+export * from './euromatch'; // V4

@@ -13,14 +13,15 @@ import { homeEdgeScore, ratingText,
 } from '../../engine';
 import { num } from '../format';
 import { ClubLink, PlayerLink, Sheet } from '../nav';
-import { findEuroMatch, isEuroMatchId } from '../../engine';
+import { findEuroMatch, isEuroMatchId, liveClubName, liveFixture, tieAggregate } from '../../engine';
 import { EuroMatchSheet } from './EuropeExtras';
 
 export function findFixture(game: GameState, id: string): { fixture: Fixture; name: string; roundLabel: string } | undefined {
   // W1: evropské zápasy klubu majitele (náhled je v EuroMatchSheet).
   if (isEuroMatchId(id)) {
     const eu = findEuroMatch(game, id);
-    return eu?.match.result ? { fixture: { id, round: 0, date: eu.match.date, homeId: game.owner.clubId, awayId: game.owner.clubId }, name: eu.match.comp, roundLabel: eu.match.stage } : undefined;
+    // V4: zápas po minutách jako Fixture (soupeř má id s předponou euo:).
+    return eu?.match.result ? { fixture: eu.match.result.match ? liveFixture(game, id)! : { id, round: 0, date: eu.match.date, homeId: game.owner.clubId, awayId: game.owner.clubId }, name: eu.match.comp, roundLabel: eu.match.stage } : undefined;
   }
   const x = allFixtures(game).find((a) => a.fixture.id === id);
   if (!x) return undefined;
@@ -29,7 +30,12 @@ export function findFixture(game: GameState, id: string): { fixture: Fixture; na
 }
 
 export function MatchDetail({ game, fixtureId, onClose, onBack }: { game: GameState; fixtureId: string; onClose: () => void; onBack?: () => void }) {
-  if (isEuroMatchId(fixtureId)) return <EuroMatchSheet game={game} id={fixtureId} onClose={onClose} onBack={onBack} />;
+  if (isEuroMatchId(fixtureId)) {
+    // V4: evropský zápas odehraný po minutách má sestavy, statistiky a průběh.
+    const ef = liveFixture(game, fixtureId);
+    if (ef?.result?.detail) return <EuroDetailSheet game={game} f={ef} onClose={onClose} onBack={onBack} />;
+    return <EuroMatchSheet game={game} id={fixtureId} onClose={onClose} onBack={onBack} />;
+  }
   const found = findFixture(game, fixtureId);
   if (!found) return null;
   const { fixture: f, name: compName, roundLabel } = found;
@@ -178,6 +184,7 @@ function Stats({ home, away }: { home: TeamMatchStats; away: TeamMatchStats }) {
     ['Ofsajdy', home.offsides, away.offsides, String],
     ['Žluté karty', home.yellows, away.yellows, String],
     ['Červené karty', home.reds, away.reds, String],
+    ...(home.pensMissed || away.pensMissed ? [['Neproměněné penalty', home.pensMissed ?? 0, away.pensMissed ?? 0, String] as [string, number, number, (v: number) => string]] : []),
   ];
   return (
     <div className="match-stats">
@@ -208,6 +215,7 @@ const EVENT_LABEL: Record<MatchEvent['type'], string> = {
   'druha-zluta': '2. ŽK',
   stridani: 'Střídání',
   zraneni: 'Zranění',
+  'penalta-mimo': 'Penalta ✗',
 };
 
 function Timeline({ events, homeId, nameOf }: { events: MatchEvent[]; homeId: string; nameOf: (id?: string) => ReactNode }) {
@@ -233,6 +241,11 @@ function Timeline({ events, homeId, nameOf }: { events: MatchEvent[]; homeId: st
               </>
             )}
             {(e.type === 'zluta' || e.type === 'cervena' || e.type === 'druha-zluta') && nameOf(e.playerId)}
+            {e.type === 'penalta-mimo' && (
+              <>
+                Neproměněná penalta: {nameOf(e.playerId)} {e.note && <span className="muted">({e.note})</span>}
+              </>
+            )}
             {e.type === 'zraneni' && (
               <>
                 {nameOf(e.playerId)} <span className="muted">({e.note})</span>
@@ -302,5 +315,44 @@ function Lineup({ title, team, events, potm }: { title: string; team: TeamMatchS
       )}
       {unused.length > 0 && <p className="muted small">Nenastoupili: {unused.map((u) => u.name).join(', ')}</p>}
     </div>
+  );
+}
+
+/** V4: náhled evropského zápasu odehraného po minutách (bez erbu soupeře, ten ve hře není). */
+function EuroDetailSheet({ game, f, onClose, onBack }: { game: GameState; f: Fixture; onClose: () => void; onBack?: () => void }) {
+  const found = findEuroMatch(game, f.id);
+  const r = f.result!;
+  const d = r.detail!;
+  const names = new Map<string, string>();
+  for (const line of [...d.home.lineup, ...d.home.bench, ...d.away.lineup, ...d.away.bench]) names.set(line.id, line.name);
+  const nameOf = (id?: string): ReactNode => (id && game.players[id] ? <PlayerLink id={id}>{names.get(id) ?? `${game.players[id].firstName} ${game.players[id].lastName}`}</PlayerLink> : id ? (names.get(id) ?? '') : '');
+  const m = found?.match;
+  const agg = m && m.leg === 2 && m.tie !== undefined && !m.neutral && found ? tieAggregate(found.run, m.tie) : undefined;
+  const homeName = liveClubName(game, f.homeId);
+  const awayName = liveClubName(game, f.awayId);
+  return (
+    <Sheet label="Náhled evropského zápasu" onClose={onClose} onBack={onBack}>
+      <p className="muted small">{m?.stage} · {formatDate(f.date, true)}{m?.neutral ? ' · neutrální půda' : ''}</p>
+      <div className="scoreboard">
+        <div className="sb-team"><strong>{homeName}</strong></div>
+        <div className="sb-score">{r.homeGoals}:{r.awayGoals}</div>
+        <div className="sb-team"><strong>{awayName}</strong></div>
+      </div>
+      {r.penalties && <p className="center"><strong>Penalty {r.penalties[0]}:{r.penalties[1]}</strong></p>}
+      {agg && <p className="center muted small">Celkové skóre dvojzápasu {agg.own}:{agg.opp} (z vašeho pohledu)</p>}
+      <p className="center muted small">
+        xG {d.home.xg.toFixed(2)} : {d.away.xg.toFixed(2)} · {num(r.attendance)} diváků
+        {m?.result?.gate ? ` · vstupné ${num(m.result.gate)} Kč` : ''}
+        {m?.result?.prize ? ` · prémie UEFA ${num(m.result.prize)} Kč` : ''}
+        {d.potm && <> · Hráč zápasu: <strong>{nameOf(d.potm)}</strong></>}
+      </p>
+      <Stats home={d.home} away={d.away} />
+      <h3>Průběh</h3>
+      <Timeline events={d.events} homeId={f.homeId} nameOf={nameOf} />
+      <div className="lineups">
+        <Lineup title={homeName} team={d.home} events={d.events.filter((e) => e.clubId === f.homeId)} potm={d.potm} />
+        <Lineup title={awayName} team={d.away} events={d.events.filter((e) => e.clubId === f.awayId)} potm={d.potm} />
+      </div>
+    </Sheet>
   );
 }

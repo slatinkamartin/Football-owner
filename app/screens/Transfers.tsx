@@ -43,9 +43,9 @@ import { money } from '../format';
 import { ForeignMarket } from './ForeignMarket';
 import { AgentsCard, DeadlineCard, DominoCard, WatchlistCard } from './MarketExtras';
 
-type Props = { game: GameState; onChange: (g: GameState) => void };
+type Props = { game: GameState; onChange: (g: GameState) => void; /** V2: části, které App ukazuje jako samostatné podzáložky Trhu. */ omit?: TransferTab[] };
 
-export function Transfers({ game, onChange }: Props) {
+export function Transfers({ game, onChange, omit = [] }: Props) {
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const apply = (r: ActionResult) => {
     if (r.state !== game) onChange(r.state);
@@ -60,14 +60,14 @@ export function Transfers({ game, onChange }: Props) {
   const [sub, setSub] = useState<TransferTab>('navrhy');
   const pending = game.market.proposals.length + game.market.offers.length;
   const watched = game.watchlist?.length ?? 0;
-  const tabs: { id: TransferTab; label: string }[] = [
+  const tabs = ([
     { id: 'navrhy', label: `Návrhy a nabídky${pending ? ` (${pending})` : ''}` },
     { id: 'hledat', label: 'Hledat' },
     { id: 'sledovani', label: `Sledovaní${watched ? ` (${watched})` : ''}` },
     { id: 'agenti', label: 'Agenti' },
     { id: 'zahranici', label: 'Zahraničí' },
     { id: 'historie', label: 'Historie' },
-  ];
+  ] as { id: TransferTab; label: string }[]).filter((t) => !omit.includes(t.id));
 
   return (
     <div className="stack">

@@ -1,8 +1,6 @@
 import { useState } from 'react';
-import { competitionOf, cupPath, formatShortDate, workload, type Cup, type Fixture, type GameState } from '../../engine';
+import { competitionOf, formatShortDate, workload, type Cup, type Fixture, type GameState } from '../../engine';
 import { Badge, Meter } from '../components';
-import { EuropeSection } from './EuropeExtras';
-import { money } from '../format';
 import { num } from '../format';
 import { Chips, DataTable, useStoredState } from '../table';
 import { ClubLink } from '../nav';
@@ -36,7 +34,6 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
       .join(', ');
 
   const w = workload(game);
-  const path = cupPath(game);
   return (
     <div className="stack">
     <div className="grid two">
@@ -57,24 +54,8 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
         </dl>
         <p className="muted small">{w.advice} Rotaci doporučíte trenérovi v přípravě před zápasem. Šíře kádru a medicína rozhodují, jak zátěž tým unese.</p>
       </section>
-      {path.length > 0 && (
-        <section className="card">
-          <h2>Cesta pohárem</h2>
-          <ul className="plain cup-path">
-            {path.map((s) => (
-              <li key={s.name} className={`cup-${s.status}`}>
-                <span className="cup-round-name">{s.name}</span>
-                <span className="muted small">{formatShortDate(s.date)}</span>
-                <span className="cup-text">{s.text}</span>
-                <span className="num small">{money(s.prize)}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="muted small">Prémie za postup do kola. U pohárového zápasu se vás hra zeptá na prémii hráčům a vstupné.</p>
-        </section>
-      )}
+      {/* V2: poháry a Evropa (CupProgressCard, pavouk, tabulka ligové fáze, los, historie) jsou v Liga › Pohár a Evropa. */}
     </div>
-    <EuropeSection game={game} onOpenMatch={onOpenMatch} />
     <div className="grid two">
       <section className="card">
         <h2>Zápasy klubu</h2>
@@ -164,7 +145,7 @@ export function Matches({ game, onOpenMatch }: { game: GameState; onOpenMatch: (
         </ul>
       </section>
     </div>
-    {Object.values(game.cups).map((cup) => (
+    {Object.values(game.cups).filter((cup) => cup.kind !== 'pohar').map((cup) => (
       <CupSection key={cup.id} game={game} cup={cup} onOpenMatch={onOpenMatch} />
     ))}
     </div>

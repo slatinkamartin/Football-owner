@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import pack from '../../data/cz-zaklad/pack.json';
 import rosterCsv from '../../data/soupisky/hraci.csv?raw';
-import { careerAllows, DIFFICULTY, parseRosterCsv, rostersByClub, type RosterRow, newCareerGame, newGame, newScenarioGame, SCENARIOS, type DataPack, type Difficulty, type GameState, type ScenarioId } from '../../engine';
+import { careerAllows, clubPrices, sharePurchasePrice, DIFFICULTY, parseRosterCsv, rostersByClub, type RosterRow, newCareerGame, newGame, newScenarioGame, SCENARIOS, type DataPack, type Difficulty, type GameState, type ScenarioId } from '../../engine';
 import { listRosterSets, loadCareer, saveCareer, type RosterSet } from '../storage';
 import { RosterEditor } from './RosterEditor';
 import { money, num } from '../format';
@@ -34,6 +34,9 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
   }, []);
   const chosenSet = sets.find((s) => s.id === source);
   const rosters = source === 'db' ? builtinRosters : source === 'file' ? customRosters?.rows : chosenSet?.rows;
+  // V4: kupní ceny klubů (hodnota klubu), v kariéře se platí z osobních peněz podle podílu.
+  const prices = useMemo(() => (mode === 'scenar' ? {} : clubPrices(czPack, difficulty, rosters?.length ? rosters : undefined)), [mode, difficulty, rosters]);
+  const shareCost = (id: string) => sharePurchasePrice(prices[id] ?? 0, ownerShare);
   const describe = (rows: RosterRow[]) => `${rows.length} hráčů z ${rostersByClub(rows).size} klubů`;
 
   const start = () => {
@@ -44,7 +47,7 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
     }
     if (!clubId) return;
     if (mode === 'kariera' && career) {
-      onStart(newCareerGame(czPack, career, { clubId, difficulty, ownerShare, rosters: rosters?.length ? rosters : undefined }));
+      onStart(newCareerGame(czPack, career, { clubId, difficulty, ownerShare, rosters: rosters?.length ? rosters : undefined, price: prices[clubId] }));
       return;
     }
     onStart(newGame(czPack, { clubId, ownerName: name, difficulty, ownerShare, rosters: rosters?.length ? rosters : undefined }));
@@ -67,7 +70,13 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
       />
     );
   }
-  const locked = (reputation: number) => (mode === 'kariera' ? careerAllows(career ?? undefined, reputation) : undefined);
+  const locked = (id: string, reputation: number) => {
+    if (mode !== 'kariera') return undefined;
+    const why = careerAllows(career ?? undefined, reputation);
+    if (why) return why;
+    const cost = shareCost(id);
+    return career && cost > career.wallet ? `Na ${Math.round(ownerShare * 100)} % klubu potřebujete ${money(cost)}, máte ${money(career.wallet)}.` : undefined;
+  };
 
   return (
     <div className="app newgame">
@@ -214,7 +223,8 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
 
       {mode !== 'scenar' && <section className="card">
         <h2>Vyberte klub</h2>
-        {mode === 'kariera' && <p className="muted small">Některé kluby chtějí majitele s úspěchy nebo dobrou pověstí. U zamčených klubů je napsané proč.</p>}
+        {mode === 'kariera' && <p className="muted small">Klub kupujete z osobních peněz: zaplatíte hodnotu klubu podle podílu. Některé kluby chtějí majitele s úspěchy nebo dobrou pověstí. U zamčených klubů je napsané proč.</p>}
+        {mode === 'volna' && <p className="muted small">Hodnota klubu je jen pro představu: ve volné hře klub dostanete se startovním kapitálem podle obtížnosti.</p>}
         {czPack.competitions.map((comp) => (
           <div key={comp.id} className="club-group">
             <h3>{comp.fullName ?? comp.name}</h3>
@@ -223,13 +233,19 @@ export function NewGame({ onStart, outdatedSave }: { onStart: (game: GameState) 
                 .filter((c) => c.competition === comp.id)
                 .sort((a, b) => b.reputation - a.reputation)
                 .map((c) => {
-                  const lock = locked(c.reputation);
+                  const lock = locked(c.id, c.reputation);
                   return (
                     <button key={c.id} className={`club-card ${clubId === c.id ? 'selected' : ''}${lock ? ' locked' : ''}`} disabled={!!lock} title={lock} onClick={() => setClubId(c.id)}>
                       <span className="crest" style={{ background: c.colors[0], borderColor: c.colors[1] }} />
                       <span className="club-card-text">
                         <strong>{c.name}</strong>
                         <span>Pověst {c.reputation} · {c.stadium.name}, {num(c.stadium.capacity)} míst</span>
+                        {prices[c.id] !== undefined && (
+                          <span className="club-price">
+                            Hodnota klubu {money(prices[c.id])}
+                            {mode === 'kariera' ? ` · váš podíl stojí ${money(shareCost(c.id))}` : ''}
+                          </span>
+                        )}
                         {lock && <span className="club-lock">Zamčeno: {lock}</span>}
                       </span>
                     </button>

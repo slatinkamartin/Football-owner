@@ -8,6 +8,8 @@ export interface Nav {
   negotiate: (playerId: string) => void;
   /** Přidat nebo odebrat hráče ze sledovaných. */
   watch?: (playerId: string) => void;
+  /** V2: přejít na záložku/podzáložku (např. 'tym/trenink', 'klub/fanousci' nebo staré 'kadr'). */
+  go?: (target: string, sub?: string) => void;
 }
 
 export const NavContext = createContext<Nav>({ open: () => {}, negotiate: () => {} });

@@ -33,13 +33,13 @@ import { Badge, Meter, Notice } from '../components';
 import { money } from '../format';
 import { VoteInfo } from '../VoteInfo';
 
-type Props = { game: GameState; onChange: (g: GameState) => void };
+type Props = { game: GameState; onChange: (g: GameState) => void; /** V2: karty, které App ukazuje v jiné podzáložce (Klub › Fanoušci, Sítě). */ hide?: ('social' | 'ultras' | 'city' | 'press')[] };
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 const width = (v: number) => `${v * 100}%`;
 const SHARE_COLORS = ['var(--accent)', '#6b8ccf', '#c9a227', '#9a6fc4', '#cf6b6b', '#5aa5a5'];
 
-export function Owner({ game, onChange }: Props) {
+export function Owner({ game, onChange, hide = [] }: Props) {
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const apply = (r: ActionResult) => {
@@ -63,15 +63,15 @@ export function Owner({ game, onChange }: Props) {
         <OwnerRatingCard game={game} />
         <RivalsCard game={game} />
       </div>
-      <SocialCard game={game} onResult={apply} />{/* W2 */}
-      <PressMemoryCard game={game} />{/* R3 */}
+      {!hide.includes('social') && <SocialCard game={game} onResult={apply} />}{/* W2 */}
+      {!hide.includes('press') && <PressMemoryCard game={game} />}{/* R3 */}
       <PromisesCard game={game} />{/* R1 */}
 
       <div className="grid two">
         <BusinessCard game={game} onResult={apply} />
         <HallOfFame game={game} />
-        <CityCard game={game} onResult={apply} />
-        <UltrasCard game={game} />
+        {!hide.includes('city') && <CityCard game={game} onResult={apply} />}
+        {!hide.includes('ultras') && <UltrasCard game={game} />}
         <OwnerW3Cards game={game} />
       </div>
 

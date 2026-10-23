@@ -67,6 +67,9 @@ export function EuropeSection({ game, onOpenMatch }: { game: GameState; onOpenMa
           {' '}Domácí evropské večery jsou vyprodané (vstupné ×2,5), za výhru a remízu v ligové fázi platí UEFA prémie.
         </p>
       )}
+      {stages.length > 0 && (
+      <details className="cup-others">
+      <summary className="muted small">Všechny evropské zápasy ({run?.matches.length ?? 0}) – kliknutím na zápas otevřete náhled</summary>
       {stages.map((s) => (
         <div key={s.stage} className="cup-round">
           <h3>
@@ -99,6 +102,8 @@ export function EuropeSection({ game, onOpenMatch }: { game: GameState; onOpenMa
           </ul>
         </div>
       ))}
+      </details>
+      )}
       {history.length > 0 && (
         <p className="muted small">
           Minulé ročníky: {history.slice(-5).reverse().map((e) => `${e.season}/${String(e.season + 1).slice(2)} ${europeBestLabel(e)}`).join(' · ')}

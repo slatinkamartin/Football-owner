@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   advanceDays,
-  allFixtures,
   APPROACH_LABEL,
   choreoCost,
   clubLabel,
@@ -30,6 +29,11 @@ import {
   type GameState,
   type MatchEvent,
   type MatchPlan,
+  type Fixture,
+  liveClubName,
+  liveFixture,
+  livePlayerName,
+  nextLiveTarget,
 } from '../../engine';
 import { Badge } from '../components';
 import { useNav } from '../nav';
@@ -86,7 +90,7 @@ export function MatchPrep({ game, onChange, onLive, compact }: { game: GameState
           <input type="checkbox" checked={!!plan.bonus} onChange={(e) => apply(setMatchPlan(game, { bonus: e.target.checked ? matchBonusAmount(game) : 0 }))} />
           <span>Mimořádná prémie za výhru {money(matchBonusAmount(game))} (vyšší nasazení)</span>
         </label>
-        {bigHome && <p className="muted small">Vstupné, kotel a choreo nastavujete na kartě velkého zápasu na Přehledu.</p>}
+        {bigHome && <p className="muted small">Vstupné, kotel a choreo nastavujete na kartě velkého zápasu na domově Týden.</p>}
         {next.home && !bigHome && (
           <div className="prep-row">
             <span>Akce pro fanoušky</span>
@@ -183,17 +187,17 @@ export function MatchDialog({ game, onChange, onClose, onResult, onLive }: { gam
   );
 }
 
-function eventText(game: GameState, e: MatchEvent): string {
-  const p = game.players[e.playerId];
-  const name = p ? `${p.firstName} ${p.lastName}` : '';
-  const club = clubLabel(game, e.clubId);
+function eventText(game: GameState, e: MatchEvent, f?: Fixture): string {
+  // V4: jména i u evropského soupeře (hráči nejsou ve hře, jsou jen v sestavě zápasu).
+  const name = livePlayerName(game, f, e.playerId);
+  const club = liveClubName(game, e.clubId);
   if (e.type === 'gol') return `GÓL! ${name} (${club})${e.note ? `, ${e.note}` : ''}`;
   if (e.type === 'zluta') return `Žlutá karta: ${name} (${club})`;
   if (e.type === 'cervena' || e.type === 'druha-zluta') return `Červená karta: ${name} (${club})`;
   if (e.type === 'zraneni') return `Zranění: ${name} (${club})`;
+  if (e.type === 'penalta-mimo') return `Penalta neproměněna: ${name} (${club})${e.note ? `, ${e.note}` : ''}`;
   if (e.type === 'stridani') {
-    const o = e.otherId ? game.players[e.otherId] : undefined;
-    return `Střídání ${club}: ${o ? `${o.firstName} ${o.lastName}` : ''} za ${name}`;
+    return `Střídání ${club}: ${livePlayerName(game, f, e.otherId)} za ${name}`;
   }
   return name;
 }
@@ -206,7 +210,7 @@ type LiveStop = { key: string; minute: number; kind: 'pulka' } | { key: string; 
  * Do bodu zlomu je zápas stejný (stejná náhoda), volba platí od další minuty, takže rozhodnutí je poctivé.
  * Když zápas není zítra, hra se k němu nejdřív posune.
  */
-export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameState; onChange: (g: GameState) => void; onClose: () => void; onSummary: (fixtureId: string) => void }) {
+export function LiveMatch({ game, onChange, onClose, onSummary, euro }: { game: GameState; onChange: (g: GameState) => void; onClose: () => void; onSummary: (fixtureId: string) => void; /** V4: přenos evropského zápasu klubu majitele. */ euro?: boolean }) {
   const [eve, setEve] = useState<GameState | undefined>();
   const [work, setWork] = useState<GameState | undefined>();
   const [sim, setSim] = useState<GameState | undefined>();
@@ -220,16 +224,16 @@ export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameSt
 
   // Posun na den před zápasem a přehrání zápasu na kopii.
   useEffect(() => {
-    const next = nextOwnFixture(game);
+    const next = nextLiveTarget(game, euro); // V4: domácí i evropský zápas
     if (!next) {
       onClose();
       return;
     }
-    const d = daysBetween(game.date, next.fixture.date);
+    const d = daysBetween(game.date, next.date);
     const e = d > 1 ? advanceDays(game, d - 1).state : game;
     if (e !== game) onChange(e);
     const played = advanceDays(e, 1).state;
-    const f = allFixtures(played).find((x) => x.fixture.id === next.fixture.id)?.fixture;
+    const f = liveFixture(played, next.id);
     if (!f?.result) {
       onClose();
       return;
@@ -242,7 +246,7 @@ export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameSt
   }, []);
 
   const own = game.owner.clubId;
-  const fixture = sim && fixtureId ? allFixtures(sim).find((x) => x.fixture.id === fixtureId)?.fixture : undefined;
+  const fixture = sim && fixtureId ? liveFixture(sim, fixtureId) : undefined;
   const events = fixture?.result?.detail?.events ?? [];
   const bm = eve?.bigMatch?.id === fixtureId && !eve?.bigMatch?.settled ? work?.bigMatch : undefined;
   const moments = eve && bm ? scheduledMoments(eve, bm) : [];
@@ -285,7 +289,7 @@ export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameSt
   if (!eve || !work || !sim || !fixture) return null;
 
   const decide = (stop: LiveStop, choice: string, label: string) => {
-    const next = stop.kind === 'pulka' ? setHalftime(work, choice as 'drzet' | 'riskovat' | 'branit').state : recordLiveChoice(work, stop.moment.kind, stop.minute, choice);
+    const next = stop.kind === 'pulka' ? setHalftime(work, choice as 'drzet' | 'riskovat' | 'branit', fixtureId).state : recordLiveChoice(work, stop.moment.kind, stop.minute, choice);
     setWork(next);
     setSim(advanceDays(next, 1).state);
     setDone((d) => [...d, stop.key]);
@@ -317,22 +321,23 @@ export function LiveMatch({ game, onChange, onClose, onSummary }: { game: GameSt
   const feed = [
     ...visible.map((e, i) => ({ minute: e.minute, order: 1, key: `e${i}`, node: (
       <li key={`e${i}`} className={e.type === 'gol' ? `goal ${e.clubId === own ? 'own-goal' : 'opp-goal'}` : ''}>
-        <span className="tl-min">{e.minute}'</span> {eventText(eve, e)}
+        <span className="tl-min">{e.minute}'</span> {eventText(eve, e, fixture)}
         {e.type === 'gol' && bm && <span className="cry">{goalCry(bm, e.clubId === own, e.minute, ownGoalsBy(e.minute, i, true), ownGoalsBy(e.minute, i, false))}</span>}
       </li>
     ) })),
     ...notes.map((n, i) => ({ minute: n.minute, order: 2, key: `n${i}`, node: <li key={`n${i}`} className={n.cls}><span className="tl-min">{n.minute}'</span> {n.text}</li> })),
   ].sort((a, b) => a.minute - b.minute || a.order - b.order);
-  const phase = finished ? 'Konec zápasu' : pause?.kind === 'pulka' ? 'Poločas' : minute === 0 ? 'Nástup týmů' : `${minute}. minuta`;
+  const pens = fixture.result?.penalties; // V4: rozstřel po dvojzápasu
+  const phase = finished ? `Konec zápasu${pens ? ` (penalty ${pens[0]}:${pens[1]})` : ''}` : pause?.kind === 'pulka' ? 'Poločas' : minute === 0 ? 'Nástup týmů' : `${minute}. minuta`;
 
   return (
     <div className="overlay">
       <div className={`card dialog live-match ${bm ? `big-live kind-${bm.kind}` : ''}`} role="dialog" aria-modal="true" aria-label="Živý přenos">
         {bm && <span className="bm-kicker center">{BIG_MATCH_LABEL[bm.kind as BigMatchKind] ?? 'Velký zápas'} · {bm.competition}</span>}
         <div className="scoreboard">
-          <span className="sb-team">{clubLabel(eve, fixture.homeId)}</span>
+          <span className="sb-team">{liveClubName(eve, fixture.homeId)}</span>
           <span className="sb-score" key={`${homeScore}-${awayScore}`}>{homeScore}:{awayScore}</span>
-          <span className="sb-team">{clubLabel(eve, fixture.awayId)}</span>
+          <span className="sb-team">{liveClubName(eve, fixture.awayId)}</span>
         </div>
         <p className="muted small center">{phase}</p>
         <CrowdMeter level={level} label={ownHome ? 'Kotel' : 'Vaši fanoušci'} />

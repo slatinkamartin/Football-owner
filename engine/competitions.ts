@@ -122,6 +122,74 @@ export function startPlayoffs(state: GameState): void {
   }
 }
 
+/** Klíč baráže vítězů skupin v state.cups. */
+export function poolPlayoffKey(pool: string): string {
+  return `baraz-${pool}`;
+}
+
+/**
+ * V4: Baráž o postup mezi vítězi skupin (ČFL A a B). Skupiny sdílí jedno postupové místo:
+ * jejich vítězové hrají dvojzápas, vítěz postupuje (dřív rozhodovaly body na zápas).
+ * Domácí v odvetě je vítěz s lepším průměrem bodů.
+ */
+export function startPoolPlayoffs(state: GameState): void {
+  const pools = new Map<string, Competition[]>();
+  for (const c of Object.values(state.competitions)) if (c.promotePool) pools.set(c.promotePool, [...(pools.get(c.promotePool) ?? []), c]);
+  for (const [pool, groups] of pools) {
+    if (groups.length < 2 || groups[0].promote >= groups.length || state.cups[poolPlayoffKey(pool)]) continue;
+    if (!groups.every(baseSeasonDone)) continue;
+    const targetTier = groups[0].tier - 1;
+    const eligible = (id: string) => {
+      const club = state.clubs[id];
+      return !club.reserveOf || (targetTier !== 1 && tierOf(state, club.reserveOf) !== targetTier);
+    };
+    const winners = groups
+      .map((g) => finalStandings(g, state).find((r) => eligible(r.clubId)))
+      .filter((r): r is NonNullable<typeof r> => !!r)
+      .sort((a, b) => b.points / Math.max(1, b.played) - a.points / Math.max(1, a.played) || b.goalsFor - b.goalsAgainst - (a.goalsFor - a.goalsAgainst));
+    if (winners.length < 2) continue;
+    const [upper, lower] = [winners[0].clubId, winners[1].clubId];
+    const year = state.season + 1;
+    const first = `${year}-06-10`;
+    const second = `${year}-06-13`;
+    const name = `Baráž o postup: ${groups.map((g) => g.name).join(' – ')}`;
+    const cup: Cup = {
+      id: poolPlayoffKey(pool),
+      name,
+      kind: 'baraz',
+      pool,
+      fixtures: [
+        { id: `${poolPlayoffKey(pool)}-${state.season}-1`, round: 1, date: first, homeId: lower, awayId: upper },
+        { id: `${poolPlayoffKey(pool)}-${state.season}-2`, round: 2, date: second, homeId: upper, awayId: lower },
+      ],
+      rounds: [{ name: 'Baráž o postup', date: first, secondLeg: second }],
+      alive: [upper, lower],
+      nextRound: 1,
+      ties: [{ upper, lower }],
+    };
+    state.cups[cup.id] = cup;
+    const own = [upper, lower].includes(state.owner.clubId);
+    addNews(state, {
+      kind: own ? 'sezona' : 'info',
+      title: `${name}: ${clubLabel(state, upper)} – ${clubLabel(state, lower)}`,
+      text: `Vítězové skupin hrají dvojzápas o jedno postupové místo (10. a 13. 6.). Vítěz hraje příští sezónu vyšší soutěž.${own ? ' Váš klub je ve hře!' : ''}`,
+    });
+  }
+}
+
+function resolvePoolPlayoff(state: GameState, cup: Cup, rng: Rng): void {
+  const t = cup.ties?.[0];
+  if (!t || t.winner || !cup.fixtures.every((f) => f.result)) return;
+  t.winner = decideTie(rng, cup.fixtures, t.upper, t.lower);
+  cup.winner = t.winner;
+  const loser = t.winner === t.upper ? t.lower : t.upper;
+  const own = [t.upper, t.lower].includes(state.owner.clubId);
+  addNews(state, {
+    kind: own ? 'sezona' : 'info',
+    title: t.winner === state.owner.clubId ? `Baráž vyhrána: ${clubLabel(state, t.winner)} postupuje!` : `Baráž: ${clubLabel(state, t.winner)} postupuje, ${clubLabel(state, loser)} zůstává`,
+  });
+}
+
 function resolvePlayoffs(state: GameState, cup: Cup, rng: Rng): void {
   if (!cup.ties || cup.ties.every((t) => t.winner) || !cup.fixtures.every((f) => f.result)) return;
   for (const t of cup.ties) {
@@ -237,6 +305,7 @@ export function afterMatchday(state: GameState, rng: Rng): void {
   if (cup && cup.fixtures.some((f) => f.date === state.date)) resolveCupRound(state, cup, rng);
   const playoff = state.cups.baraz;
   if (playoff && playoff.fixtures.some((f) => f.date === state.date)) resolvePlayoffs(state, playoff, rng);
+  for (const c of Object.values(state.cups)) if (c.pool && c.fixtures.some((f) => f.date === state.date)) resolvePoolPlayoff(state, c, rng); // V4
 }
 
 export function allFixtures(state: GameState): { fixture: Fixture; name: string; tier: number; cup?: Cup; comp?: Competition }[] {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DIFFICULTY, formatDate, scenarioDef, scenarioStatus, settingsOf, updateSettings, type GameSettings, type GameState, type SeasonReport } from '../../engine';
 import { SeasonReportView } from './Report';
+import { SeasonCard } from './SeasonCard'; // V3
 import { AchievementsCard } from './Achievements'; // W3
 import { parseGame, serializeGame } from '../storage';
 
@@ -221,11 +222,11 @@ function HowToPlayCard() {
       <h2>Jak hrát</h2>
       <ol className="small">
         <li><strong>Jste majitel, ne trenér.</strong> Sestavu a taktiku řeší trenér, hráče shání sportovní ředitel. Vy rozhodujete o penězích, lidech a směru klubu.</li>
-        <li><strong>Posouvejte čas</strong> tlačítkem posunu v horní liště: hra jde k dalšímu milníku, nebo o týden. Zastaví se, když je potřeba vaše rozhodnutí (nastavíte níže).</li>
-        <li><strong>Přehled</strong> ukáže, co je právě důležité: rozhodnutí, zprávy a nejbližší zápas.</li>
-        <li><strong>Vedení</strong>: stanovte cíl sezóny, najměte a odvolávejte trenéra a ředitele.</li>
-        <li><strong>Finance</strong>: schvalte rozpočet, hlídejte výhled peněz a vyberte vedlejší cíle sezóny.</li>
-        <li><strong>Stadion</strong>: stavby, velké investice a programy klubu zvedají příjmy i úroveň hráčů.</li>
+        <li><strong>Posouvejte čas</strong> tlačítkem posunu (v horní liště, na mobilu vpravo dole): hra jde k dalšímu milníku, nebo o týden. Zastaví se, když je potřeba vaše rozhodnutí (nastavíte níže).</li>
+        <li><strong>Týden</strong> ukáže, co je právě důležité: agendu týdne, schránku rozhodnutí, stav klubu, zprávy a nejbližší zápas.</li>
+        <li><strong>Tým › Vedení</strong>: stanovte cíl sezóny, najměte a odvolávejte trenéra a ředitele.</li>
+        <li><strong>Peníze</strong>: schvalte rozpočet, hlídejte výhled peněz a vyberte vedlejší cíle sezóny.</li>
+        <li><strong>Klub › Stadion</strong>: stavby, velké investice a programy klubu zvedají příjmy i úroveň hráčů.</li>
       </ol>
       <p className="muted small">Klubu nesmějí dojít peníze: když hrozí, můžete vložit vlastní peníze nebo si půjčit. Na konci sezóny dostanete výroční zprávu.</p>
     </section>
@@ -264,7 +265,12 @@ function ChapterCard({ game }: { game: GameState }) {
           ))}
         </ul>
       )}
-      {open && <SeasonReportView report={open} onClose={() => setOpen(null)} />}
+      <SeasonCard game={game} compact /> {/* V3: karta sezóny ke sdílení */}
+      {open && (
+        <SeasonReportView report={open} onClose={() => setOpen(null)}>
+          <SeasonCard game={game} season={open.season} compact />
+        </SeasonReportView>
+      )}
     </section>
   );
 }

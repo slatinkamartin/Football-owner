@@ -155,7 +155,7 @@ export function createChallenges(state: GameState): void {
   addNews(state, {
     kind: 'info',
     title: 'Vaše výzvy sezóny',
-    text: `${picked.map((c) => c.label).join(' · ')}. Za každou splněnou výzvu získáte body odkazu a k tomu peníze nebo pověst. Průběh najdete na Přehledu.`,
+    text: `${picked.map((c) => c.label).join(' · ')}. Za každou splněnou výzvu získáte body odkazu a k tomu peníze nebo pověst. Průběh najdete v Klub › Projekty a cíle.`,
   });
 }
 

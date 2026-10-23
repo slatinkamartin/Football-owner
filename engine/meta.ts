@@ -1,5 +1,8 @@
 import { annualCosts } from './finance';
-import { newGame, type NewGameOptions } from './game';
+import { DIFFICULTY, newGame, type NewGameOptions } from './game';
+import { clubValuationOf } from './ownership'; // V4
+import type { RosterRow } from './rosters'; // V4
+import type { Difficulty } from './types'; // V4
 import { squadOf } from './players';
 import { careerAchievements, restoreCareerAchievements, seasonAchievementLines, type AchievementRecord } from './achievements'; // W3
 import { challengeReportLines } from './challenges'; // W3
@@ -282,10 +285,36 @@ export function careerAllows(career: Career | undefined, reputation: number): st
   return undefined;
 }
 
-/** Nová hra v kariéře: přenese peníze, pověst a síň slávy. */
-export function newCareerGame(pack: DataPack, career: Career, opts: Omit<NewGameOptions, 'ownerName'>): GameState {
+/**
+ * V4: Kupní ceny klubů = hodnota klubu (kádr, stadion, značka, startovní hotovost podle obtížnosti).
+ * Spočítá se na jednom vygenerovaném světě (stejné soupisky), cena celého klubu (100 %).
+ */
+export function clubPrices(pack: DataPack, difficulty: Difficulty, rosters?: RosterRow[]): Record<string, number> {
+  const state = newGame(pack, { clubId: pack.clubs[0].id, ownerName: 'Odhad', difficulty, rosters, seed: 4242 });
+  const out: Record<string, number> = {};
+  for (const c of pack.clubs) {
+    const club = state.clubs[c.id];
+    if (!club) continue;
+    out[c.id] = clubValuationOf(state, c.id, annualCosts(club, tierOf(state, c.id)) * DIFFICULTY[difficulty].clubCash);
+  }
+  return out;
+}
+
+/** V4: Kupní cena podílu v klubu. */
+export function sharePurchasePrice(price: number, share: number): number {
+  return Math.round((price * share) / 1_000_000) * 1_000_000;
+}
+
+/** Nová hra v kariéře: přenese peníze, pověst a síň slávy. `price` = kupní cena celého klubu (V4), platí se podle podílu. */
+export function newCareerGame(pack: DataPack, career: Career, opts: Omit<NewGameOptions, 'ownerName'> & { price?: number }): GameState {
   const state = newGame(pack, { ...opts, ownerName: career.name });
   state.owner.wallet = career.wallet;
+  // V4: koupě klubu z osobních peněz podle podílu.
+  const paid = opts.price ? Math.min(career.wallet, sharePurchasePrice(opts.price, opts.ownerShare ?? 1)) : 0;
+  if (paid > 0) {
+    state.owner.wallet -= paid;
+    addNews(state, { kind: 'info', title: `Koupě klubu: ${mil(paid)}`, text: `Za ${Math.round((opts.ownerShare ?? 1) * 100)} % klubu ${state.clubs[opts.clubId].name} jste zaplatil ${mil(paid)} z osobních peněz (hodnota klubu ${mil(opts.price!)}).` });
+  }
   state.owner.media = career.media;
   state.owner.league = career.league;
   // Trofeje z minulých klubů zůstávají v síni slávy, označené klubem (nové trofeje neblokují).

@@ -1,4 +1,5 @@
 import { allFixtures } from './competitions';
+import { lastEuroFacts } from './euromatch'; // V4
 import { playerAge, squadOf } from './players';
 import { computeTable } from './standings';
 import type { Fixture, GameState, Player } from './types';
@@ -46,6 +47,10 @@ export interface OwnMatchFacts {
   worst?: { playerId: string; name: string; rating: number; position: string };
   /** Odchovanec mezi střelci. */
   academyScorer?: { playerId: string; name: string };
+  /** V4: neproměněná penalta vlastního hráče (saved = chytil brankář). */
+  missedPenalty?: { playerId: string; name: string; minute: number; saved: boolean };
+  /** V4: soupeř neproměnil penaltu. */
+  oppMissedPenalty?: { minute: number; saved: boolean };
 }
 
 function ownFixtures(state: GameState): { f: Fixture; name: string }[] {
@@ -103,6 +108,8 @@ export function matchFacts(state: GameState, f: Fixture, competition = ''): OwnM
   const worst = rated[0] && (rated[0].rating ?? 10) <= 5.4 ? { playerId: rated[0].id, name: rated[0].name, rating: rated[0].rating!, position: rated[0].position } : undefined;
   const potmId = r.detail?.potm && state.players[r.detail.potm]?.clubId === own ? r.detail.potm : undefined;
   const academy = scorers.find((s) => state.players[s.playerId]?.academy);
+  const missed = events.find((e) => e.type === 'penalta-mimo' && e.clubId === own); // V4
+  const oppMissed = events.find((e) => e.type === 'penalta-mimo' && e.clubId !== own); // V4
   return {
     fixtureId: f.id,
     date: f.date,
@@ -127,6 +134,8 @@ export function matchFacts(state: GameState, f: Fixture, competition = ''): OwnM
     potm: potmId ? { playerId: potmId, name: name(potmId) } : undefined,
     worst,
     academyScorer: academy ? { playerId: academy.playerId, name: academy.name } : undefined,
+    missedPenalty: missed ? { playerId: missed.playerId, name: name(missed.playerId), minute: missed.minute, saved: missed.note === 'chytil brankář' } : undefined,
+    oppMissedPenalty: oppMissed ? { minute: oppMissed.minute, saved: oppMissed.note === 'chytil brankář' } : undefined,
   };
 }
 
@@ -134,7 +143,10 @@ export function matchFacts(state: GameState, f: Fixture, competition = ''): OwnM
 export function lastOwnMatch(state: GameState): OwnMatchFacts | undefined {
   const list = ownFixtures(state);
   const last = list[list.length - 1];
-  return last ? matchFacts(state, last.f, last.name) : undefined;
+  const dom = last ? matchFacts(state, last.f, last.name) : undefined;
+  // V4: evropské zápasy (po minutách) se počítají taky, aby texty po nich vycházely z jejich dění.
+  const eu = lastEuroFacts(state);
+  return eu && (!dom || eu.date >= dom.date) ? eu : dom;
 }
 
 /** Zápas klubu majitele odehraný právě dnes nebo včera (pro reakce den po zápase). */

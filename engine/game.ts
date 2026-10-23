@@ -34,7 +34,9 @@ import { monthlyEurope, qualifyEurope, resolveEurope, startEurope } from './euro
 import { dailyEurope } from './europe';
 import { dailyStars } from './stars';
 import { boardCoversLoss, clubValuation, createShareholders, monthlyShareholders } from './ownership';
+import { recordCupHistory } from './cupview'; // V3
 import { afterMatchday, allFixtures, baseSeasonDone, finalStandings, setupCup, startGroups, startPlayoffs } from './competitions';
+import { poolPlayoffKey, startPoolPlayoffs } from './competitions'; // V4
 import { monthlyDevelopment, moraleNews, recordCareers, recordTimeline, recordTrend } from './development';
 import { doubleRoundRobin } from './fixtures';
 import { simulateMatch } from './match';
@@ -99,6 +101,7 @@ import { challengesTick, createChallenges, settleChallenges } from './challenges
 import { monthlyLongEffects, weeklyBigDecisions } from './bigdecisions'; // W3
 import { dailySituations } from './situations'; // R1: situace z dat, sliby, týdenní limit
 import { awayTripEdge, dailyFans } from './fans'; // W3: fanoušci průběžně
+import { dailyAgenda } from './agenda'; // V1
 
 export const START_SEASON = 2026;
 const MAX_SQUAD = 26;
@@ -348,6 +351,7 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
   generateProposals(state);
   state.timeline = [];
   delete state.cups.baraz;
+  for (const [k, c] of Object.entries(state.cups)) if (c.pool) delete state.cups[k]; // V4: baráž vítězů skupin
   setupCup(state, rng);
   const own = state.clubs[state.owner.clubId];
   if (summerWindow) own.finance.lastAccounting = own.finance.accounting;
@@ -521,7 +525,15 @@ function endSeason(state: GameState, rng: Rng): void {
       }
     }
     // Skupiny jedné soutěže (ČFL A a B): postupují nejlepší vítězové skupin podle bodů na zápas a skóre.
-    for (const groups of pools.values()) {
+    for (const [poolKey, groups] of pools) {
+      // V4: rozhodla baráž vítězů skupin.
+      const tie = state.cups[poolPlayoffKey(poolKey)]?.ties?.[0];
+      const g = tie?.winner ? groups.find((x) => x.clubIds.includes(tie.winner!)) : undefined;
+      if (tie?.winner && g && isEligibleFor(state, tie.winner, upper.tier, moved)) {
+        moves.push({ clubId: tie.winner, from: g, to: upper, up: true });
+        moved.add(tie.winner);
+        continue;
+      }
       const winners = groups
         .map((g) => ({ g, row: tables.get(g.id)!.find((r) => isEligibleFor(state, r.clubId, upper.tier, moved)) }))
         .filter((x) => x.row)
@@ -1071,6 +1083,7 @@ function processDay(state: GameState, rng: Rng): void {
   dailyDeadline(state, rng);
   playMatchesOn(state, rng);
   afterMatchday(state, rng);
+  recordCupHistory(state); // V3: pohárová historie
   dailyRivals(state); // W2: vedení soupeřů
   dailyBigMatch(state); // W1: týden velkého zápasu a vyúčtování
   dailySocial(state); // W2: sítě, po zápase, paměť rivality (po vyúčtování velkého zápasu, kvůli momentům)
@@ -1078,10 +1091,12 @@ function processDay(state: GameState, rng: Rng): void {
   dailyFans(state); // W3: fanouškovská rada, ankety, výjezdy, oslavy
   dailySituations(state, rng); // R1: situace z dat den po zápase, sliby majitele
   dailyPress(state); // R3: navazující příběhy a tisková konference po zápase
+  dailyAgenda(state, rng); // V1: týdenní agenda, trénink, projekty, požadavky postav, rutina
   for (const comp of Object.values(state.competitions)) {
     if (comp.format === 'nadstavba' && !comp.groups && comp.reservedDates && baseSeasonDone(comp)) startGroups(state, comp, rng);
   }
   if (md === '06-08') startPlayoffs(state);
+  if (md === '06-08') startPoolPlayoffs(state); // V4: baráž vítězů skupin ČFL
   if (state.date.endsWith('-01')) monthlyFinance(state, rng);
   if (state.date.endsWith('-01')) monthlyLongEffects(state); // W3
   if (md === '08-31' || md === '02-14') {

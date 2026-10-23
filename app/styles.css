@@ -14,7 +14,67 @@
   --down: #fdecec;
   --radius: 12px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.05);
+  /* V2: téma – text na akcentu, barvy klubu (App je přepíše podle klubu s hlídaným kontrastem) */
+  --on-accent: #ffffff;
+  --club: #1a7f4b;
+  --club-2: #ffffff;
+  --on-club: #ffffff;
+  --card-2: #f7f9f7;
+  --overlay: rgba(20, 30, 25, 0.45);
+  --tone-good: #2e9e5b;
+  --tone-warn: #e0a030;
+  --tone-bad: #d9534f;
+  --gold-bg: #fffaf0;
+  --euro-bg: #f1f4ff;
   color-scheme: light;
+}
+
+/* V2 (B12): tmavý režim podle systému, nebo ručně přes data-theme na <html>. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #111513;
+    --card: #1c221f;
+    --card-2: #232a26;
+    --text: #e6ece8;
+    --muted: #9aa7a0;
+    --line: #2f3833;
+    --accent: #5cc98d;
+    --accent-soft: #1f3a2b;
+    --neg: #ff7a73;
+    --pos: #5cc98d;
+    --warn-bg: #3a2c12;
+    --warn: #f3c46b;
+    --up: #1f3a2b;
+    --down: #3d2222;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.35);
+    --overlay: rgba(0, 0, 0, 0.6);
+    --gold-bg: #2d2717;
+    --euro-bg: #1c2238;
+    --on-accent: #111513;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #111513;
+  --card: #1c221f;
+  --card-2: #232a26;
+  --text: #e6ece8;
+  --muted: #9aa7a0;
+  --line: #2f3833;
+  --accent: #5cc98d;
+  --accent-soft: #1f3a2b;
+  --neg: #ff7a73;
+  --pos: #5cc98d;
+  --warn-bg: #3a2c12;
+  --warn: #f3c46b;
+  --up: #1f3a2b;
+  --down: #3d2222;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.35);
+  --overlay: rgba(0, 0, 0, 0.6);
+  --gold-bg: #2d2717;
+  --euro-bg: #1c2238;
+  --on-accent: #111513;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -26,6 +86,7 @@ body {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   font-size: 15px;
   line-height: 1.45;
+  font-variant-numeric: tabular-nums;
 }
 
 h1, h2, h3 { margin: 0 0 10px; line-height: 1.2; }
@@ -44,17 +105,18 @@ button {
 }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: 0.45; cursor: default; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 button.danger { color: var(--neg); border-color: #f0c4c4; }
 button.big { padding: 12px 22px; font-size: 16px; }
 
-input {
+input, select {
   font: inherit;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--card);
+  color: var(--text);
   min-width: 0;
 }
 textarea {
@@ -1272,3 +1334,428 @@ input[type='checkbox'], input[type='radio'] { flex: none; width: auto; padding: 
 .promise-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.25rem 0.75rem; align-items: baseline; }
 .promises-list .meter { display: block; width: 100%; margin: 0.3rem 0 0.15rem; }
 .promises-done li { padding: 0.2rem 0; }
+
+/* --- V3: poháry a Evropa, karta sezóny --- */
+.cv-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 0; border: 0; background: none; }
+.cv-badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 12px; line-height: 20px; font-weight: 600; background: var(--line); color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cv-badge-good { background: var(--up); color: var(--pos); }
+.cv-badge-warn { background: var(--warn-bg); color: var(--warn); }
+.cv-badge-bad { background: var(--down); color: var(--neg); }
+.cv-badge.live .cv-badge-ico { animation: cv-pulse 2s ease-in-out infinite; }
+@keyframes cv-pulse { 50% { opacity: 0.45; } }
+.cv-block + .cv-block { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; }
+.cv-block h3 { margin: 6px 0; }
+.cv-steps { list-style: none; margin: 8px 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; counter-reset: none; }
+.cv-step { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; padding-top: 16px; }
+.cv-step::before { content: ''; position: absolute; top: 6px; left: 0; right: 0; height: 3px; background: var(--line); }
+.cv-step:first-child::before { left: 50%; }
+.cv-step:last-child::before { right: 50%; }
+.cv-dot { position: absolute; top: 1px; left: calc(50% - 7px); width: 14px; height: 14px; border-radius: 50%; background: var(--card); border: 3px solid var(--line); z-index: 1; }
+.cv-step-name { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; line-height: 1.2; }
+.cv-step-sub { color: var(--muted); font-variant-numeric: tabular-nums; }
+.cv-postup::before, .cv-volno::before { background: var(--pos); }
+.cv-postup .cv-dot, .cv-volno .cv-dot { background: var(--pos); border-color: var(--pos); }
+.cv-vyrazeni .cv-dot { background: var(--neg); border-color: var(--neg); }
+.cv-vyrazeni .cv-step-name { color: var(--neg); text-decoration: line-through; }
+.cv-dalsi .cv-dot { border-color: var(--accent); animation: cv-pulse 1.6s ease-in-out infinite; }
+.cv-dalsi .cv-step-name { color: var(--accent); }
+.cv-mimo { opacity: 0.45; }
+.cv-step.fresh.cv-postup .cv-dot { animation: cv-pop 0.9s ease-out 2; }
+.cv-step.fresh.cv-vyrazeni .cv-dot { animation: cv-shake 0.5s ease-in-out 2; }
+@keyframes cv-pop { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(26, 127, 75, 0.5); } 50% { transform: scale(1.5); box-shadow: 0 0 0 8px rgba(26, 127, 75, 0); } 100% { transform: scale(1); } }
+@keyframes cv-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+.cv-flash { margin: 4px 0; padding: 4px 8px; border-radius: 8px; font-weight: 600; font-size: 13px; animation: cv-in 0.6s ease-out; }
+.cv-flash.good { background: var(--up); color: var(--pos); }
+.cv-flash.bad { background: var(--down); color: var(--neg); }
+@keyframes cv-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.cv-card.cv-advance, .cv-block.cv-advance { animation: cv-glow 1.4s ease-out 1; }
+.cv-card.cv-out, .cv-block.cv-out { animation: cv-dim 1.4s ease-out 1; }
+@keyframes cv-glow { 0% { box-shadow: 0 0 0 3px rgba(26, 127, 75, 0.45); } 100% { box-shadow: var(--shadow); } }
+@keyframes cv-dim { 0% { box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.35); } 100% { box-shadow: var(--shadow); } }
+.cv-chances { margin: 6px 0; display: flex; flex-direction: column; gap: 3px; }
+.cv-chances li { display: grid; grid-template-columns: minmax(0, 1fr) 90px 44px; gap: 8px; align-items: center; font-size: 13px; }
+.cv-chances li .num { text-align: right; }
+.cv-chance { display: block; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.cv-chance-fill { display: block; height: 100%; background: var(--pos); }
+.cv-bracket { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+.cv-col { flex: 0 0 220px; scroll-snap-align: start; min-width: 0; }
+.cv-col h3 { margin: 0 0 6px; font-size: 14px; }
+.cv-matches { display: flex; flex-direction: column; gap: 4px; }
+.cv-match-btn { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; padding: 4px 6px; font-size: 12px; text-align: left; border-radius: 6px; }
+.cv-match-btn:disabled { opacity: 1; }
+.cv-match-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cv-match-btn span:last-child { text-align: right; }
+.cv-match-btn .out { text-decoration: line-through; color: var(--muted); }
+.cv-match-btn .win { font-weight: 700; }
+.cv-match.own .cv-match-btn { border-color: var(--accent); background: var(--accent-soft); }
+.cv-score { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.cv-empty { border: 1px dashed var(--line); border-radius: 8px; padding: 8px; }
+.cv-chain { list-style: none; padding: 0; margin: 4px 0 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.cv-chain li { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 13px; }
+.cv-chain li + li::before { content: '↓ '; color: var(--muted); }
+.cv-chain-postup { background: var(--up); border-color: var(--pos) !important; }
+.cv-chain-vyrazeni { background: var(--down); text-decoration: line-through; }
+.cv-chain-hraje { border-color: var(--warn) !important; background: var(--warn-bg); }
+.cv-chain-mimo, .cv-chain-padak { color: var(--muted); }
+.cv-tie { border-left: 4px solid var(--line); padding: 4px 0 4px 10px; margin: 6px 0; }
+.cv-tie-postup { border-color: var(--pos); }
+.cv-tie-vyrazeni { border-color: var(--neg); }
+.cv-tie-hraje { border-color: var(--warn); }
+.cv-tie.fresh, .cv-sr.fresh { animation: cv-in 0.8s ease-out; }
+.cv-leg.o-V { color: var(--pos); font-weight: 600; }
+.cv-leg.o-P { color: var(--neg); }
+.cv-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cv-table th, .cv-table td { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.cv-table .num { text-align: right; }
+.cv-table tr td:first-child { border-left: 4px solid transparent; }
+.cv-table tr.zone-osmifinale td:first-child { border-left-color: var(--pos); }
+.cv-table tr.zone-playoff td:first-child { border-left-color: #d9a400; }
+.cv-table tr.zone-vyrazeni td:first-child { border-left-color: var(--neg); }
+.cv-table tr.gap td { border-top: 2px dashed var(--line); }
+.cv-table tr.own-row td { background: var(--accent-soft); font-weight: 700; }
+.cv-zone { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-left: 4px; }
+.cv-zone.zone-osmifinale { background: var(--pos); }
+.cv-zone.zone-playoff { background: #d9a400; }
+.cv-zone.zone-vyrazeni { background: var(--neg); }
+.cv-opps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.cv-opp { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.cv-opp.o-V { border-color: var(--pos); background: var(--up); }
+.cv-opp.o-P { background: var(--down); }
+.cv-spring { list-style: none; padding: 0; margin: 6px 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.cv-sr { border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; min-width: 0; overflow-wrap: anywhere; }
+.cv-sr-name { font-weight: 700; font-size: 13px; }
+.cv-sr-postup { border-color: var(--pos); background: var(--up); }
+.cv-sr-vyrazeni { border-color: var(--neg); background: var(--down); }
+.cv-sr-hraje { border-color: var(--warn); background: var(--warn-bg); }
+.cv-sr-mimo { opacity: 0.45; }
+.cv-pots { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.cv-pot { border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+.cv-pot-label { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+.cv-history li { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.cv-history li:last-child { border-bottom: 0; }
+.cv-history .t-good { color: var(--pos); font-weight: 600; }
+.cv-history .t-bad { color: var(--muted); }
+.season-card { margin-top: 10px; }
+.season-card-actions { display: flex; gap: 6px; }
+.season-card-img { display: block; width: 100%; max-width: 360px; height: auto; border-radius: 12px; box-shadow: var(--shadow); margin: 8px 0; }
+@media (max-width: 640px) {
+  .cv-steps { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .cv-step-name { font-size: 10px; }
+  .cv-step-sub { font-size: 10px; }
+  .cv-spring { grid-template-columns: 1fr 1fr; }
+  .cv-col { flex-basis: 78vw; }
+  .cv-history li { grid-template-columns: 56px minmax(0, 1fr); }
+  .cv-history li > :nth-child(3) { grid-column: 2; }
+  .cv-table .hide-sm, .cv-table th.hide-sm { display: none; }
+  .cv-chances li { grid-template-columns: minmax(0, 1fr) 60px 40px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cv-badge.live .cv-badge-ico, .cv-dalsi .cv-dot, .cv-step.fresh .cv-dot, .cv-flash, .cv-card, .cv-block, .cv-tie.fresh, .cv-sr.fresh { animation: none !important; }
+}
+
+/* --- V2: rozhraní (navigace, domov Týden, stav klubu, schránka, postavy, téma, den zápasu) --- */
+.app { max-width: 1240px; }
+.num { font-variant-numeric: tabular-nums; }
+select { max-width: 100%; }
+.icon { flex: none; vertical-align: -0.2em; }
+.overlay { background: var(--overlay); }
+.icon-btn { display: inline-grid; place-items: center; padding: 6px; border-radius: 10px; line-height: 0; }
+.icon-btn.active { color: var(--accent); border-color: var(--accent); }
+.crest-btn { padding: 0; border: none; background: none; line-height: 0; border-radius: 8px; }
+.crest-svg { display: block; flex: none; }
+.topbar-text { min-width: 0; }
+.subtabs button.active, .chips button.active, .segmented button.active, .ach-filter button.active, .stepper button.active .step-no { color: var(--on-accent); }
+.subtabs button.active .subtab-count { background: color-mix(in srgb, var(--on-accent) 25%, transparent); color: var(--on-accent); }
+
+/* Hlavní záložky (desktop) */
+.main-tabs { border-bottom-color: var(--line); }
+.main-tabs button { display: inline-flex; align-items: center; gap: 6px; }
+.main-tabs .tab-hra { margin-left: auto; }
+.tab-count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--tone-warn); color: #1f1600; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; }
+.main-subtabs { margin-bottom: 14px; }
+.main-tabs::after { content: none; }
+.sticky-head::after { content: ''; display: block; height: 3px; background: linear-gradient(90deg, var(--club) 0 60%, var(--club-2) 60% 80%, var(--club) 80%); opacity: 0.85; }
+
+/* Mobilní spodní lišta a tlačítko posunu */
+.bottom-bar, .step-fab { display: none; }
+@media (max-width: 760px) {
+  .main-tabs { display: none; }
+  .topbar .advance { display: none; }
+  .hide-mobile { display: none; }
+  .app { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  .bottom-bar {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 9;
+    background: var(--card); border-top: 1px solid var(--line);
+    padding: 4px max(4px, env(safe-area-inset-left, 0px)) max(4px, env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.08);
+  }
+  .bottom-bar button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; border: none; background: none; padding: 6px 0 4px; font-size: 11px; color: var(--muted); border-radius: 10px; min-width: 0; }
+  .bottom-bar button.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .bb-badge { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 16px; padding: 0 4px; border-radius: 999px; background: var(--tone-bad); color: #fff; font-size: 10px; line-height: 16px; font-weight: 700; }
+  .step-fab {
+    display: inline-flex; align-items: center; gap: 6px;
+    position: fixed; right: 16px; bottom: calc(70px + env(safe-area-inset-bottom, 0px)); z-index: 9;
+    padding: 12px 18px; border-radius: 999px; font-size: 15px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    max-width: calc(100% - 32px);
+  }
+  .step-fab span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toast, .ach-toast { bottom: calc(130px + env(safe-area-inset-bottom, 0px)); }
+  .tab-tyden .step-cta { display: none; }
+}
+
+/* Domov „Týden“ */
+.week-grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.9fr); align-items: start; }
+.week-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.week-col > .card, .week-col .card { margin: 0; }
+.week-col .bigmatch-card, .week-col .briefing { grid-column: auto; }
+.week-more { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-top: 16px; }
+.week-more:empty { display: none; }
+@media (max-width: 1100px) {
+  .week-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .week-col-c { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
+}
+@media (max-width: 760px) {
+  .week-more { grid-template-columns: minmax(0, 1fr); }
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.card-head h2 { margin: 0; display: inline-flex; align-items: center; gap: 8px; }
+.card-head h2 .icon { color: var(--accent); }
+.countdown { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.countdown strong { font-size: 20px; color: var(--text); }
+.countdown.soon { color: var(--accent); font-weight: 700; }
+.next-match-card { border-top: 4px solid var(--club); }
+.next-match-card.is-eve { box-shadow: 0 0 0 2px var(--accent), var(--shadow); }
+.nm-teams { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; margin: 4px 0 6px; }
+.nm-team { display: flex; flex-direction: column; align-items: center; gap: 4px; font-weight: 700; font-size: 16px; text-align: center; min-width: 0; overflow-wrap: anywhere; }
+.nm-team.own { color: var(--accent); }
+.nm-vs { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; }
+.nm-flag { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--euro-bg); color: var(--text); }
+.step-cta { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; font-size: 16px; margin-top: 8px; }
+.nm-last { margin: 10px 0 0; }
+.w-slot { min-width: 0; }
+.w-slot:empty { display: none; }
+.w-slot .agenda-options, .w-slot .agenda-slots { grid-template-columns: minmax(0, 1fr); }
+.w-slot > .dismissible:not(:has(.card)) { display: none; }
+.w-slot:not(:has(.card, .guide-tip, .cv-badges, .dismissed-restore)) { display: none; }
+.topbar-cup { display: inline-flex; min-width: 0; }
+@media (min-width: 761px) { .week-cup { display: none; } }
+@media (max-width: 760px) {
+  .topbar-cup.hide-mobile { display: none; }
+  .week-grid { display: flex; flex-direction: column; align-items: stretch; }
+  .week-col { display: contents; }
+  .w-draw { order: 1; } .w-big { order: 2; } .w-tip-step { order: 3; } .w-next { order: 4; } .w-cup { order: 5; }
+  .w-tip-inbox { order: 6; } .w-inbox { order: 7; } .w-tip-agenda { order: 8; } .w-agenda { order: 9; }
+  .w-advisor { order: 10; } .w-status { order: 11; } .w-cupcard { order: 12; } .w-news { order: 13; }
+}
+
+/* B4 stav klubu */
+.status-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.status-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line); border-left: 4px solid var(--line); min-width: 0; }
+.status-tile.open { border-color: var(--accent); }
+.status-tile.tone-good { border-left-color: var(--tone-good); }
+.status-tile.tone-warn { border-left-color: var(--tone-warn); }
+.status-tile.tone-bad { border-left-color: var(--tone-bad); }
+.st-label { font-size: 12px; color: var(--muted); display: inline-flex; gap: 4px; align-items: center; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
+.st-value { font-size: 22px; font-weight: 800; line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
+.st-value.long { font-size: 17px; }
+.st-sub { font-size: 12px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-trend { font-size: 13px; }
+.trend { display: inline-flex; align-items: center; gap: 1px; font-weight: 700; font-size: 13px; }
+.status-detail { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); animation: v2-fade 0.2s ease-out; }
+.status-rows { display: grid; gap: 4px; margin-bottom: 8px; }
+.status-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.status-row dd { margin: 0; display: flex; gap: 6px; align-items: center; font-weight: 600; }
+.status-row .meter { width: 90px; }
+.status-reasons li { padding: 2px 0; }
+
+/* B5 schránka rozhodnutí */
+.inbox-list { display: flex; flex-direction: column; gap: 6px; }
+.inbox-item { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.inbox-item.open { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 35%, var(--card)); }
+.inbox-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; }
+.inbox-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; }
+.inbox-meta .inbox-go { margin-left: auto; }
+.inbox-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
+.inbox-main { min-width: 0; display: flex; flex-direction: column; }
+.inbox-title { font-weight: 600; text-align: left; overflow-wrap: anywhere; }
+button.inbox-title { padding: 0; border: none; background: none; color: var(--text); cursor: pointer; }
+button.inbox-title:hover { color: var(--accent); }
+.inbox-fallback { font-size: 12px; }
+.inbox-go { padding: 5px 10px; font-size: 13px; white-space: nowrap; }
+.due { font-size: 12px; white-space: nowrap; display: inline-flex; gap: 3px; align-items: center; padding: 2px 7px; border-radius: 999px; background: var(--card-2); color: var(--muted); }
+.due-warn { background: var(--warn-bg); color: var(--warn); }
+.due-bad { background: var(--down); color: var(--neg); font-weight: 700; }
+.inbox-text { margin: 8px 0 6px; }
+.inbox-options { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.inbox-options button { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; }
+.inbox-options button .small { color: var(--muted); }
+.inbox-options .opt-default { border-color: var(--accent); }
+.opt-tag { position: absolute; top: -8px; right: 8px; font-size: 10px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.inbox-empty { display: flex; gap: 6px; align-items: center; }
+
+/* Odsunutelné karty */
+.dismissible { position: relative; touch-action: pan-y; transition: transform 0.18s ease, opacity 0.18s ease; }
+.dismissible > .card { margin: 0; }
+.dismiss-x { position: absolute; top: 10px; right: 10px; z-index: 1; padding: 4px; line-height: 0; border-radius: 8px; border-color: transparent; background: transparent; color: var(--muted); }
+.dismissible > .card > h2:first-child, .dismissible .card-head { padding-right: 30px; }
+.dismissed-restore { align-self: flex-start; font-size: 13px; }
+
+/* B10 průvodce */
+.guide-tip { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--accent-soft); border: 1px dashed var(--accent); animation: v2-pop 0.35s ease-out; }
+.guide-tip p { margin: 4px 0 8px; }
+.guide-icon { color: var(--accent); }
+
+/* B6 postavy */
+.contacts-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.contact-card { display: flex; gap: 12px; align-items: flex-start; text-align: left; border: 1px solid transparent; cursor: pointer; }
+.contact-card:hover, .contact-card.open { border-color: var(--accent); }
+.contact-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.contact-rel { display: flex; align-items: center; gap: 6px; }
+.contact-need { color: var(--warn); }
+.contact-last { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.contact-head { display: flex; gap: 12px; align-items: center; }
+.contact-head h2 { margin: 0; }
+.contact-history li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.avatar { flex: none; }
+.avatar-track { stroke: var(--line); }
+.avatar-ring.good { stroke: var(--tone-good); }
+.avatar-ring.warn { stroke: var(--tone-warn); }
+.avatar-ring.bad { stroke: var(--tone-bad); }
+.rel-bar { position: relative; display: inline-block; width: 80px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.rel-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); }
+.rel-fill { position: absolute; top: 0; bottom: 0; }
+.rel-fill.pos { background: var(--tone-good); }
+.rel-fill.neg { background: var(--tone-bad); }
+
+/* B8 karta konce týdne */
+.weekend-card {
+  position: fixed; right: 16px; bottom: 16px; z-index: 8;
+  width: min(360px, calc(100% - 32px)); padding: 12px 14px; border-radius: 14px;
+  background: var(--card); border: 1px solid var(--line); border-top: 4px solid var(--club);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18); overflow: hidden;
+  animation: v2-slide 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.we-deltas { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 6px; margin: 10px 0 6px; }
+.we-delta { display: flex; flex-direction: column; padding: 6px 8px; border-radius: 8px; background: var(--card-2); opacity: 0; animation: v2-pop 0.35s ease-out forwards; }
+.we-delta strong { font-size: 17px; }
+.we-delta.pos strong { color: var(--pos); }
+.we-delta.neg strong { color: var(--neg); }
+.we-lines li { padding: 2px 0; opacity: 0; animation: v2-fade 0.3s ease-out forwards; }
+.we-timer { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--accent); transform-origin: left; animation: v2-timer linear forwards; }
+@media (max-width: 760px) { .weekend-card { left: 16px; right: 16px; width: auto; bottom: auto; top: calc(var(--head-h, 64px) + 8px); } }
+@media (max-width: 420px) { th, td { padding: 6px 4px; } td { font-size: 14px; } .card { padding: 14px 12px; } }
+@keyframes v2-slide { from { transform: translateY(18px) scale(0.96); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes v2-pop { from { transform: scale(0.9); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes v2-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes v2-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) { .weekend-card, .we-delta, .we-lines li, .guide-tip, .status-detail { animation: none; opacity: 1; } }
+
+/* B9 den zápasu přes celou obrazovku */
+.matchday-stage { position: fixed; inset: 0; z-index: 12; background: #0b1220; }
+.md-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
+.md-crowd { animation: md-bounce 1.4s ease-in-out infinite; transform-origin: center; }
+.md-flood { animation: md-flicker 4s ease-in-out infinite; }
+.md-vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 30%, rgba(5, 10, 18, 0.65) 100%); }
+.matchday-stage .overlay { background: transparent; z-index: 1; padding: 16px; }
+.matchday-stage .live-match { max-width: 720px; max-height: calc(100dvh - 32px); background: color-mix(in srgb, var(--card) 92%, transparent); backdrop-filter: blur(6px); border-top: 5px solid var(--club); }
+.matchday-stage .scoreboard { background: #0d1117; color: #f5f7fa; border-radius: 12px; padding: 10px 12px; box-shadow: inset 0 0 0 2px #2a3340; }
+.matchday-stage .sb-score { color: #ffd84d; text-shadow: 0 0 12px rgba(255, 216, 77, 0.45); font-size: 40px; }
+.matchday-stage .live-feed { max-height: min(40vh, 360px); background: var(--card); }
+@keyframes md-bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes md-flicker { 0%, 100% { opacity: 1; } 50% { opacity: 0.82; } }
+@media (prefers-reduced-motion: reduce) { .md-crowd, .md-flood { animation: none; } }
+@media (max-width: 640px) { .matchday-stage .overlay { padding: 8px; } .matchday-stage .sb-score { font-size: 30px; } }
+
+/* Vzhled */
+.theme-switch { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.theme-switch button { display: inline-flex; align-items: center; gap: 6px; }
+
+/* B12: tmavý režim – pevné světlé barvy starších sekcí */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .bigmatch-card { background: linear-gradient(135deg, var(--gold-bg) 0%, var(--card) 55%); }
+  :root:not([data-theme='light']) .bigmatch-card.kind-evropa, :root:not([data-theme='light']) .euro-draw { background: linear-gradient(135deg, var(--euro-bg) 0%, var(--card) 55%); }
+  :root:not([data-theme='light']) .bm-banner { background: var(--gold-bg); }
+  :root:not([data-theme='light']) .bm-banner.kind-evropa, :root:not([data-theme='light']) .draw-list li.revealed { background: var(--euro-bg); }
+  :root:not([data-theme='light']) .bm-icon { background: #4a3a14; color: #f6e3b4; }
+  :root:not([data-theme='light']) .kind-evropa .bm-icon { background: #283466; color: #dfe5ff; }
+  :root:not([data-theme='light']) .kind-evropa .bm-kicker, :root:not([data-theme='light']) .euro-draw .bm-kicker { color: #aab8ff; }
+  :root:not([data-theme='light']) .phase-liga { background: #1c2a44; color: #a9c4f5; }
+  :root:not([data-theme='light']) .ach-toast { background: #3a3014; color: #fbefc4; }
+  :root:not([data-theme='light']) .ach-step.on.bronze, :root:not([data-theme='light']) .ach-bronze .ach-icon { background: #3d2c1c; color: #f3e1cf; }
+  :root:not([data-theme='light']) .ach-step.on.silver, :root:not([data-theme='light']) .ach-silver .ach-icon { background: #2c3138; color: #e6e9ee; }
+  :root:not([data-theme='light']) .ach-step.on.gold, :root:not([data-theme='light']) .ach-gold .ach-icon { background: #3a3014; color: #fbefc4; }
+  :root:not([data-theme='light']) .ach-bronze .ach-tier { color: #e2b58b; }
+  :root:not([data-theme='light']) .ach-silver .ach-tier { color: #c3cad4; }
+  :root:not([data-theme='light']) .ach-gold .ach-tier { color: #f0d27a; }
+  :root:not([data-theme='light']) .ms-bar { background: #3a4540; }
+  :root:not([data-theme='light']) .sc-priprava { background: #34403a; }
+  :root:not([data-theme='light']) .sc-pauza { background: #4b5650; }
+  :root:not([data-theme='light']) button.danger { border-color: #6b3434; }
+  :root:not([data-theme='light']) .bottom-bar { box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.5); }
+}
+:root[data-theme='dark'] .bigmatch-card { background: linear-gradient(135deg, var(--gold-bg) 0%, var(--card) 55%); }
+:root[data-theme='dark'] .bigmatch-card.kind-evropa, :root[data-theme='dark'] .euro-draw { background: linear-gradient(135deg, var(--euro-bg) 0%, var(--card) 55%); }
+:root[data-theme='dark'] .bm-banner { background: var(--gold-bg); }
+:root[data-theme='dark'] .bm-banner.kind-evropa, :root[data-theme='dark'] .draw-list li.revealed { background: var(--euro-bg); }
+:root[data-theme='dark'] .bm-icon { background: #4a3a14; color: #f6e3b4; }
+:root[data-theme='dark'] .kind-evropa .bm-icon { background: #283466; color: #dfe5ff; }
+:root[data-theme='dark'] .kind-evropa .bm-kicker, :root[data-theme='dark'] .euro-draw .bm-kicker { color: #aab8ff; }
+:root[data-theme='dark'] .phase-liga { background: #1c2a44; color: #a9c4f5; }
+:root[data-theme='dark'] .ach-toast { background: #3a3014; color: #fbefc4; }
+:root[data-theme='dark'] .ach-step.on.bronze, :root[data-theme='dark'] .ach-bronze .ach-icon { background: #3d2c1c; color: #f3e1cf; }
+:root[data-theme='dark'] .ach-step.on.silver, :root[data-theme='dark'] .ach-silver .ach-icon { background: #2c3138; color: #e6e9ee; }
+:root[data-theme='dark'] .ach-step.on.gold, :root[data-theme='dark'] .ach-gold .ach-icon { background: #3a3014; color: #fbefc4; }
+:root[data-theme='dark'] .ach-bronze .ach-tier { color: #e2b58b; }
+:root[data-theme='dark'] .ach-silver .ach-tier { color: #c3cad4; }
+:root[data-theme='dark'] .ach-gold .ach-tier { color: #f0d27a; }
+:root[data-theme='dark'] .ms-bar { background: #3a4540; }
+:root[data-theme='dark'] .sc-priprava { background: #34403a; }
+:root[data-theme='dark'] .sc-pauza { background: #4b5650; }
+:root[data-theme='dark'] button.danger { border-color: #6b3434; }
+:root[data-theme='dark'] .bottom-bar { box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.5); }
+@media (max-width: 760px) { .main-subtabs { flex-wrap: wrap; overflow: visible; } .main-subtabs button { padding: 5px 11px; font-size: 13px; } }
+/* --- /V2 --- */
+.cv-leg .linkbtn { color: inherit; }
+.cv-short { display: none; }
+@media (max-width: 640px) { .cv-step .cv-long { display: none; } .cv-step .cv-short { display: inline; } }
+
+/* --- V1: agenda, rádce, postavy, projekty, trénink, lov, shrnutí týdne --- */
+.agenda-slots { display: grid; gap: 6px; margin: 8px 0; }
+.agenda-slot { border: 1px dashed var(--muted); border-radius: 8px; padding: 6px 8px; }
+.agenda-slot.done { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.agenda-slot.routine { border-style: dotted; }
+.agenda-slot p { margin: 4px 0 0; }
+.agenda-options { display: grid; gap: 8px; margin-top: 8px; }
+.agenda-option { padding: 6px 0; border-top: 1px solid var(--line); }
+.agenda-option.disabled { opacity: 0.6; }
+.agenda-option-head { display: flex; gap: 8px; align-items: flex-start; }
+.agenda-option-head p { margin: 2px 0; }
+.agenda-option select { max-width: 100%; min-width: 0; flex: 1 1 180px; }
+.agenda-icon { display: inline-flex; width: 1.6em; justify-content: center; flex: none; }
+.advisor-list { display: grid; gap: 8px; }
+.advisor-list p { margin: 2px 0 4px; }
+.character-row { padding: 6px 0; border-top: 1px solid var(--line); }
+.character-row > .linkbtn { width: 100%; text-align: left; display: flex; gap: 8px; }
+.character-detail { margin-top: 6px; }
+.character-detail li.row-between { gap: 8px; padding: 3px 0; }
+.project { padding: 8px 0; border-top: 1px solid var(--line); }
+.project-offers > li { padding: 6px 0; border-top: 1px solid var(--line); }
+.hunt-list > li { padding: 8px 0; border-top: 1px solid var(--line); }
+.hunt-list p { margin: 2px 0; }
+.week-deltas { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 12px; margin: 6px 0; }
+.week-deltas li { display: flex; justify-content: space-between; gap: 8px; }
+.week-lines { padding-left: 1.2em; margin: 6px 0 0; }
+.num { font-variant-numeric: tabular-nums; }
+/* --- /V1 --- */
+.cv-step-sub .linkbtn { color: inherit; font-size: inherit; padding: 0; }
+.cv-postup .cv-step-sub { color: var(--pos); font-weight: 600; }
+.cv-vyrazeni .cv-step-sub { color: var(--neg); font-weight: 600; }
+.cv-opp .linkbtn { color: inherit; font-weight: 700; padding: 0; }
+
+/* --- V4: dodělávky (cena klubu) --- */
+.club-card .club-price { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* --- Integrace 0.28: krátké názvy kol podle šířky karty (úzký sloupec na Týdnu) --- */
+.cv-card { container-type: inline-size; }
+@container (max-width: 520px) { .cv-step .cv-long { display: none; } .cv-step .cv-short { display: inline; } }

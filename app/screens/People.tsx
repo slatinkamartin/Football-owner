@@ -292,9 +292,9 @@ function Candidates({ game, role, setRole, onResult }: { game: GameState; role: 
           {
             key: 'act',
             label: '',
-            value: (s) => (isInterested(s, club) ? 1 : 0),
+            value: (s) => (isInterested(s, club, game) ? 1 : 0),
             render: (s) =>
-              !isInterested(s, club) ? (
+              !isInterested(s, club, game) ? (
                 <span className="muted small">nemá zájem</span>
               ) : pending === s.id ? (
                 <span className="buttons end">

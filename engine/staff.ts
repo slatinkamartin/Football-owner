@@ -7,6 +7,7 @@ import { finalStandings } from './competitions';
 import { computeTable } from './standings';
 import type { Club, ClubStaff, CoachStyle, Competition, GameState, SeasonGoal, Staff, StaffRole } from './types';
 import { addNews, clamp, competitionOf, FREE, tierOf } from './world';
+import { staffPull } from './ownerlevel'; // V1
 
 export const ROLE_LABEL: Record<StaffRole, string> = {
   trener: 'Hlavní trenér',
@@ -325,8 +326,9 @@ export function severance(state: GameState, s: { wage: number; contractUntil: nu
   return Math.max(0, Math.min(12, months)) * s.wage;
 }
 
-export function isInterested(s: Staff, club: Club): boolean {
-  return s.ability - staffLevelForReputation(club.reputation) <= 15;
+export function isInterested(s: Staff, club: Club, state?: GameState): boolean {
+  // V1: vyšší úroveň majitele přiláká lepší lidi.
+  return s.ability - staffLevelForReputation(club.reputation) <= 15 + (state && club.id === state.owner.clubId ? staffPull(state) : 0);
 }
 
 export function candidates(state: GameState, role: StaffRole): Staff[] {
@@ -366,7 +368,7 @@ export function hireStaff(prev: GameState, staffId: string, years: number): Acti
   const candidate = prev.staff[staffId];
   const club = prev.clubs[prev.owner.clubId];
   if (!candidate || candidate.clubId !== FREE) return { state: prev, ok: false, message: 'Kandidát už není k dispozici.' };
-  if (!isInterested(candidate, club)) {
+  if (!isInterested(candidate, club, prev)) {
     return { state: prev, ok: false, message: `${candidate.firstName} ${candidate.lastName} nemá o práci v klubu této úrovně zájem.` };
   }
   const state = structuredClone(prev);

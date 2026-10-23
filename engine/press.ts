@@ -171,6 +171,26 @@ export function pressCandidates(state: GameState, m: OwnMatchFacts, s: SeasonFac
     });
   }
 
+  // V4: neproměněná penalta v zápase bez výhry.
+  const mp = m.missedPenalty;
+  const mpp = P(mp?.playerId);
+  if (mp && mpp && m.outcome !== 'V') {
+    out.push({
+      priority: 6,
+      q: {
+        topic: 'penalta',
+        text: `${fullName(mpp)} v ${mp.minute}. minutě neproměnil penaltu${mp.saved ? ', brankář ji chytil' : ', šla mimo branku'}. Bude penalty kopat dál?`,
+        fact: `Neproměněná penalta ${mp.minute}. min (${m.scoreline}).`,
+        playerId: mpp.id,
+        defaultAnswer: 'trener',
+        answers: [
+          answer('duvera', 'Má naši plnou důvěru, kopat bude dál', { player: 5, media: -1 }, { player: mpp }),
+          answer('trener', 'O exekutorovi rozhodne trenér', { coach: 1 }),
+        ],
+      },
+    });
+  }
+
   // Sporný moment z přenosu velkého zápasu.
   const bm = state.bigMatch && state.bigMatch.date === m.date ? state.bigMatch : undefined;
   const sporny = (bm?.moments ?? []).map((x) => x.match(/(Neuznaný gól|sporném verdiktu)[^(]*\((\d+)\. min\)/)).find(Boolean);
@@ -398,6 +418,24 @@ export function pressCandidates(state: GameState, m: OwnMatchFacts, s: SeasonFac
         answers: [
           answer('plati', 'Slib platí, pracujeme na tom', { media: 1 }, { note: 'Nesplněný slib pak bolí víc' }),
           answer('odklad', 'Potřebujeme víc času', { media: -2, fans: -1 }),
+        ],
+      },
+    });
+  }
+
+  // V4: evropský zápas – otázka z jeho dění.
+  if (m.fixtureId.startsWith('eu-')) {
+    const what = m.outcome === 'V' ? 'výhra' : m.outcome === 'P' ? 'prohra' : 'remíza';
+    out.push({
+      priority: 5,
+      q: {
+        topic: 'evropa',
+        text: `${m.competition}: ${what} ${m.scoreline}${m.xgFor !== undefined && m.xgAgainst !== undefined ? ` při xG ${m.xgFor.toFixed(1)} : ${m.xgAgainst.toFixed(1)}` : ''}. Na co se Evropa u vás hraje?`,
+        fact: `${m.competition}, ${m.scoreline}.`,
+        defaultAnswer: 'krok',
+        answers: [
+          answer('ambice', 'Chceme jít co nejdál, Evropa je priorita', { fans: 2, media: 1, team: -1 }),
+          answer('krok', 'Zápas od zápasu, liga má přednost', { team: 1 }),
         ],
       },
     });

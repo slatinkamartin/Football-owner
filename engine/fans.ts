@@ -399,7 +399,7 @@ function closePoll(state: GameState): void {
   } else {
     f.commitment = { id: p.id, kind: 'moment', label: `Malba na tribuně: ${win.label}`, due, cost: roundTo(120_000 * s, 10_000), breakGain: 0, respectLabel: 'Namalovat', breakLabel: 'Nedělat nic' };
   }
-  addNews(state, { kind: 'info', title: `Anketa fanoušků: ${win.label}`, text: `${p.question} Vyhrálo „${win.label}“ (${win.share} %). Výsledek je pro klub závazek, rozhodněte na Přehledu do ${fmt(due)}.` });
+  addNews(state, { kind: 'info', title: `Anketa fanoušků: ${win.label}`, text: `${p.question} Vyhrálo „${win.label}“ (${win.share} %). Výsledek je pro klub závazek, rozhodněte v Klub › Fanoušci do ${fmt(due)}.` });
 }
 
 function fmt(iso: string): string {
@@ -579,7 +579,7 @@ function startCelebration(state: GameState, reason: string, label: string, big: 
   const f = fs(state);
   if (f.celebration) return;
   f.celebration = { reason, label, deadline: addDays(state.date, 7), big };
-  addNews(state, { kind: 'sezona', title: `Fanoušci chtějí slavit ${reason} na náměstí`, text: `${label}. Rozhodněte na Přehledu, jak velká oslava bude (do ${fmt(f.celebration.deadline)}).` });
+  addNews(state, { kind: 'sezona', title: `Fanoušci chtějí slavit ${reason} na náměstí`, text: `${label}. Rozhodněte v Klub › Fanoušci, jak velká oslava bude (do ${fmt(f.celebration.deadline)}).` });
 }
 
 /** Záchrana: den po konci sezóny, když byl cíl záchrana (nebo klub hrál dole) a nesestoupil. */
@@ -678,7 +678,7 @@ export function dailyFans(state: GameState): void {
     const idea = pickIdea(state);
     if (idea) {
       f.council = { idea, offered: state.date, deadline: addDays(state.date, 14), legend: idea === 'tribuna' ? legendName(state) : undefined };
-      addNews(state, { kind: 'info', title: `Fanouškovská rada: ${FAN_IDEAS[idea].title}`, text: 'Nápad čeká na Přehledu v kartě Fanoušci. Když nerozhodnete do dvou týdnů, odloží se.' });
+      addNews(state, { kind: 'info', title: `Fanouškovská rada: ${FAN_IDEAS[idea].title}`, text: 'Nápad čeká v Klub › Fanoušci (a ve schránce rozhodnutí). Když nerozhodnete do dvou týdnů, odloží se.' });
     }
   }
   if (day === 2 && [8, 9, 10, 11, 12, 3, 4, 5, 6].includes(month)) openPoll(state, 'hrac');

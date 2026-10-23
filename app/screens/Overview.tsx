@@ -41,6 +41,177 @@ import { money } from '../format';
 
 type Target = MilestoneTab | 'majitel';
 
+/**
+ * V2: Přehled se rozdělil. Domov „Týden“ (Week.tsx) skládá nejdůležitější karty, zbytek původního
+ * Přehledu je tady jako samostatné kusy, které App umísťuje do podzáložek (nic se neztratilo):
+ * poslední zápas, tabulka a pozice, majitel ve zkratce, vedení klubu (úkoly), graf pozice,
+ * zprávy, historie klubu a scénář.
+ */
+
+export function NextMatchSummary({ game, onOpenMatch }: { game: GameState; onOpenMatch: (id: string) => void }) {
+  const club = game.clubs[game.owner.clubId];
+  const comp = competitionOf(game, club.id);
+  const last = comp?.fixtures
+    .filter((f) => f.result && (f.homeId === club.id || f.awayId === club.id))
+    .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+  if (!last) return null;
+  return (
+    <section className="card">
+      <h2>Poslední zápas</h2>
+      <div className="match-big">
+        <span className={last.homeId === club.id ? 'own' : ''}>{game.clubs[last.homeId].shortName}</span>
+        <span>{last.result!.homeGoals}:{last.result!.awayGoals}</span>
+        <span className={last.awayId === club.id ? 'own' : ''}>{game.clubs[last.awayId].shortName}</span>
+      </div>
+      <p className="muted">
+        {formatDate(last.date, true)}
+        {last.result!.detail && <> · xG {last.result!.detail.home.xg.toFixed(1)} : {last.result!.detail.away.xg.toFixed(1)}</>}
+      </p>
+      <button onClick={() => onOpenMatch(last.id)}>Náhled zápasu</button>
+    </section>
+  );
+}
+
+/** Tabulka ve zkratce (pozice, body, forma). */
+export function TableSummary({ game }: { game: GameState }) {
+  const club = game.clubs[game.owner.clubId];
+  const comp = competitionOf(game, club.id);
+  const table = comp ? computeTable(comp, game) : [];
+  const position = table.findIndex((r) => r.clubId === club.id);
+  const row = table[position];
+  return (
+    <section className="card">
+      <h2>Tabulka</h2>
+      {row && row.played === 0 ? (
+        <p className="muted">Sezóna ještě nezačala. {comp?.name}, {table.length} týmů.</p>
+      ) : row ? (
+        <>
+          <div className="stat-big">{position + 1}. místo</div>
+          <p className="muted">
+            {comp?.name} · {row.points} bodů z {row.played} zápasů · skóre {row.goalsFor}:{row.goalsAgainst}
+          </p>
+          <div className="form">
+            {row.form.map((f, i) => (
+              <span key={i} className={`form-${f}`}>{f}</span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="muted">Klub nehraje žádnou soutěž.</p>
+      )}
+    </section>
+  );
+}
+
+/** Majitel ve zkratce (dřív na Přehledu). */
+export function OwnerSummary({ game, onNavigate }: { game: GameState; onNavigate?: (tab: Target) => void }) {
+  const club = game.clubs[game.owner.clubId];
+  return (
+    <section className="card">
+      <div className="row-between">
+        <h2>Majitel</h2>
+        {onNavigate && <button className="linkbtn" onClick={() => onNavigate('majitel')}>Podrobnosti ›</button>}
+      </div>
+      <dl className="kv">
+        <dt>Zůstatek klubu</dt>
+        <dd className={club.finance.balance < 0 ? 'neg' : ''}>{money(club.finance.balance)}</dd>
+        <dt>Vaše osobní peníze</dt>
+        <dd>{money(game.owner.wallet)}</dd>
+        <dt>Váš podíl</dt>
+        <dd>{Math.round(game.owner.share * 100)} %</dd>
+        <dt>Pověst u médií</dt>
+        <dd>{Math.round(game.owner.media)}</dd>
+        {game.shareholders.length > 0 && (
+          <>
+            <dt>Spokojenost akcionářů</dt>
+            <dd className={shareholderConfidence(game) < 35 ? 'neg' : ''}>{Math.round(shareholderConfidence(game))}</dd>
+          </>
+        )}
+      </dl>
+    </section>
+  );
+}
+
+/** Graf pozice v tabulce během sezóny. */
+export function PositionChart({ game }: { game: GameState }) {
+  const comp = competitionOf(game, game.owner.clubId);
+  if (game.timeline.length < 2 || !comp) return null;
+  return (
+    <section className="card wide">
+      <LineChart
+        title={`Pozice v tabulce v sezóně ${seasonLabel(game.season)}`}
+        points={[...game.timeline].sort((a, b) => a.round - b.round).map((t) => ({ label: `${t.round}. kolo`, value: t.position }))}
+        format={(v) => `${Math.round(v)}.`}
+        invert
+        min={1}
+        max={comp.clubIds.length}
+      />
+    </section>
+  );
+}
+
+/** Zprávy: krátký seznam s rozbalením dalších. */
+export function NewsCard({ game, onOpenMatch, initial = 10, title = 'Zprávy', className = 'card wide' }: { game: GameState; onOpenMatch: (id: string) => void; initial?: number; title?: string; className?: string }) {
+  const [newsLimit, setNewsLimit] = useState(initial);
+  return (
+    <section className={`${className} news-card`}>
+      <h2>{title}</h2>
+      <ul className="news">
+        {game.news.slice(0, newsLimit).map((n, i) => (
+          <li key={i} className={`news-${n.kind}`}>
+            <span className="news-date">{formatShortDate(n.date)}</span>
+            <div>
+              <strong>{n.title}</strong>
+              {n.text && <p>{n.text}</p>}
+              {n.playerId && game.players[n.playerId] && (
+                <PlayerLink id={n.playerId}>Karta hráče</PlayerLink>
+              )}{' '}
+              {n.fixtureId && findFixture(game, n.fixtureId) && (
+                <button className="linkbtn" onClick={() => onOpenMatch(n.fixtureId!)}>
+                  Náhled zápasu
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {game.news.length > newsLimit && (
+        <button className="linkbtn news-more" onClick={() => setNewsLimit(newsLimit + 15)}>
+          Další zprávy ({game.news.length - newsLimit}) ›
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Historie klubu po sezónách. */
+export function ClubHistoryCard({ game }: { game: GameState }) {
+  if (!game.history.length) return <section className="card wide"><h2>Historie klubu</h2><p className="muted">První sezóna pod vaším vedením ještě běží.</p></section>;
+  return (
+    <section className="card wide">
+      <h2>Historie klubu</h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Sezóna</th><th>Soutěž</th><th className="num">Umístění</th><th className="num">Body</th></tr>
+          </thead>
+          <tbody>
+            {[...game.history].reverse().map((h) => (
+              <tr key={h.season}>
+                <td>{seasonLabel(h.season)}</td>
+                <td>{game.competitions[h.ownerClub.competitionId]?.name ?? '–'}</td>
+                <td className="num">{h.ownerClub.position}.</td>
+                <td className="num">{h.ownerClub.points}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/** Starý Přehled (zachovaný pro případné použití, App ho už neukazuje). */
 export function Overview({
   game,
   onChange,
@@ -51,184 +222,33 @@ export function Overview({
   onChange: (g: GameState) => void;
   onNavigate: (tab: Target, sub?: BriefingTask['sub']) => void;
   onOpenMatch: (id: string) => void;
-  /** Živý přenos spouští dialog před zápasem (App); Přehled ho už nepoužívá. */
   onLive?: () => void;
 }) {
-  const [newsLimit, setNewsLimit] = useState(10);
-  const club = game.clubs[game.owner.clubId];
-  const comp = competitionOf(game, club.id);
-  const table = comp ? computeTable(comp, game) : [];
-  const position = table.findIndex((r) => r.clubId === club.id);
-  const row = table[position];
-  const last = comp?.fixtures
-    .filter((f) => f.result && (f.homeId === club.id || f.awayId === club.id))
-    .sort((a, b) => (a.date < b.date ? 1 : -1))[0];
-  const next = comp?.fixtures
-    .filter((f) => !f.result && (f.homeId === club.id || f.awayId === club.id))
-    .sort((a, b) => (a.date < b.date ? -1 : 1))[0];
-
   return (
     <div className="grid">
       <Briefing game={game} onNavigate={onNavigate} />
-      <EuroDrawCard game={game} onChange={onChange} /><BigMatchCard game={game} onChange={onChange} /> {/* W1 */}
+      <EuroDrawCard game={game} onChange={onChange} /><BigMatchCard game={game} onChange={onChange} />
       <Decisions game={game} onChange={onChange} />
       <ScenarioCard game={game} />
       <SideGoalsCard game={game} onOpen={() => onNavigate('finance')} />
       <ChallengesCard game={game} />
-      <FansCard game={game} onChange={onChange} /> {/* W3 */}
-      <ForumCard game={game} onChange={onChange} /> {/* R2 */}
-      <section className="card">
-        <h2>Další zápas</h2>
-        {next ? (
-          <>
-            <div className="match-big">
-              <span className={next.homeId === club.id ? 'own' : ''}>{game.clubs[next.homeId].shortName}</span>
-              <span className="vs">–</span>
-              <span className={next.awayId === club.id ? 'own' : ''}>{game.clubs[next.awayId].shortName}</span>
-            </div>
-            <p className="muted">
-              {formatDate(next.date, true)} · {comp?.name}, {next.round}. kolo
-            </p>
-          </>
-        ) : (
-          <p className="muted">V této sezóně už klub nehraje.</p>
-        )}
-      </section>
-
+      <FansCard game={game} onChange={onChange} />
+      <ForumCard game={game} onChange={onChange} />
       <EuropeStarsCard game={game} onOpenMatch={onOpenMatch} />
-      {last && (
-        <section className="card">
-          <h2>Poslední zápas</h2>
-          <div className="match-big">
-            <span className={last.homeId === club.id ? 'own' : ''}>{game.clubs[last.homeId].shortName}</span>
-            <span>{last.result!.homeGoals}:{last.result!.awayGoals}</span>
-            <span className={last.awayId === club.id ? 'own' : ''}>{game.clubs[last.awayId].shortName}</span>
-          </div>
-          <p className="muted">
-            {formatDate(last.date, true)}
-            {last.result!.detail && <> · xG {last.result!.detail.home.xg.toFixed(1)} : {last.result!.detail.away.xg.toFixed(1)}</>}
-          </p>
-          <button onClick={() => onOpenMatch(last.id)}>Náhled zápasu</button>
-        </section>
-      )}
-
-      <section className="card">
-        <h2>Tabulka</h2>
-        {row && row.played === 0 ? (
-          <p className="muted">Sezóna ještě nezačala. {comp?.name}, {table.length} týmů.</p>
-        ) : row ? (
-          <>
-            <div className="stat-big">{position + 1}. místo</div>
-            <p className="muted">
-              {comp?.name} · {row.points} bodů z {row.played} zápasů · skóre {row.goalsFor}:{row.goalsAgainst}
-            </p>
-            <div className="form">
-              {row.form.map((f, i) => (
-                <span key={i} className={`form-${f}`}>{f}</span>
-              ))}
-            </div>
-          </>
-        ) : (
-          <p className="muted">Klub nehraje žádnou soutěž.</p>
-        )}
-      </section>
-
-      <section className="card">
-        <div className="row-between">
-          <h2>Majitel</h2>
-          <button className="linkbtn" onClick={() => onNavigate('majitel')}>Podrobnosti ›</button>
-        </div>
-        <dl className="kv">
-          <dt>Zůstatek klubu</dt>
-          <dd className={club.finance.balance < 0 ? 'neg' : ''}>{money(club.finance.balance)}</dd>
-          <dt>Vaše osobní peníze</dt>
-          <dd>{money(game.owner.wallet)}</dd>
-          <dt>Váš podíl</dt>
-          <dd>{Math.round(game.owner.share * 100)} %</dd>
-          <dt>Pověst u médií</dt>
-          <dd>{Math.round(game.owner.media)}</dd>
-          {game.shareholders.length > 0 && (
-            <>
-              <dt>Spokojenost akcionářů</dt>
-              <dd className={shareholderConfidence(game) < 35 ? 'neg' : ''}>{Math.round(shareholderConfidence(game))}</dd>
-            </>
-          )}
-        </dl>
-      </section>
-
+      <NextMatchSummary game={game} onOpenMatch={onOpenMatch} />
+      <TableSummary game={game} />
+      <OwnerSummary game={game} onNavigate={onNavigate} />
       <ToDo game={game} onNavigate={onNavigate} />
-
       <PulsePanel game={game} />
-
-
-      {game.timeline.length >= 2 && comp && (
-        <section className="card wide">
-          <LineChart
-            title={`Pozice v tabulce v sezóně ${seasonLabel(game.season)}`}
-            points={[...game.timeline].sort((a, b) => a.round - b.round).map((t) => ({ label: `${t.round}. kolo`, value: t.position }))}
-            format={(v) => `${Math.round(v)}.`}
-            invert
-            min={1}
-            max={comp.clubIds.length}
-          />
-        </section>
-      )}
-
-      <section className="card wide">
-        <h2>Zprávy</h2>
-        <ul className="news">
-          {game.news.slice(0, newsLimit).map((n, i) => (
-            <li key={i} className={`news-${n.kind}`}>
-              <span className="news-date">{formatShortDate(n.date)}</span>
-              <div>
-                <strong>{n.title}</strong>
-                {n.text && <p>{n.text}</p>}
-                {n.playerId && game.players[n.playerId] && (
-                  <PlayerLink id={n.playerId}>Karta hráče</PlayerLink>
-                )}{' '}
-                {n.fixtureId && findFixture(game, n.fixtureId) && (
-                  <button className="linkbtn" onClick={() => onOpenMatch(n.fixtureId!)}>
-                    Náhled zápasu
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-        {game.news.length > newsLimit && (
-          <button className="linkbtn news-more" onClick={() => setNewsLimit(newsLimit + 15)}>
-            Další zprávy ({game.news.length - newsLimit}) ›
-          </button>
-        )}
-      </section>
-
-      {game.history.length > 0 && (
-        <section className="card wide">
-          <h2>Historie klubu</h2>
-          <table>
-            <thead>
-              <tr><th>Sezóna</th><th>Soutěž</th><th className="num">Umístění</th><th className="num">Body</th></tr>
-            </thead>
-            <tbody>
-              {[...game.history].reverse().map((h) => (
-                <tr key={h.season}>
-                  <td>{seasonLabel(h.season)}</td>
-                  <td>{game.competitions[h.ownerClub.competitionId]?.name ?? '–'}</td>
-                  <td className="num">{h.ownerClub.position}.</td>
-                  <td className="num">{h.ownerClub.points}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      )}
-
+      <PositionChart game={game} />
+      <NewsCard game={game} onOpenMatch={onOpenMatch} />
+      <ClubHistoryCard game={game} />
       <Stories game={game} onNavigate={onNavigate} />
     </div>
   );
 }
 
-function ToDo({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target) => void }) {
+export function ToDo({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target) => void }) {
   const own = game.owner.clubId;
   const comp = competitionOf(game, own);
   const coach = coachOf(game, own);
@@ -289,7 +309,7 @@ function ToDo({ game, onNavigate }: { game: GameState; onNavigate: (tab: Target)
 }
 
 /** Scénář: cíl, kolik sezón zbývá a jak si klub vede. */
-function ScenarioCard({ game }: { game: GameState }) {
+export function ScenarioCard({ game }: { game: GameState }) {
   const sc = game.scenario;
   if (!sc) return null;
   const def = scenarioDef(sc.id);

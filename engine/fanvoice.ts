@@ -91,6 +91,8 @@ export function matchFactLine(m: OwnMatchFacts, s?: SeasonFacts): string {
   if (m.comeback === 'jejich') parts.push('Ztracené vedení.');
   if (m.lateDecider) parts.push(m.lateDecider.own ? `Rozhodující gól ${vMin(m.lateDecider.minute)}.` : `Soupeř skóroval ${vMin(m.lateDecider.minute)}.`);
   for (const r of m.reds) parts.push(`Červená karta: ${r.name} (${r.minute}.).`);
+  if (m.missedPenalty) parts.push(`Neproměněná penalta: ${m.missedPenalty.name} (${m.missedPenalty.minute}., ${m.missedPenalty.saved ? 'chytil brankář' : 'mimo branku'}).`); // V4
+  if (m.oppMissedPenalty) parts.push(`Soupeř neproměnil penaltu (${m.oppMissedPenalty.minute}.).`); // V4
   if (m.earlySub) parts.push(`${m.earlySub.name} střídán už ${vMin(m.earlySub.minute)}.`);
   if (m.potm) parts.push(`Hráč zápasu: ${m.potm.name}.`);
   if (s && s.streak.length >= 3) {
@@ -160,6 +162,14 @@ function matchLines(m: OwnMatchFacts, s: SeasonFacts | undefined): Lines {
     L.ultras.push('Byli jsme slyšet celých 90 minut.');
     L.pametnik.push('Remízy se kdysi braly jinak. Dneska je to málo.');
   }
+  // V4: neproměněné penalty.
+  const mp = m.missedPenalty;
+  if (mp) {
+    if (m.outcome === 'V') L.optimista.push(`I když ${lastName(mp.name)} penaltu ${mp.saved ? 'nedal' : 'poslal vedle'}, vyhráli jsme. Hlavu vzhůru, ${lastName(mp.name)}!`);
+    else L.kritik.push(`Penalta ${vMin(mp.minute)} a ${lastName(mp.name)} ${mp.saved ? 'ji kopne brankáři do rukou' : 'ji pošle vedle'}. ${m.outcome === 'P' ? 'Tam se zápas zlomil.' : 'Dva body v háji.'}`);
+    L.statistik.push(`Neproměněná penalta ${vMin(mp.minute)} (${mp.saved ? 'chytil brankář' : 'mimo branku'}).`);
+  }
+  if (m.oppMissedPenalty && m.outcome !== 'P') L.ultras.push(`${m.oppMissedPenalty.saved ? 'Chycená penalta' : 'Penalta soupeře vedle'} ${vMin(m.oppMissedPenalty.minute)} – kotel to brankáři odzpíval!`);
   if (m.xgFor !== undefined && m.xgAgainst !== undefined) L.statistik.push(`xG ${dec(m.xgFor)} : ${dec(m.xgAgainst)} – ${m.xgFor - m.xgAgainst >= 0.8 ? 'jasně lepší tým' : m.xgAgainst - m.xgFor >= 0.8 ? 'soupeř si šance vytvořil víc' : 'vyrovnaný zápas'}.`);
   if (s?.position && s.points !== undefined) L.statistik.push(`Po ${s.played}. zápase ${s.position}. místo, ${plural(s.points, 'bod', 'body', 'bodů')}${move ? ` (${move.text})` : ''}.`);
   if (s && s.streak.length >= 3) L.statistik.push(s.streak.kind === 'V' ? `${ordWin(s.streak.length)}.` : s.streak.kind === 'P' ? `${s.streak.length}. porážka v řadě.` : `${s.streak.length}. remíza v řadě.`);
@@ -224,12 +234,14 @@ export function factHeadlines(m: OwnMatchFacts, s: SeasonFacts | undefined, kind
     if (m.academyScorer) out.push(`Odchovanec ${lastName(m.academyScorer.name)} se zapsal mezi střelce`);
   } else if (m.outcome === 'P') {
     if (m.reds[0]) out.push(`Červená pro ${lastName(m.reds[0].name)} ${vMin(m.reds[0].minute)} zlomila zápas`);
+    if (m.missedPenalty) out.push(`${lastName(m.missedPenalty.name)} neproměnil penaltu ${vMin(m.missedPenalty.minute)}`); // V4
     if (m.comeback === 'jejich') out.push('Promarněné vedení stálo všechno');
     if (m.lateDecider && !m.lateDecider.own) out.push(`Krutá ${m.lateDecider.minute}. minuta`);
     if (s && s.winless >= 4) out.push(`Už ${plural(s.winless, 'zápas', 'zápasy', 'zápasů')} bez výhry`);
     if (move && !move.up) out.push(`Porážka znamená ${move.text}`);
   } else {
     if (m.lateDecider) out.push(m.lateDecider.own ? `Vyrovnání ${vMin(m.lateDecider.minute)}!` : `Gól ${vMin(m.lateDecider.minute)} vzal výhru`);
+    if (m.missedPenalty) out.push(`Neproměněná penalta ${lastName(m.missedPenalty.name)} stála výhru`); // V4
   }
   if (m.xgFor !== undefined && m.xgAgainst !== undefined && Math.abs(m.xgFor - m.xgAgainst) >= 1) out.push(`xG ${dec(m.xgFor)} : ${dec(m.xgAgainst)}${(m.xgFor > m.xgAgainst) === (m.outcome === 'V') ? '' : ' – výsledek klame'}`);
   if (m.potm && out.length < 2) out.push(`Hráč zápasu: ${m.potm.name}`);

@@ -1,29 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
-  advanceDays,
   BIG_MATCH_LABEL,
   bigMatchCountdown,
   clubLabel,
-  crowdBase,
-  crowdLevel,
-  euroLiveEvents,
   euroMatchTomorrow,
-  finalWhistle,
-  findEuroMatch,
-  goalCry,
   markEuroDrawSeen,
-  matchIntro,
   pendingEuroDraw,
   prepDecisions,
   prepValue,
   rivalryStory,
   setBigMatchPrep,
   type BigMatchKind,
-  type BigMatchState,
   type GameState,
   type PrepKey,
 } from '../../engine';
 import { Badge, Meter } from '../components';
+import { LiveMatch } from './MatchPrep'; // V4
 
 const KIND_ICON: Record<string, string> = { derby: '⚔', evropa: '★', titul: '♛', zachrana: '⚓', pohar: '🏆', baraz: '⚖' };
 
@@ -197,10 +189,10 @@ export function EuroMatchDialog({ game, onClose, onResult, onLive }: { game: Gam
         <h2>{m.home ? `${own} – ${m.opponent.name}` : `${m.opponent.name} – ${own}`}</h2>
         <BigMatchBanner game={game} fixtureId={m.id} />
         <p className="small">Soupeř: {m.opponent.name} ({m.opponent.country}), síla {m.opponent.rating}.</p>
-        <p className="muted small">Evropský přenos ukazuje průběh zápasu s atmosférou stadionu; do hry se v něm nezasahuje.</p>
+        <p className="muted small">Zápas se hraje po minutách s vaším kádrem. V přenosu rozhodujete o poločase a v koncovce, jako doma.</p>
         <div className="match-choice">
           <button onClick={onResult}>Jen výsledek<span>Zápas se odehraje hned.</span></button>
-          <button className="primary" onClick={onLive}>Sledovat zápas<span>Přenos s kotlem a znělkou.</span></button>
+          <button className="primary" onClick={onLive}>Sledovat zápas<span>Přenos s kotlem, poločasem a rozhodnutími v klíčových chvílích.</span></button>
         </div>
         <button className="linkbtn" onClick={onClose}>Zatím zavřít</button>
       </div>
@@ -209,79 +201,9 @@ export function EuroMatchDialog({ game, onClose, onResult, onLive }: { game: Gam
 }
 
 /**
- * Evropský přenos (zjednodušený): zápas se odehraje hned (výsledek dává engine/europe.ts),
- * přenos pak po minutách ukazuje góly, hlasitost kotle a komentář.
+ * V4: Evropský přenos je stejný jako domácí (LiveMatch): zápas po minutách, poločas, vabank
+ * a body zlomu velkého zápasu. Rozhodnutí platí od další minuty.
  */
 export function EuroLive({ game, onChange, onClose, onSummary }: { game: GameState; onChange: (g: GameState) => void; onClose: () => void; onSummary: (id: string) => void }) {
-  const [data] = useState(() => {
-    const m = euroMatchTomorrow(game);
-    if (!m) return undefined;
-    const bm: BigMatchState | undefined = game.bigMatch?.id === m.id ? game.bigMatch : undefined;
-    const played = advanceDays(game, 1).state;
-    return { m, bm, played, intro: matchIntro(game, bm), base: crowdBase(game, bm, m.home && !m.neutral), events: euroLiveEvents(played, m.id) };
-  });
-  const [minute, setMinute] = useState(0);
-  const feedRef = useRef<HTMLUListElement>(null);
-  useEffect(() => {
-    const el = feedRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [minute]);
-  useEffect(() => {
-    if (!data) {
-      onClose();
-      return;
-    }
-    onChange(data.played);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  useEffect(() => {
-    if (!data || minute >= 90) return;
-    const goal = data.events.some((e) => e.minute === minute);
-    const t = setTimeout(() => setMinute(minute + 1), goal ? 1100 : 70);
-    return () => clearTimeout(t);
-  }, [minute, data]);
-  if (!data) return null;
-  const { m, bm } = data;
-  const visible = data.events.filter((e) => e.minute <= minute);
-  const gf = visible.filter((e) => e.own).length;
-  const ga = visible.length - gf;
-  const own = clubLabel(game, game.owner.clubId);
-  const level = crowdLevel(data.base, visible, minute);
-  const end = minute >= 90;
-  const res = findEuroMatch(data.played, m.id)?.match.result;
-  const pens = end && res?.penalties ? ` (pen. ${res.penalties[0]}:${res.penalties[1]})` : '';
-  const name = (id?: string) => (id && game.players[id] ? `${game.players[id].firstName} ${game.players[id].lastName}` : own);
-  const home = m.home || m.neutral;
-  return (
-    <div className="overlay">
-      <div className={`card dialog live-match big-live kind-evropa`} role="dialog" aria-modal="true" aria-label="Evropský přenos">
-        <span className="bm-kicker center">★ {m.stage}</span>
-        <div className="scoreboard">
-          <span className="sb-team">{home ? own : m.opponent.name}</span>
-          <span className="sb-score" key={`${gf}-${ga}`}>{home ? gf : ga}:{home ? ga : gf}</span>
-          <span className="sb-team">{home ? m.opponent.name : own}</span>
-        </div>
-        <p className="muted small center">{end ? `Konec zápasu${pens}` : `${minute}. minuta`}</p>
-        <CrowdMeter level={level} label={m.home && !m.neutral ? 'Kotel' : 'Vaši fanoušci'} />
-        <ul className="plain live-feed" ref={feedRef}>
-          {data.intro.map((t, i) => <li key={`i${i}`} className="intro">{t}</li>)}
-          {visible.map((e, i) => (
-            <li key={i} className={e.own ? 'goal own-goal' : 'goal opp-goal'}>
-              <span className="tl-min">{e.minute}'</span> GÓL! {e.own ? name(e.playerId) : m.opponent.name}
-              <span className="cry">{goalCry(bm, e.own, e.minute, visible.slice(0, i + 1).filter((x) => x.own).length, visible.slice(0, i + 1).filter((x) => !x.own).length)}</span>
-            </li>
-          ))}
-          {end && <li className="final">{finalWhistle(bm ?? ({ kind: 'evropa' } as BigMatchState), gf, ga)}</li>}
-        </ul>
-        {end ? (
-          <div className="buttons">
-            <button className="primary" onClick={() => onSummary(m.id)}>Souhrn zápasu ›</button>
-            <button onClick={onClose}>Zavřít</button>
-          </div>
-        ) : (
-          <button className="linkbtn" onClick={() => setMinute(90)}>Přeskočit ›</button>
-        )}
-      </div>
-    </div>
-  );
+  return <LiveMatch euro game={game} onChange={onChange} onClose={onClose} onSummary={onSummary} />;
 }

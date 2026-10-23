@@ -102,7 +102,9 @@ export function interest(state: GameState, p: Player, clubId: string): { ok: boo
 /** Hodnocení hráče, jak ho vidí skauti klubu majitele. Vlastní hráče zná klub přesně. */
 export function scouted(state: GameState, p: Player): { overall: number; potential: number; exact: boolean } {
   if (p.clubId === state.owner.clubId) return { overall: p.overall, potential: p.potential, exact: true };
-  const err = scoutingError(state);
+  // V1: osobní skautská cesta majitele (engine/hunt.ts) zpřesní odhad.
+  const trip = state.hunt?.trips?.[p.id];
+  const err = scoutingError(state) * (trip && trip.season === state.season ? Math.max(0.15, 1 - 0.35 * trip.level) : 1);
   const n1 = hash01(`${p.id}-${state.season}-o`) * 2 - 1;
   const n2 = hash01(`${p.id}-${state.season}-p`) * 2 - 1;
   const overall = Math.round(p.overall + n1 * err);

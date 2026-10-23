@@ -21,6 +21,7 @@ import { bigDecisionTemplates } from './bigdecisions';
 import { decisionBudgetLeft, decisionsLastWeek, situationTemplates } from './situations'; // R1: situace z dat a týdenní limit
 import { freshOwnMatch, matchesWord, seasonFacts } from './facts'; // R1
 import { ultrasOf } from './surroundings'; // R1
+import { characterTemplates } from './characters'; // V1
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -113,6 +114,7 @@ export const TEMPLATES: Record<string, Template> = {
   ...starsTemplates(),
   // R1: situace z dat (engine/situations.ts, vznikají den po zápase z faktů, nikdy náhodně).
   ...situationTemplates(),
+  ...characterTemplates(), // V1: požadavky postav
   // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
   'tiskovka-zapas': {
     weight: () => 0,

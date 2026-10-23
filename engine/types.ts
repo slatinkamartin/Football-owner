@@ -716,6 +716,8 @@ export interface OwnerPromise {
   /** Hráči v kádru v době slibu (posila musí být nová). */
   known?: string[];
   done?: 'splneno' | 'poruseno';
+  /** V4: kdy byl slib vyhodnocen. */
+  resolved?: string;
 }
 
 export interface MatchPlan {
@@ -778,7 +780,8 @@ export interface MatchResult {
   detail?: MatchDetail;
 }
 
-export type MatchEventType = 'gol' | 'zluta' | 'cervena' | 'druha-zluta' | 'stridani' | 'zraneni';
+/** V4: 'penalta-mimo' = neproměněná penalta (note: chytil brankář / mimo branku). */
+export type MatchEventType = 'gol' | 'zluta' | 'cervena' | 'druha-zluta' | 'stridani' | 'zraneni' | 'penalta-mimo';
 
 export interface MatchEvent {
   minute: number;
@@ -814,6 +817,8 @@ export interface TeamMatchStats {
   yellows: number;
   reds: number;
   saves: number;
+  /** V4: neproměněné penalty (jen když nějaká byla). */
+  pensMissed?: number;
 }
 
 export interface MatchDetail {
@@ -861,6 +866,8 @@ export interface Cup {
   winner?: string;
   /** Baráž: dvojice (horní klub, dolní klub) a vítěz. */
   ties?: { upper: string; lower: string; winner?: string }[];
+  /** V4: baráž vítězů skupin jedné soutěže (promotePool, např. ČFL A a B): vítěz postupuje. */
+  pool?: string;
 }
 
 export interface Owner {
@@ -1193,6 +1200,20 @@ export interface GameState {
   press?: import('./press').PressState;
   /** R3: výroky a navazující příběhy (engine/narrative.ts). */
   narrative?: import('./narrative').NarrativeState;
+  /** V1: týdenní agenda majitele a rutina podřízeným (engine/agenda.ts). */
+  agenda?: import('./agenda').AgendaState;
+  /** V1: postavy kolem klubu – paměť rozhovorů a vztahy (engine/characters.ts). */
+  characters?: import('./characters').CharactersState;
+  /** V1: strategické projekty sezóny (engine/projects.ts). */
+  strategy?: import('./projects').StrategyState;
+  /** V1: týdenní plán tréninku s trenérem (engine/training.ts). */
+  training?: import('./training').TrainingState;
+  /** V1: přestupy jako lov – skautské cesty, plán okna (engine/hunt.ts). */
+  hunt?: import('./hunt').HuntState;
+  /** V1: zkušenosti majitele pro úrovně pověsti (engine/ownerlevel.ts). */
+  ownerXp?: number;
+  /** V3: pohárová historie klubu majitele po sezónách (engine/cupview.ts). */
+  cupHistory?: import('./cupview').CupHistoryEntry[];
 }
 
 /** Stav velkého zápasu: příprava v týdnu před ním a reakce po něm. Pole doplňují moduly přípravy, přenosu a sítí. */

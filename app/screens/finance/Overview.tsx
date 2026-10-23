@@ -74,7 +74,7 @@ export function FinanceOverview({ game, onOpen, onChange }: { game: GameState; o
   const [details, setDetails] = useStoredState('fin:prehled', { open: false });
 
   const alerts: { text: string; tone: 'bad' | 'warn'; tab?: FinanceTab }[] = [];
-  if (game.crisis) alerts.push({ tone: 'bad', text: 'Klub je v krizovém režimu. Rozhodněte o krizovém plánu v Přehledu hry.' });
+  if (game.crisis) alerts.push({ tone: 'bad', text: 'Klub je v krizovém režimu. Rozhodněte o krizovém plánu ve schránce rozhodnutí na domově Týden.' });
   if (club.finance.monthsNegative > 0) {
     alerts.push({ tone: 'bad', text: `Účet je ${club.finance.monthsNegative}. měsíc v minusu${od ? ' nad kontokorent' : ''}. Po ${INSOLVENCY_MONTHS}. měsíci přijde insolvence.`, tab: 'financovani' });
   }
