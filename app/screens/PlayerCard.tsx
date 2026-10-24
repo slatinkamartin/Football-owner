@@ -13,6 +13,7 @@ import { ratingText,
   POSITION_LABEL,
   scouted,
   transferWindow,
+  chemistryImpact, // W4
   type GameState,
 } from '../../engine';
 import { LineChart } from '../chart';
@@ -140,6 +141,7 @@ export function PlayerCard({ game, playerId }: { game: GameState; playerId: stri
               <dd>z {clubLabel(game, p.loan.fromId)}, opce {money(p.loan.buyOption)}</dd>
             </>
           )}
+          {!own ? (() => { const ci = chemistryImpact(game, p); return ci.text ? (<><dt>Odhad dopadu na chemii</dt><dd className={ci.delta < 0 ? 'neg' : ci.delta > 0 ? 'pos' : ''}>{ci.text}</dd></>) : null; })() : null}{/* W4 */}
           <dt>Smlouva do</dt>
           <dd className={contractExpiring(game, p) ? 'neg' : ''}>{p.clubId === FREE ? '–' : p.loan ? 'konec sezóny (hostování)' : `30. 6. ${p.contractUntil}`}</dd>
           {own && p.bookValue !== undefined && (

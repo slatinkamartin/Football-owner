@@ -6,7 +6,8 @@ import { squadOf, teamStrength } from './players';
 import type { ActionResult } from './staff';
 import { coachOf } from './staff';
 import { computeTable } from './standings';
-import type { CoachStyle, Cup, Fixture, GameEvent, GameState, MatchPlan } from './types';
+import type { CoachStyle, Competition, Cup, Fixture, GameEvent, GameState, MatchPlan } from './types';
+import { settingsOf } from './settings';
 import { clamp, clubLabel, competitionOf, hash01, tierOf } from './world';
 import { resolvePressConference } from './press';
 import { trainingMatchBonus } from './training'; // V1
@@ -40,7 +41,7 @@ export function nextOwnFixture(state: GameState): OwnFixture | undefined {
 }
 
 export interface Stake {
-  key: 'derby' | 'soupeř' | 'titul' | 'zachrana' | 'pohar' | 'zaver';
+  key: 'derby' | 'soupeř' | 'titul' | 'zachrana' | 'pohar' | 'zaver' | 'playoff';
   label: string;
 }
 
@@ -53,6 +54,11 @@ export function matchStakes(state: GameState, f: Fixture, cup?: Cup): Stake[] {
   const rival = isRival(state, opp);
   if (rival?.kind === 'derby') out.push({ key: 'derby', label: `derby: ${clubLabel(state, opp)}` });
   if (cup) {
+    // W3: play-off o umístění (pokud ho soutěž vede jako vyřazovací pohár): klíčové je jen finále.
+    if (/umíst|umist/i.test(cup.name)) {
+      if (cupFinalRound(cup, f)) out.push({ key: 'playoff', label: 'finále play-off o umístění' });
+      return out;
+    }
     if (cup.kind === 'pohar') {
       if (f.round >= 4) out.push({ key: 'pohar', label: `pohár: ${cup.rounds[f.round - 1]?.name ?? ''}` });
     } else out.push({ key: 'zachrana', label: 'baráž o soutěž' });
@@ -64,11 +70,78 @@ export function matchStakes(state: GameState, f: Fixture, cup?: Cup): Stake[] {
   const pos = (id: string) => table.findIndex((r) => r.clubId === id) + 1;
   const played = table.find((r) => r.clubId === own)?.played ?? 0;
   const n = table.length;
-  if (played >= 10) {
+  const group = comp.groups && comp.fixtures.some((x) => x.id === f.id) ? comp.groups.find((g) => g.clubIds.includes(own) && g.clubIds.includes(opp)) : undefined;
+  const isGroupMatch = !!group && !baseFixture(comp, f);
+  // W3: souboj o čelo / o záchranu jen když jsou oba týmy bodově blízko (nejvýš 6 bodů).
+  const ptsOf = (id: string) => table.find((r) => r.clubId === id)?.points ?? 0;
+  const close = Math.abs(ptsOf(own) - ptsOf(opp)) <= 6;
+  if (played >= 10 && !isGroupMatch && close) {
     if (pos(own) <= 3 && pos(opp) <= 3) out.push({ key: 'titul', label: 'souboj o čelo tabulky' });
     if (pos(own) > n - 4 && pos(opp) > n - 4) out.push({ key: 'zachrana', label: 'šestibodový zápas o záchranu' });
   }
+  // W3: nadstavba – rozhodující zápasy o titul a záchranu a finále play-off o umístění (podle skupin soutěže).
+  if (isGroupMatch && group) {
+    const s = nadstavbaStake(state, comp, group, f, table.map((r) => ({ clubId: r.clubId, points: r.points })), n);
+    if (s && !out.some((x) => x.key === s.key)) out.push(s);
+  }
   return out;
+}
+
+// ---------- W3: klíčové zápasy nadstavby ----------
+
+/** Zápas základní části (ne nadstavby): odehrané kolo nebo kolo do posledního kola základní části. */
+function baseFixture(comp: Competition, f: Fixture): boolean {
+  const reserved = comp.reservedDates ?? [];
+  if (reserved.length) return !reserved.includes(f.date) && f.date < reserved[0];
+  return false;
+}
+
+/** Poslední kolo vyřazovacího pohárového play-off (finále). */
+function cupFinalRound(cup: Cup, f: Fixture): boolean {
+  const name = cup.rounds[f.round - 1]?.name ?? '';
+  if (/finále/i.test(name) && !/semi|čtvrt|osmi/i.test(name)) return true;
+  return f.round === cup.rounds.length && cup.fixtures.filter((x) => x.round === f.round).length <= 1;
+}
+
+/**
+ * O co jde v zápase nadstavby. Skupina o titul: rozhoduje, dokud o titul klub hraje (a soupeř také,
+ * nebo zbývají poslední dvě kola). Skupina o záchranu: dokud klubu hrozí baráž/sestup, nebo se z nich
+ * může dostat. Play-off o umístění: jen finále (kolo, ve kterém se ve skupině hraje jediný zápas).
+ */
+function nadstavbaStake(state: GameState, comp: Competition, group: { name: string; clubIds: string[] }, f: Fixture, table: { clubId: string; points: number }[], n: number): Stake | undefined {
+  const own = state.owner.clubId;
+  const opp = f.homeId === own ? f.awayId : f.homeId;
+  const rows = table.filter((r) => group.clubIds.includes(r.clubId));
+  const idx = (id: string) => rows.findIndex((r) => r.clubId === id);
+  const pts = (i: number) => rows[i]?.points ?? 0;
+  // Zbývající zápasy klubu ve skupině včetně tohoto (stejně před i po zápase).
+  const rem = comp.fixtures.filter((x) => x.date >= f.date && (x.homeId === own || x.awayId === own) && group.clubIds.includes(x.homeId) && group.clubIds.includes(x.awayId)).length;
+  const swing = 2 * Math.max(1, rem);
+  const name = group.name.toLowerCase();
+  if (/umíst|umist|play/.test(name)) {
+    const sameRound = comp.fixtures.filter((x) => x.round === f.round && group.clubIds.includes(x.homeId)).length;
+    return sameRound <= 1 && rows.length >= 4 ? { key: 'playoff', label: 'finále play-off o umístění' } : undefined;
+  }
+  if (/titul/.test(name)) {
+    const alive = (id: string) => {
+      const i = idx(id);
+      if (i < 0) return false;
+      return i === 0 ? pts(0) - pts(1) <= swing : pts(0) - pts(i) <= swing;
+    };
+    if (alive(own) && (alive(opp) || rem <= 2)) return { key: 'titul', label: 'nadstavba: rozhodující zápas o titul' };
+    return undefined;
+  }
+  if (/záchran|zachran/.test(name)) {
+    // Ohrožená místa: poslední tři v soutěži (baráž a sestup) = poslední tři ve skupině.
+    const zone = Math.max(1, rows.length - Math.min(3, Math.max(1, n - 13)));
+    const fight = (id: string) => {
+      const i = idx(id);
+      if (i < 0) return false;
+      return i >= zone ? pts(zone - 1) - pts(i) <= swing : pts(i) - pts(zone) <= swing;
+    };
+    if (fight(own) && (fight(opp) || rem <= 2)) return { key: 'zachrana', label: 'nadstavba: rozhodující zápas o záchranu' };
+  }
+  return undefined;
 }
 
 // ---------- Informace o soupeři ----------
@@ -181,6 +254,78 @@ export function pendingPrematch(state: GameState): (OwnFixture & { stakes: Stake
   return stakes.length ? { ...next, stakes } : undefined;
 }
 
+// ---------- W3: okno jen u klíčových zápasů ----------
+
+/** Klíčový zápas (derby, čelo, záchrana, pohár od čtvrtfinále, baráž, rozhodující zápasy nadstavby). Evropa je klíčová vždy. */
+export function isKeyMatch(state: GameState, f: Fixture, cup?: Cup): boolean {
+  return matchStakes(state, f, cup).length > 0;
+}
+
+/** Zastavit se před každým zápasem (nastavení Hra, výchozí vypnuto). */
+export function stopBeforeEveryMatch(state: GameState): boolean {
+  return !!settingsOf(state).stops.everyMatch;
+}
+
+/** Otevře se před tímto zápasem okno (jen klíčový zápas, nebo když to majitel chce u každého)? */
+export function opensMatchWindow(state: GameState, next: OwnFixture): boolean {
+  if (state.owner.ousted) return false;
+  return stopBeforeEveryMatch(state) || isKeyMatch(state, next.fixture, next.cup);
+}
+
+/** Domácí zápas zítra, před kterým se otevře okno (klíčový zápas). Běžné zápasy odehraje posun sám. */
+export function matchWindowTomorrow(state: GameState): OwnFixture | undefined {
+  const next = nextOwnFixture(state);
+  return next && next.fixture.date === addDays(state.date, 1) && opensMatchWindow(state, next) ? next : undefined;
+}
+
+export type CoachAdvice = 'vysledek' | 'odvazne' | 'trener';
+
+/** Jediná rada trenérovi před klíčovým zápasem. Výchozí: nechat na trenérovi. */
+export const COACH_ADVICE: { id: CoachAdvice; label: string; hint: string }[] = [
+  { id: 'vysledek', label: 'Na výsledek', hint: 'Opatrně a zezadu: méně šancí, ale i méně inkasovaných gólů.' },
+  { id: 'odvazne', label: 'Odvážně', hint: 'Útočně a s rizikem: víc šancí na obou stranách.' },
+  { id: 'trener', label: 'Nechat na trenérovi', hint: 'Trenér postaví tým po svém. Nic neriskujete u důvěry.' },
+];
+
+const ADVICE_APPROACH: Record<CoachAdvice, MatchPlan['approach']> = { vysledek: 'beton', odvazne: 'utok', trener: undefined };
+
+/** Rada trenérovi pro daný zápas (z plánu zápasu). */
+export function coachAdviceOf(state: GameState, fixtureId: string): CoachAdvice {
+  const plan = state.matchPlan?.fixtureId === fixtureId ? state.matchPlan : undefined;
+  return plan?.approach === 'beton' ? 'vysledek' : plan?.approach === 'utok' ? 'odvazne' : 'trener';
+}
+
+/**
+ * Rada trenérovi před klíčovým zápasem (domácí i evropský, `fixtureId` = id zápasu).
+ * Trenér ji přijme, nebo ne (podle důvěry a ega); „Nechat na trenérovi“ nic neriskuje.
+ */
+export function setCoachAdvice(prev: GameState, advice: CoachAdvice, fixtureId?: string): ActionResult {
+  const id = fixtureId ?? nextOwnFixture(prev)?.fixture.id;
+  if (!id) return { state: prev, ok: false, message: 'Žádný zápas není na programu.' };
+  if (prev.owner.ousted) return { state: prev, ok: false, message: 'Klub teď řídí představenstvo.' };
+  const state = structuredClone(prev);
+  const plan: MatchPlan = state.matchPlan?.fixtureId === id ? state.matchPlan : { fixtureId: id };
+  plan.approach = ADVICE_APPROACH[advice];
+  plan.coachAccepted = advice === 'trener' ? undefined : hash01(`${id}-${plan.approach}-`) < coachAcceptChance(state);
+  state.matchPlan = plan;
+  const message = advice === 'trener' ? 'Necháte to na trenérovi.' : plan.coachAccepted ? 'Trenér radu přijal. Když to nevyjde, padá to i na vás.' : 'Trenér radu odmítl a postaví tým po svém.';
+  return { state, ok: true, message };
+}
+
+/** Zásah v 75. minutě (když se nerozhodovalo o poločase). */
+export function setLateChoice(prev: GameState, choice: NonNullable<MatchPlan['late']>, fixtureId: string): GameState {
+  const state = structuredClone(prev);
+  const plan: MatchPlan = state.matchPlan?.fixtureId === fixtureId ? state.matchPlan : { fixtureId };
+  plan.late = choice;
+  state.matchPlan = plan;
+  return state;
+}
+
+/** Trenér přijme vzkaz z lóže během zápasu (poločas, 75. minuta)? */
+export function liveAccepted(state: GameState, fixtureId: string, what: string): boolean {
+  return hash01(`${fixtureId}-${what}`) < coachAcceptChance(state) + 0.15;
+}
+
 export interface PlanEffect {
   style?: CoachStyle;
   bonus: number;
@@ -211,7 +356,7 @@ export function planEffect(state: GameState, f: Fixture): PlanEffect {
 export function halftimeAdjust(state: GameState, f: Fixture): { style?: CoachStyle; bonus?: number } | undefined {
   const plan = state.matchPlan;
   if (!plan || plan.fixtureId !== f.id || !plan.halftime || plan.halftime === 'drzet') return undefined;
-  const accepted = hash01(`${f.id}-pulka-${plan.halftime}`) < coachAcceptChance(state) + 0.15;
+  const accepted = liveAccepted(state, f.id, `pulka-${plan.halftime}`);
   if (!accepted) return undefined;
   return plan.halftime === 'riskovat' ? { style: 'utocny', bonus: 0.6 } : { style: 'defenzivni', bonus: 0.3 };
 }

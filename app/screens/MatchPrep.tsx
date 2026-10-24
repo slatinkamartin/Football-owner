@@ -1,34 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   advanceDays,
-  APPROACH_LABEL,
-  choreoCost,
   clubLabel,
   coachAcceptChance,
+  coachAdviceOf,
+  COACH_ADVICE,
   goalChance,
   BIG_MATCH_LABEL,
   crowdBase,
   crowdLevel,
   finalWhistle,
   goalCry,
+  lateMoment,
+  liveDecisionMinute,
   matchIntro,
-  MAX_LIVE_DECISIONS,
   recordLiveChoice,
   scheduledMoments,
-  vabankMoment,
+  setCoachAdvice,
+  setLateChoice,
   type BigMatchKind,
+  type CoachAdvice,
   type LiveMoment,
-  matchBonusAmount,
   matchStakes,
   nextOwnFixture,
   opponentScout,
   setHalftime,
-  setMatchPlan,
-  workload,
-  type ActionResult,
   type GameState,
   type MatchEvent,
-  type MatchPlan,
   type Fixture,
   liveClubName,
   liveFixture,
@@ -37,79 +35,33 @@ import {
 } from '../../engine';
 import { Badge } from '../components';
 import { useNav } from '../nav';
-import { money } from '../format';
 import { BigMatchBanner, CrowdMeter } from './BigMatch';
 
 const daysBetween = (a: string, b: string) => Math.round((new Date(`${b}T00:00:00Z`).getTime() - new Date(`${a}T00:00:00Z`).getTime()) / 86_400_000);
 
-/** Příprava na příští zápas: taktika s trenérem, rotace, prémie, akce pro fanoušky, návštěva kabiny. */
-export function MatchPrep({ game, onChange, onLive, compact }: { game: GameState; onChange: (g: GameState) => void; onLive?: () => void; compact?: boolean }) {
+/**
+ * W3: jediná rada trenérovi před klíčovým zápasem (domácím i evropským). Výchozí: nechat na trenérovi.
+ * Rotaci, prémie a akce pro fanoušky řeší vedení samo; u velkého zápasu je pojetí na kartě odpočtu.
+ */
+export function CoachAdviceChoice({ game, fixtureId, onChange }: { game: GameState; fixtureId: string; onChange: (g: GameState) => void }) {
   const [msg, setMsg] = useState<string | null>(null);
-  const next = nextOwnFixture(game);
-  if (!next) return null;
-  const stakes = matchStakes(game, next.fixture, next.cup);
-  const plan: Partial<MatchPlan> = game.matchPlan?.fixtureId === next.fixture.id ? game.matchPlan : {};
-  const apply = (r: ActionResult) => {
-    onChange(r.state);
+  const cur = coachAdviceOf(game, fixtureId);
+  const accept = Math.round(coachAcceptChance(game) * 100);
+  const pick = (a: CoachAdvice) => {
+    const r = setCoachAdvice(game, a, fixtureId);
+    if (r.ok) onChange(r.state);
     setMsg(r.message);
   };
-  const accept = Math.round(coachAcceptChance(game) * 100);
-  const w = workload(game);
-  const days = daysBetween(game.date, next.fixture.date);
-  const bigHome = next.home && game.bigMatch?.id === next.fixture.id && !game.bigMatch.settled;
+  const hint = COACH_ADVICE.find((o) => o.id === cur)?.hint;
   return (
-    <div className="match-prep">
-      {!compact && (
-        <div className="row-between">
-          <strong>
-            {next.home ? 'Doma' : 'Venku'} s {clubLabel(game, next.opponentId)}
-          </strong>
-          <span className="muted small">{next.name}, za {days} {days === 1 ? 'den' : days < 5 ? 'dny' : 'dní'}</span>
-        </div>
-      )}
-      {stakes.length > 0 && (
-        <div className="buttons">
-          {stakes.map((s) => <Badge key={s.key} tone="warn">{s.label}</Badge>)}
-        </div>
-      )}
-      <div className="prep-row">
-        <span>Taktika (doporučení trenérovi, přijme asi s {accept}% šancí)</span>
-        <div className="segmented">
-          {(['utok', 'vyvazene', 'beton'] as const).map((a) => (
-            <button key={a} className={(plan.approach ?? 'vyvazene') === a ? 'active' : ''} onClick={() => apply(setMatchPlan(game, { approach: a }))}>{APPROACH_LABEL[a]}</button>
-          ))}
-        </div>
+    <div className="coach-advice">
+      <div className="segmented wrap" role="group" aria-label="Rada trenérovi">
+        {COACH_ADVICE.map((o) => (
+          <button key={o.id} className={cur === o.id ? 'active' : ''} aria-pressed={cur === o.id} title={o.hint} onClick={() => pick(o.id)}>{o.label}</button>
+        ))}
       </div>
-      {plan.coachAccepted === false && <p className="neg small">Trenér doporučení odmítl a postaví tým po svém.</p>}
-      <div className="prep-actions">
-        <label className="check">
-          <input type="checkbox" checked={!!plan.rotate} onChange={(e) => apply(setMatchPlan(game, { rotate: e.target.checked }))} />
-          <span>Šetřit opory (rotace): slabší sestava, ale opory se zotaví{w.level === 'vysoka' ? ' — nahuštěný program, doporučeno' : ''}</span>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={!!plan.bonus} onChange={(e) => apply(setMatchPlan(game, { bonus: e.target.checked ? matchBonusAmount(game) : 0 }))} />
-          <span>Mimořádná prémie za výhru {money(matchBonusAmount(game))} (vyšší nasazení)</span>
-        </label>
-        {bigHome && <p className="muted small">Vstupné, kotel a choreo nastavujete na kartě velkého zápasu na domově Týden.</p>}
-        {next.home && !bigHome && (
-          <div className="prep-row">
-            <span>Akce pro fanoušky</span>
-            <div className="segmented">
-              <button className={!plan.fanAction ? 'active' : ''} onClick={() => apply(setMatchPlan(game, { fanAction: undefined }))}>žádná</button>
-              <button className={plan.fanAction === 'levne' ? 'active' : ''} onClick={() => apply(setMatchPlan(game, { fanAction: 'levne' }))}>poloviční vstupné</button>
-              <button className={plan.fanAction === 'choreo' ? 'active' : ''} onClick={() => apply(setMatchPlan(game, { fanAction: 'choreo' }))}>choreo ({money(choreoCost(game))})</button>
-            </div>
-          </div>
-        )}
-        <label className="check">
-          <input type="checkbox" checked={!!plan.visit} onChange={(e) => apply(setMatchPlan(game, { visit: e.target.checked }))} />
-          <span>Zajít do kabiny před zápasem {game.owner.trust.trener >= 50 ? '(trenér vám věří, povzbudí to tým)' : '(trenér vám nevěří, může to být kontraproduktivní)'}</span>
-        </label>
-      </div>
+      {hint && <span className="muted small">{hint}{cur !== 'trener' ? ` Trenér radu přijme asi s ${accept}% šancí.` : ''}</span>}
       {msg && <p className="muted small">{msg}</p>}
-      {onLive && days <= 7 && (
-        <button className="primary" onClick={onLive}>Sledovat zápas živě ›</button>
-      )}
     </div>
   );
 }
@@ -117,8 +69,9 @@ export function MatchPrep({ game, onChange, onLive, compact }: { game: GameState
 const FORM_TONE = { V: 'good', R: 'neutral', P: 'bad' } as const;
 
 /**
- * Zápasový milník: otevře se tlačítkem „Zápas ›“ v předvečer zápasu. Ukáže soupeře, všechno,
- * co majitel může před zápasem ovlivnit, a nechá vybrat, jestli chce jen výsledek, nebo přenos.
+ * Zápasový milník: otevře se tlačítkem „Zápas ›“ v předvečer KLÍČOVÉHO zápasu (W3; běžné zápasy odehraje
+ * posun sám, pokud majitel v nastavení nechce zastavovat před každým). Ukáže soupeře, jednu radu trenérovi
+ * a nechá vybrat, jestli chce jen výsledek, nebo přenos.
  */
 export function MatchDialog({ game, onChange, onClose, onResult, onLive }: { game: GameState; onChange: (g: GameState) => void; onClose: () => void; onResult: () => void; onLive: () => void }) {
   const nav = useNav();
@@ -132,6 +85,7 @@ export function MatchDialog({ game, onChange, onClose, onResult, onLive }: { gam
   const away = next.home ? oppName : ownName;
   const edge = scout.ownStrength - scout.strength;
   const big = game.bigMatch?.id === next.fixture.id && !game.bigMatch.settled;
+  const stakes = matchStakes(game, next.fixture, next.cup);
   return (
     <div className="overlay" onClick={onClose}>
       <div className="card dialog match-dialog" role="dialog" aria-modal="true" aria-label="Zápas" onClick={(e) => e.stopPropagation()}>
@@ -170,16 +124,21 @@ export function MatchDialog({ game, onChange, onClose, onResult, onLive }: { gam
           {chance !== undefined && <li className="muted">Šance na splnění cíle sezóny: {Math.round(chance * 100)} %</li>}
         </ul>
 
+        {stakes.length > 0 && (
+          <div className="buttons">
+            {stakes.map((x) => <Badge key={x.key} tone="warn">{x.label}</Badge>)}
+          </div>
+        )}
         {!game.owner.ousted && (
           <>
-            <h3>Co můžete před zápasem ovlivnit</h3>
-            <MatchPrep game={game} onChange={onChange} compact />
+            <h3>Rada trenérovi</h3>
+            <CoachAdviceChoice game={game} fixtureId={next.fixture.id} onChange={onChange} />
           </>
         )}
 
         <div className="match-choice">
           <button onClick={onResult}>Jen výsledek<span>Zápas se odehraje hned, uvidíte souhrn.</span></button>
-          <button className="primary" onClick={onLive}>Sledovat zápas<span>{big ? 'Přenos s kotlem, poločasem a rozhodnutími v klíčových chvílích.' : 'Přenos s rozhodnutím o poločase.'}</span></button>
+          <button className="primary" onClick={onLive}>Sledovat zápas<span>{big ? 'Přenos s kotlem a jedním vzkazem trenérovi (o poločase, nebo v 75. minutě).' : 'Přenos s jedním vzkazem trenérovi (o poločase, nebo v 75. minutě).'}</span></button>
         </div>
         <button className="linkbtn" onClick={onClose}>Zatím zavřít</button>
       </div>
@@ -205,8 +164,8 @@ function eventText(game: GameState, e: MatchEvent, f?: Fixture): string {
 type LiveStop = { key: string; minute: number; kind: 'pulka' } | { key: string; minute: number; kind: 'moment'; moment: LiveMoment };
 
 /**
- * Živý přenos. Zápas se přehraje na kopii hry; v bodech zlomu (poločas, u velkých zápasů navíc
- * sporný verdikt, pyro nebo vabank v 75. minutě) se volba zapíše a zbytek zápasu se přehraje znovu.
+ * Živý přenos. Zápas se přehraje na kopii hry; v jediném bodě zlomu (W3: poločas, když klub nevede,
+ * jinak 75. minuta) se volba zapíše a zbytek zápasu se přehraje znovu.
  * Do bodu zlomu je zápas stejný (stejná náhoda), volba platí od další minuty, takže rozhodnutí je poctivé.
  * Když zápas není zítra, hra se k němu nejdřív posune.
  */
@@ -253,13 +212,16 @@ export function LiveMatch({ game, onChange, onClose, onSummary, euro }: { game: 
   const ownHome = fixture?.homeId === own;
   const goalsBy = (club: string, upTo: number) => events.filter((e) => e.type === 'gol' && e.clubId === club && e.minute <= upTo).length;
 
-  const stops: LiveStop[] = [{ key: 'pulka', minute: 45, kind: 'pulka' }];
-  for (const m of moments) stops.push({ key: m.kind, minute: m.minute, kind: 'moment', moment: m });
-  if (bm && fixture && moments.length < MAX_LIVE_DECISIONS) {
+  // W3: v přenosu nejvýš jeden zásah. Když klub o poločase nevede, rozhoduje se o poločase; jinak v 75. minutě.
+  // Pyro a sporný verdikt se odehrají samy s výchozí volbou (jen zpráva v komentáři, bez zastavení).
+  const stops: LiveStop[] = [];
+  if (fixture) {
     const opp = ownHome ? fixture.awayId : fixture.homeId;
-    if (goalsBy(own, 75) < goalsBy(opp, 75) || done.includes('vabank')) stops.push({ key: 'vabank', minute: 75, kind: 'moment', moment: vabankMoment() });
+    if (liveDecisionMinute(goalsBy(own, 45), goalsBy(opp, 45)) === 45) stops.push({ key: 'zasah', minute: 45, kind: 'pulka' });
+    else stops.push({ key: 'zasah', minute: 75, kind: 'moment', moment: lateMoment(goalsBy(own, 75), goalsBy(opp, 75)) });
   }
   const stopAt = (m: number) => stops.find((s) => s.minute === m && !done.includes(s.key));
+  const autoMoment = (m: number) => moments.find((x) => x.minute === m);
 
   // Hodiny přenosu: po minutách, u gólu delší pauza, v bodě zlomu zastaví.
   useEffect(() => {
@@ -269,6 +231,11 @@ export function LiveMatch({ game, onChange, onClose, onSummary, euro }: { game: 
       setPause(stop);
       if (stop.kind === 'moment') setNotes((n) => [...n, { minute, text: `${stop.moment.title}: ${stop.moment.text}`, cls: 'moment' }]);
       return;
+    }
+    const auto = autoMoment(minute);
+    if (auto && !notes.some((n) => n.minute === minute && n.cls === 'moment')) {
+      const def = auto.options.find((o) => o.id === auto.def)?.label ?? '';
+      setNotes((n) => [...n, { minute, text: `${auto.title}: ${auto.text} ${def ? `Lavička a pořadatelé: ${def.toLowerCase()}.` : ''}`, cls: 'moment' }]);
     }
     if (minute >= 90) {
       setFinished(true);
@@ -289,7 +256,8 @@ export function LiveMatch({ game, onChange, onClose, onSummary, euro }: { game: 
   if (!eve || !work || !sim || !fixture) return null;
 
   const decide = (stop: LiveStop, choice: string, label: string) => {
-    const next = stop.kind === 'pulka' ? setHalftime(work, choice as 'drzet' | 'riskovat' | 'branit', fixtureId).state : recordLiveChoice(work, stop.moment.kind, stop.minute, choice);
+    const late = (g: GameState) => (bm ? recordLiveChoice(g, 'vabank', stop.minute, choice) : setLateChoice(g, choice as 'vabank' | 'branit' | 'nechat', fixtureId!));
+    const next = stop.kind === 'pulka' ? setHalftime(work, choice as 'drzet' | 'riskovat' | 'branit', fixtureId).state : late(work);
     setWork(next);
     setSim(advanceDays(next, 1).state);
     setDone((d) => [...d, stop.key]);

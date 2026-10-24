@@ -183,13 +183,18 @@ export function seasonMilestones(state: GameState): Milestone[] {
     });
   }
 
-  if (comp?.reservedDates?.length && !comp.groups) {
+  if (comp?.reservedDates?.length) {
     add({
       id: `nadstavba-${y}`,
       date: addDays(comp.reservedDates[0], -1),
       short: 'nadstavby',
       title: 'Zítra začíná nadstavba',
-      text: ['Základní část skončila, kluby se rozdělí do skupin podle tabulky.'],
+      text: comp.clubIds.length === 16
+        ? [
+            'Základní část skončila. 1.–6. hraje skupinu o titul a 11.–16. skupinu o záchranu: jednokolově 5 kol, body ze základní části zůstávají.',
+            '7.–10. hraje play-off o umístění (semifinále 10–7 a 9–8 na dva zápasy, pak finále). Vítěz získá volný los do 2. kola poháru.',
+          ]
+        : ['Základní část skončila, kluby se rozdělí do skupin podle tabulky.'],
       todo: [{ label: 'Tabulka', tab: 'tabulky' }],
     });
   }

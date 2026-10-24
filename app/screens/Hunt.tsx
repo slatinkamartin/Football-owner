@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { huntTargets, planAgendaAction, setHuntPlan, suggestedPositions, toggleHunt, weekAgenda, type ActionResult, type GameState, type Position } from '../../engine';
+import { focusHuntTarget, huntTargets, monthPriorities, setHuntPlan, suggestedPositions, toggleHunt, type ActionResult, type GameState, type Position } from '../../engine';
+import { chemistryImpact } from '../../engine'; // W4
 import { Badge } from '../components';
 import { money } from '../format';
 import { PlayerLink } from '../nav';
@@ -12,9 +13,8 @@ export function HuntCard({ game, onResult }: { game: GameState; onResult: (r: Ac
   const plan = game.hunt?.plan && game.hunt.plan.season === game.season ? game.hunt.plan : undefined;
   const [budget, setBudget] = useState(String(Math.round((plan?.budget ?? game.clubs[game.owner.clubId].policy.transferBudget) / 1e6)));
   const [positions, setPositions] = useState<Position[]>(plan?.positions ?? suggestedPositions(game));
-  const ag = weekAgenda(game).options;
-  const trip = ag.find((o) => o.id === 'skauting');
-  const pitch = ag.find((o) => o.id === 'prestup');
+  const focus = game.agenda?.focus;
+  const scoutsOn = monthPriorities(game).priorities.includes('prestupy');
   return (
     <section className="card hunt-card">
       <h2>Lov na posily</h2>
@@ -31,6 +31,7 @@ export function HuntCard({ game, onResult }: { game: GameState; onResult: (r: Ac
         <button onClick={() => onResult(setHuntPlan(game, positions, (Number(budget.replace(',', '.')) || 0) * 1e6))}>Uložit plán</button>
       </div>
       <h3>Cíle</h3>
+      <p className="muted small">{scoutsOn ? 'Skautské cesty a v okně i osobní jednání dělá vedení každý týden podle priority „Skauting a přestupy“.' : 'Skautské cesty a osobní jednání dělá vedení, když mezi priority měsíce zařadíte „Skauting a přestupy“.'}</p>
       {!list.length && <p className="muted small">Žádné cíle. Přidejte hráče mezi sledované (karta hráče, Přestupy) nebo požádejte ředitele o tipy (schůzka s postavou).</p>}
       <ul className="plain hunt-list">
         {list.map((t) => (
@@ -46,15 +47,11 @@ export function HuntCard({ game, onResult }: { game: GameState; onResult: (r: Ac
               {t.rival && <> · <span className={t.rival.strength >= 60 ? 'neg' : ''}>soupeř {t.rival.name} {t.rival.strength} %</span></>}
             </p>
             {t.notes.length > 0 && <p className="muted small">{t.notes.join(' · ')}</p>}
+            {(() => { const pl = game.players[t.playerId] ?? game.foreign?.targets.find((f) => f.player.id === t.playerId || f.id === t.id)?.player; const ci = pl ? chemistryImpact(game, pl) : undefined; return ci?.text ? <p className={`small ${ci.delta < 0 ? 'neg' : ''}`}>{ci.text}</p> : null; })()}{/* W4: odhad dopadu na chemii */}
             <div className="buttons">
-              <button disabled={!!trip?.disabledReason || !trip?.targets?.some((x) => x.id === t.id)} title={trip?.disabledReason} onClick={() => onResult(planAgendaAction(game, 'skauting', t.id))}>
-                Skautská cesta (agenda)
+              <button className={focus === t.id ? 'primary' : ''} aria-pressed={focus === t.id} disabled={t.trips >= 3 && focus !== t.id} onClick={() => onResult(focusHuntTarget(game, focus === t.id ? undefined : t.id))}>
+                {focus === t.id ? 'Skauti jedou přednostně' : 'Poslat skauty přednostně'}
               </button>
-              {!t.foreign && (
-                <button disabled={!!pitch?.disabledReason || !pitch?.targets?.some((x) => x.id === t.playerId)} title={pitch?.disabledReason} onClick={() => onResult(planAgendaAction(game, 'prestup', t.playerId))}>
-                  Osobní jednání (agenda)
-                </button>
-              )}
               {!t.foreign && (
                 <button className="linkbtn" onClick={() => onResult(toggleHunt(game, t.playerId))}>
                   Odebrat

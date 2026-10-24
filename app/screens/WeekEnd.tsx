@@ -1,5 +1,5 @@
 /**
- * V2 (B8): animovaná karta konce týdne. Po přechodu do nového týdne se krátce ukáže shrnutí
+ * V2 (B8), W2: animovaná karta konce měsíce (dříve týdne). Po přechodu do nového týdne se krátce ukáže shrnutí
  * (co přinesly akce, výsledky, změny čísel). Nepřekáží: je v rohu, sama zmizí, jde zavřít.
  */
 import { useEffect, useState } from 'react';
@@ -30,7 +30,7 @@ export function WeekEndCard({ data, onClose, autoMs = 9000 }: { data: WeekEndDat
     <aside className="weekend-card" role="status" aria-label={data.title} onMouseEnter={() => setPaused(true)} onFocus={() => setPaused(true)} onTouchStart={() => setPaused(true)}>
       <div className="row-between">
         <strong><Icon name="tyden" size={16} /> {data.title}</strong>
-        <button className="icon-btn" aria-label="Zavřít shrnutí týdne" onClick={onClose}><Icon name="close" size={16} /></button>
+        <button className="icon-btn" aria-label="Zavřít shrnutí" onClick={onClose}><Icon name="close" size={16} /></button>
       </div>
       {data.deltas.length > 0 && (
         <div className="we-deltas">

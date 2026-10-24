@@ -61,6 +61,29 @@ npm run build      # produkční sestavení do složky dist/
 - Stárnutí a vývoj hráčů, odchody do důchodu, dorost z akademie.
 - Automatické ukládání v prohlížeči (IndexedDB), záloha do souboru.
 
+### Novinky verze 0.29: liga podle pravidel, měsíční priority, chemie týmu a strategická rozhodnutí
+**Liga a Evropa**
+- **Nadstavba 1. ligy podle herního modelu Chance Ligy:** skupina o titul (1.–6.) a o záchranu (11.–16.) jednokolově, 5 kol s oficiálním rozpisem a počtem domácích zápasů; **play-off o umístění (7.–10.)** vyřazovacími dvojzápasy – vítěz 7. místo, volný los do 2. kola poháru a bonus 3 mil. Kč, finalista 1,5 mil. Kč. Základní část končí v dubnu, nadstavba v květnu.
+- **Evropská místa podle přístupového seznamu UEFA** (Česko 10. v koeficientu, lze změnit konstantou): mistr → Liga mistrů rovnou do ligové fáze, 2. → LM 2. předkolo, 3. → EL 2. předkolo, 4. → KL 2. předkolo, vítěz MOL Cupu → EL play-off (když je v první čtyřce, místa se posunou). Padáky do nižší soutěže jako ve skutečnosti.
+- **Tabulka** ukazuje barevná pásma s legendou (Evropa, baráž, sestup), kde právě jste, a kartu nadstavby s pavoukem play-off.
+- B-tým nikdy neskončí ve stejné soutěži jako mateřský klub.
+
+**Měsíční priority místo týdenní agendy**
+- 1. den měsíce vyberete 2–3 oblasti (od 3. úrovně 4): kabina, sponzoři, přestupy, radnice, fanoušci, média, projekty, mládež. Akce pak během měsíce dělá vedení samo; bez výběru zvolí priority vedení za polovičního účinku. Souhrn na konci měsíce. Jedna osobní schůzka s postavou týdně zdarma.
+- Vztahy a důvěra už neutečou na maximum: zisky nad ~80 slábnou a každý měsíc se hodnoty mírně vracejí k úrovni, kterou si klub zaslouží výsledky.
+
+**Méně zásahů do zápasů**
+- Běžné zápasy odehraje tlačítko posunu bez okna, výsledek ukáže krátké oznámení (zastavování před každým zápasem lze zapnout v nastavení).
+- Klíčové zápasy (derby, rozhodující evropské zápasy, souboje o čelo a záchranu, pohár od čtvrtfinále, baráž, finále play-off o umístění): jedna rada trenérovi před zápasem a nejvýš jeden zásah během něj. Příprava velkého zápasu je jedno rozhodnutí „Pojetí zápasu“. Slavia má za sezónu asi 11–17 takových zápasů.
+
+**Složení týmu a chemie (Tým › Složení)**
+- Hřiště se základní sestavou, lavička, hloubka kádru a slabá místa, věková struktura, cizinci, odchovanci, končící smlouvy, platová hierarchie.
+- **Týmová chemie 0–100** ze 7 složek s vysvětlením (souhra, stabilita sestavy, nováčci, jazykové skupiny, spokojenost, kapitán a lídři, výsledky). Mírně ovlivní sílu v zápase (asi ±3 %) a morálku po porážkách. U hráče na trhu odhad dopadu na chemii.
+- **Kapitán a lídři kabiny:** v červenci volba kapitána (výchozí návrh trenéra), změna během sezóny něco stojí.
+
+**Strategická rozhodnutí majitele (Klub › Majitel)**
+- Vize klubu na 3 roky, priorita soutěží, bilanční schůzka po sezóně (10.–19. června), platová hierarchie (strop/výjimka pro hvězdu), názvová práva stadionu, reinvestice zisku na valné hromadě, partnerský klub v zahraničí, ženský tým a komunitní program. Firmy a partnerské kluby jsou vymyšlené. Celkový počet rozhodnutí za sezónu se nezvýšil.
+
 ### Novinky verze 0.28: týden majitele, nové rozhraní a cesta poháry
 **Hratelnost – víc než klikání od zápasu k zápasu**
 - **Agenda týdne:** 3 akce týdně (od 3. úrovně majitele 4) – porada s trenérem, oběd se sponzorem, cesta za hráčem, rozhovor pro média, návštěva tréninku, schůzka s postavou, krok projektu. Každá má hned viditelný výsledek „před → po“; nevyužité akce v pondělí propadnou.

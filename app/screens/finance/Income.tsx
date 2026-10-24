@@ -8,6 +8,7 @@ import {
   defaultSeasonTicketPrice,
   defaultTicketPrice,
   EUROPE_LABEL,
+  accessLabel,
   expectedPosition,
   fanshopDetail,
   forecastSeason,
@@ -247,7 +248,7 @@ export function FinanceIncome({ game, onChange, onOpen, focus }: { game: GameSta
         <LineCard id="evropa" title="Evropa a domácí pohár" lines={line('evropa', 'pohar')} effects={['pověst', 'sponzorské bonusy']}>
           <dl className="kv">
             <dt>Evropské poháry</dt>
-            <dd>{europe ? (game.europe!.resolved ? (europe.result === 'predkola' ? EUROPE_LABEL.predkola : EUROPE_LABEL[europe.result]) : `předkola ${EUROPE_LABEL[europe.entry]}`) : 'nehrajeme'}</dd>
+            <dd>{europe ? (game.europe!.resolved ? (europe.result === 'predkola' ? EUROPE_LABEL.predkola : EUROPE_LABEL[europe.result]) : (europe.stage ? accessLabel({ comp: europe.entry, stage: europe.stage }) : `předkola ${EUROPE_LABEL[europe.entry]}`)) : 'nehrajeme'}</dd>
             {europe && (
               <>
                 <dt>{game.europe!.resolved ? 'Příjmy z Evropy' : 'Odhad příjmů'}</dt>

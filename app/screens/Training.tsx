@@ -11,7 +11,7 @@ export function TrainingCard({ game, onResult }: { game: GameState; onResult: (r
         {t.owner ? <Badge tone={t.accepted ? 'good' : 'warn'}>{t.accepted ? 'trenér plán dodržuje' : 'trenér trénuje po svém'}</Badge> : <Badge>bez plánu majitele</Badge>}
       </div>
       <p className="muted small">
-        Teď: {describePlan(t)}. Šance, že trenér návrh přijme: {Math.round(t.acceptChance * 100)} % (podle důvěry). Návštěva tréninku z agendy zajistí, že plán dodrží.
+        Teď: {describePlan(t)}. Šance, že trenér návrh přijme: {Math.round(t.acceptChance * 100)} % (podle důvěry). Priorita měsíce „Trenér a kabina“ (návštěvy tréninku) zajistí, že plán dodrží.
       </p>
       <h3>Zaměření</h3>
       <div className="buttons">

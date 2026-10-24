@@ -732,6 +732,8 @@ export interface MatchPlan {
   coachAccepted?: boolean;
   /** Rozhodnutí o poločase (živý přenos). */
   halftime?: 'drzet' | 'riskovat' | 'branit';
+  /** W3: jediný zásah v 75. minutě (když nebyl poločas): vabank, bránit, nebo nechat na trenérovi. */
+  late?: 'vabank' | 'branit' | 'nechat';
 }
 
 export type PulseKey = 'fans' | 'media' | 'kabina' | 'vedeni';
@@ -766,6 +768,8 @@ export interface GameSettings {
     offerMin: number;
     injury: boolean;
     milestone: boolean;
+    /** W3: zastavovat před každým zápasem (výchozí vypnuto: okno jen u klíčových zápasů). */
+    everyMatch?: boolean;
   };
 }
 
@@ -846,7 +850,7 @@ export interface Competition extends CompetitionDef {
   /** Odečtené body (disciplinární tresty). */
   penalties?: Record<string, number>;
   /** Skupiny nadstavby (vznikají po základní části). */
-  groups?: { name: string; clubIds: string[] }[];
+  groups?: { name: string; clubIds: string[]; /** W1 v0.29: místo skupiny se hraje play-off o umístění. */ playoff?: boolean }[];
   /** Termíny vyhrazené pro nadstavbu. */
   reservedDates?: string[];
 }
@@ -855,7 +859,8 @@ export interface Competition extends CompetitionDef {
 export interface Cup {
   id: string;
   name: string;
-  kind: 'pohar' | 'baraz';
+  /** W1 v0.29: 'umisteni' = play-off o 7.–10. místo v nadstavbě 1. ligy. */
+  kind: 'pohar' | 'baraz' | 'umisteni';
   fixtures: Fixture[];
   /** Názvy a termíny kol (u baráže i odveta). */
   rounds: { name: string; date: string; secondLeg?: string }[];
@@ -868,6 +873,8 @@ export interface Cup {
   ties?: { upper: string; lower: string; winner?: string }[];
   /** V4: baráž vítězů skupin jedné soutěže (promotePool, např. ČFL A a B): vítěz postupuje. */
   pool?: string;
+  /** W1 v0.29: play-off o umístění – soutěž a nasazení podle základní části (7., 8., 9., 10.). */
+  placement?: { compId: string; seeds: string[] };
 }
 
 export interface Owner {
@@ -1040,6 +1047,8 @@ export interface EuropeEntry {
   clubId: string;
   /** Kam klub nastoupil (předkola). */
   entry: EuropeCompetition;
+  /** W1 v0.29: vstupní fáze podle přístupového seznamu UEFA (starší hry: chybí = jeden dvojzápas o ligovou fázi). */
+  stage?: import('./europe').EuroStage;
   /** Kde skončil: ligová fáze některé soutěže, nebo vyřazení v předkolech. */
   result: EuropeCompetition | 'predkola';
   revenue: number;
@@ -1172,6 +1181,8 @@ export interface GameState {
   /** Evropské poháry českých klubů v aktuální sezóně a historie. */
   europe?: EuropeSeason;
   europeHistory?: EuropeEntry[];
+  /** W1 v0.29: vítěz play-off o umístění má v příští sezóně volný los do 2. kola poháru. */
+  cupBye?: { season: number; clubId: string };
   /** W1: reprezentační srazy a letní příběh hvězdy. */
   stars?: import('./stars').StarsState;
   /** Kluby mimo modelované soutěže (divize a níže). */
@@ -1194,10 +1205,14 @@ export interface GameState {
   /** W3: dlouhodobé efekty velkých rozhodnutí a plánování nabídek (engine/bigdecisions.ts). */
   longEffects?: import('./bigdecisions').LongEffect[];
   bigDecisions?: import('./bigdecisions').BigDecisionsState;
+  /** W5: strategická rozhodnutí majitele – vize, priorita soutěží, bilanční schůzka, platy, název stadionu, partner, komunita (engine/ownerdecisions.ts). */
+  ownerDecisions?: import('./ownerdecisions').OwnerDecisionsState;
   /** W3: fanoušci průběžně – rada, ankety, výjezdy, oslavy (engine/fans.ts). */
   fans?: import('./fans').FansState;
   /** R3: tisková konference po zápase (engine/press.ts). */
   press?: import('./press').PressState;
+  /** W4: týmová chemie, kapitán a lídři kabiny (engine/chemistry.ts). */
+  chemistry?: import('./chemistry').ChemistryState;
   /** R3: výroky a navazující příběhy (engine/narrative.ts). */
   narrative?: import('./narrative').NarrativeState;
   /** V1: týdenní agenda majitele a rutina podřízeným (engine/agenda.ts). */
@@ -1246,6 +1261,8 @@ export interface BigMatchState {
   settled?: boolean;
   /** W1: krátké shrnutí dopadů přípravy (pro kartu po zápase). */
   report?: string[];
+  /** W3: souhrnné rozhodnutí o přípravě nabídnuto majiteli (false = zařídí vedení, týdenní limit vyčerpán). */
+  prepOffered?: boolean;
 }
 
 /** W1: los evropských pohárů s postupným odkrytím soupeře. */

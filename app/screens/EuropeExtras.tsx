@@ -60,7 +60,8 @@ export function EuropeSection({ game, onOpenMatch }: { game: GameState; onOpenMa
       )}
       {run && (
         <p className="muted small">
-          {run.phase === 'predkola' && `Dvojzápas o ligovou fázi. O postupu rozhoduje hlavně síla kádru (průměr 14 nejlepších), posily do srpna šanci zvednou. Kdo vypadne, hraje o nižší soutěž.`}
+          {run.phase === 'predkola' && run.slot !== undefined && `Předkola: ${['2. předkolo, 3. předkolo a play-off', '3. předkolo a play-off', 'play-off'][run.slot]} – vítěz play-off jde do ligové fáze. Kdo vypadne, padá o soutěž níž (z play-off rovnou do ligové fáze nižší soutěže). O postupu rozhoduje hlavně síla kádru (průměr 14 nejlepších).`}
+          {run.phase === 'predkola' && run.slot === undefined && `Dvojzápas o ligovou fázi. O postupu rozhoduje hlavně síla kádru (průměr 14 nejlepších), posily do srpna šanci zvednou. Kdo vypadne, hraje o nižší soutěž.`}
           {run.phase === 'liga' && `Ligová fáze: ${run.points} bodů, skóre ${run.gf}:${run.ga}${run.rank ? `, odhad ${run.rank}. místo z 36` : ''}. Prvních 8 jde rovnou do osmifinále, 9.–24. místo hraje play-off o jaro.`}
           {run.phase === 'jaro' && `Jaro v Evropě! Zatím: ${run.best}.`}
           {run.phase === 'konec' && `Evropská sezóna skončila: ${run.best}.`}

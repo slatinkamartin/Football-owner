@@ -1,4 +1,5 @@
 import { forecastSeason, operatingActual } from './budget';
+import { easeAdd } from './ease'; // W2 kalibrace: tlumení zisků nad ~80
 import { addDays } from './calendar';
 import { annualCosts, balanceSheet, book } from './finance';
 import { startBigProject } from './investments';
@@ -406,7 +407,7 @@ export function sponsorRelation(state: GameState, slot: SponsorSlot): number {
 }
 
 export function changeSponsorRelation(state: GameState, slot: SponsorSlot, delta: number): void {
-  state.sponsorRelations = { ...(state.sponsorRelations ?? {}), [slot]: clamp(sponsorRelation(state, slot) + delta, 0, 100) };
+  state.sponsorRelations = { ...(state.sponsorRelations ?? {}), [slot]: easeAdd(sponsorRelation(state, slot), delta) };
 }
 
 /** Násobek nabídek při prodlužování podle vztahu (0,9–1,1). */

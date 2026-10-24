@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { characterTopics, characters, formatShortDate, planAgendaAction, weekAgenda, type ActionResult, type Character, type GameState } from '../../engine';
+import { characterTopics, characters, formatShortDate, meetingView, personalMeeting, type ActionResult, type Character, type GameState } from '../../engine';
 import { Badge, Meter } from '../components';
 
 /** V1 (A4): postavy kolem klubu (V2 z nich dělá kontakty B6). */
 
 export function CharacterDetail({ game, c, onResult }: { game: GameState; c: Character; onResult: (r: ActionResult) => void }) {
   const topics = characterTopics(game, c.id);
-  const opt = weekAgenda(game).options.find((o) => o.id === 'postava');
+  const mv = meetingView(game);
+  const opt = { disabledReason: mv.free ? undefined : mv.note };
   return (
     <div className="character-detail">
       {c.need && <p className="small">Potřebuje: {c.need}</p>}
@@ -16,7 +17,7 @@ export function CharacterDetail({ game, c, onResult }: { game: GameState; c: Cha
             <span>
               <strong>{t.label}</strong> <span className="muted">{t.disabledReason ?? t.hint}</span>
             </span>
-            <button disabled={!!t.disabledReason || !!opt?.disabledReason} title={opt?.disabledReason} onClick={() => onResult(planAgendaAction(game, 'postava', `${c.id}|${t.id}`))}>
+            <button disabled={!!t.disabledReason || !!opt?.disabledReason} title={opt?.disabledReason} onClick={() => onResult(personalMeeting(game, c.id, t.id))}>
               Domluvit schůzku
             </button>
           </li>

@@ -1,8 +1,8 @@
 import type { GameState } from './types';
 
 /**
- * V1 (A9): Pověst majitele v úrovních. Zkušenosti (XP) sbírá majitel akcemi agendy, splněnými projekty
- * a úspěchy v síni slávy. Úrovně odemykají větší sponzory, zahraniční kontakty, lepší trenéry a 4. akci agendy.
+ * V1 (A9): Pověst majitele v úrovních. Zkušenosti (XP) sbírá majitel akcemi podle svých priorit měsíce, osobními schůzkami, splněnými projekty
+ * a úspěchy v síni slávy. Úrovně odemykají větší sponzory, zahraniční kontakty, lepší trenéry a 4. prioritu měsíce (od 3. úrovně).
  */
 
 export type OwnerUnlock = 'sponzori' | 'slot4' | 'zahranici' | 'treneri' | 'legenda';
@@ -24,7 +24,7 @@ export const OWNER_LEVELS: LevelDef[] = [
 
 export const UNLOCK_LABEL: Record<OwnerUnlock, string> = {
   sponzori: 'Větší sponzoři: oběd se sponzorem může přinést prémiovou nabídku',
-  slot4: '4. akce v týdenní agendě',
+  slot4: '4. priorita měsíce (vedení se věnuje čtyřem oblastem)',
   zahranici: 'Zahraniční kontakty: skautské cesty i za hráči v cizině',
   treneri: 'Lepší trenéři a ředitelé ochotní přijít (o 5 bodů výš)',
   legenda: 'Legenda: odměny za strategické projekty o polovinu vyšší',

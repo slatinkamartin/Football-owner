@@ -9,6 +9,7 @@ import { computeTable } from './standings';
 import { addTrophy, cityOf, ultrasOf } from './surroundings';
 import type { GameState } from './types';
 import { addNews, clamp, competitionOf, hash01, tierOf } from './world';
+import { visionProjectBias } from './ownerdecisions'; // W5
 
 /**
  * V1 (A6): Strategické projekty. Na začátku sezóny (i hned v nové hře) vedení nabídne asi 6 projektů,
@@ -85,7 +86,7 @@ function youth(s: GameState) {
 }
 
 const agendaStep = (label: string): StepDef => ({
-  text: (_s, p) => `${label} (${Math.min(p.agenda, p.data.agendaNeed ?? 2)}/${p.data.agendaNeed ?? 2} z agendy)`,
+  text: (_s, p) => `${label} (${Math.min(p.agenda, p.data.agendaNeed ?? 2)}/${p.data.agendaNeed ?? 2} z priorit měsíce)`,
   check: (_s, p) => p.agenda >= (p.data.agendaNeed ?? 2),
 });
 
@@ -244,7 +245,7 @@ export function projectOffers(state: GameState): ProjectOffer[] {
   if (state.strategy?.picked === state.season || state.owner.ousted) return [];
   const running = new Set((state.strategy?.active ?? []).filter((p) => p.status === 'bezi').map((p) => p.id));
   const list = PROJECT_DEFS.filter((d) => d.eligible(state) && !running.has(d.id))
-    .sort((a, b) => hash01(`${state.seed}-${state.season}-${a.id}`) - hash01(`${state.seed}-${state.season}-${b.id}`))
+    .sort((a, b) => visionProjectBias(state, b.id) - visionProjectBias(state, a.id) || hash01(`${state.seed}-${state.season}-${a.id}`) - hash01(`${state.seed}-${state.season}-${b.id}`)) // W5: vize klubu
     .slice(0, 6);
   return list.map((d) => {
     const fake: ActiveProject = { id: d.id, season: state.season, deadline: '', done: [], agenda: 0, data: d.init(state), status: 'bezi' };

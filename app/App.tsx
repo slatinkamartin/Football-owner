@@ -16,11 +16,13 @@ import { NewGame } from './screens/NewGame';
 import { ClubHistoryCard, OwnerSummary, PositionChart, ScenarioCard, ToDo } from './screens/Overview';
 import { LiveMatch, MatchDialog } from './screens/MatchPrep';
 import { EuroLive, EuroMatchDialog } from './screens/BigMatch'; // W1
-import { bigMatchWeekStarted, euroMatchTomorrow } from '../engine'; // W1
+import { bigMatchWeekStarted, euroWindowTomorrow } from '../engine'; // W1, W3
 import { Owner } from './screens/Owner';
+import { OwnerDecisionsCard } from './screens/OwnerDecisions'; // W5
 import { CalendarStrip } from './SeasonCalendar';
 import { People } from './screens/People';
 import { Squad } from './screens/Squad';
+import { TeamShape } from './screens/TeamShape'; // W4
 import { Stadium } from './screens/Stadium';
 import { Transfers } from './screens/Transfers';
 import { Tables } from './screens/Tables';
@@ -37,8 +39,8 @@ import { SideGoalsCard } from './screens/finance/Extras';
 import { ChallengesCard } from './screens/Challenges';
 import { EuropeSection, EuropeStarsCard } from './screens/EuropeExtras';
 import { SeasonCard } from './screens/SeasonCard'; // V3
-import { forumThreads, lastWeekSummary, planAgendaAction, projectOffers, weekAgenda } from '../engine';
-import { AdvisorCard, AgendaCard, RoutineCard } from './screens/Agenda'; // V1
+import { forumThreads, lastMonthSummary, meetingView, personalMeeting, projectOffers } from '../engine';
+import { AdvisorCard, PrioritiesCard, RoutineCard } from './screens/Agenda'; // V1, W2: priority měsíce
 import { TrainingCard } from './screens/Training'; // V1
 import { HuntCard } from './screens/Hunt'; // V1
 import { OwnerLevelCard, ProjectsCard } from './screens/Projects'; // V1
@@ -48,7 +50,8 @@ import { Contacts } from './screens/Contacts';
 import { GuideTip, startGuide, useGuide } from './screens/Guide';
 import { AppearanceCard } from './screens/Appearance';
 import { WeekEndCard, type WeekEndData } from './screens/WeekEnd';
-import { MatchdayStage } from './screens/Matchday';
+import { MatchdayStage, MatchResultToast } from './screens/Matchday'; // W3: souhrn běžného zápasu
+import { opensMatchWindow } from '../engine'; // W3
 import { Icon } from './icons';
 import { Crest, SubTabs, type SubTab } from './ui';
 import { DEFAULT_SUB, MAIN_TABS, resolveTarget, type KlubSub, type LigaSub, type MainTab, type SubTabId, type TrhSub, type TymSub } from './navmap';
@@ -103,6 +106,7 @@ function WithResult({ game, onChange, children }: { game: GameState; onChange: (
 
 const TYM_TABS: SubTab<TymSub>[] = [
   { id: 'kadr', label: 'Kádr' },
+  { id: 'slozeni', label: 'Složení' }, // W4
   { id: 'trenink', label: 'Trénink' },
   { id: 'vedeni', label: 'Vedení' },
   { id: 'postavy', label: 'Postavy' },
@@ -142,6 +146,7 @@ export function App() {
   const [stopReason, setStopReason] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [matchOpen, setMatchOpen] = useState(false);
+  const [playedId, setPlayedId] = useState<string | null>(null); // W3: odehraný běžný zápas (krátký souhrn)
   const [liveEuro, setLiveEuro] = useState(false); // W1: evropský přenos
   const [theme, setTheme] = useState<ThemePref>(() => loadThemePref());
   const [systemTick, setSystemTick] = useState(0);
@@ -214,6 +219,7 @@ export function App() {
     setLive(false);
     setLiveEuro(false);
     setMatchOpen(false);
+    setPlayedId(null);
     setModals([]);
     setMilestone(null);
     setStopReason(null);
@@ -256,7 +262,7 @@ export function App() {
   const nmDays = nm ? daysUntil(game, nm.date) : 99;
   const match = ownMatchTomorrow(game);
   // W1: evropský zápas klubu majitele zítra (když se nehraje i domácí zápas).
-  const euro = match ? undefined : euroMatchTomorrow(game);
+  const euro = match ? undefined : euroWindowTomorrow(game); // W3: okno jen u klíčového evropského zápasu
   const step = nextStep(game);
   const showMilestones = settingsOf(game).stops.milestone;
   const advance = (next: GameState, reason?: string) => {
@@ -264,24 +270,34 @@ export function App() {
     update(next);
     const m = milestoneToday(next);
     if (showMilestones && m && next.date !== game.date && !next.gameOver) setMilestone(m);
-    // B8: přechod do nového týdne → krátké shrnutí.
-    if (!next.gameOver && weekStart(next.date) !== weekStart(game.date)) {
-      const from = weekSnap.current && weekStart(weekSnap.current.date) === weekStart(game.date) ? weekSnap.current : game;
-      const v1 = lastWeekSummary(next);
-      setWeekEnd(v1 && v1.week === weekStart(game.date) ? v1 : basicWeekSummary(from, next));
+    // B8 → W2: přechod do nového měsíce → krátké shrnutí měsíce (týdenní karta zmizela).
+    if (!next.gameOver && next.date.slice(0, 7) !== game.date.slice(0, 7)) {
+      const from = weekSnap.current && weekSnap.current.date.slice(0, 7) === game.date.slice(0, 7) ? weekSnap.current : game;
+      const v1 = lastMonthSummary(next);
+      setWeekEnd(v1 && v1.month === game.date.slice(0, 7) ? v1 : basicWeekSummary(from, next));
       weekSnap.current = next;
     } else if (!weekSnap.current) weekSnap.current = game;
   };
   // Jedno tlačítko: v předvečer zápasu otevře zápas, jinak posune hru k dalšímu zápasu, milníku nebo o týden.
+  // W3: okno před zápasem jen u klíčových zápasů (nebo podle nastavení); běžný zápas se odehraje rovnou.
+  const keyEve = !!match && opensMatchWindow(game, match);
   const onStep = () => {
-    if (match || euro) {
+    setPlayedId(null);
+    if (keyEve || euro) {
       setMatchOpen(true);
+      return;
+    }
+    if (match) {
+      const r = advanceDays(game, 1, true);
+      advance(r.state, bigMatchWeekStarted(r.state, game.bigMatch?.id));
+      if (r.fixtureId && !r.state.gameOver) setPlayedId(r.fixtureId);
       return;
     }
     const r = advanceStep(game);
     advance(r.state, r.reason);
+    if (r.fixtureId && !r.state.gameOver) setPlayedId(r.fixtureId);
   };
-  const stepLabel = match ? 'Zápas' : euro ? 'Evropský zápas' : step.kind === 'tyden' ? 'Další týden' : step.label;
+  const stepLabel = match ? (keyEve ? 'Zápas' : 'Odehrát zápas') : euro ? 'Evropský zápas' : step.kind === 'tyden' ? 'Další týden' : step.label;
   const stepTitle = match
     ? `Zítra: ${clubLabel(game, match.fixture.homeId)} – ${clubLabel(game, match.fixture.awayId)} (${match.name})`
     : euro
@@ -316,11 +332,10 @@ export function App() {
   const onChangeHome = (next: GameState) => update(pulseAfterAction(game, next));
   const legacyGo = (t: string, s?: string) => go(t, s);
 
-  // Schůzka s postavou jde přes agendu týdne (spotřebuje jednu akci).
-  const agenda = weekAgenda(game);
-  const agendaLeft = Math.max(0, agenda.slots - agenda.used.filter((u) => !u.routine).length);
+  // Osobní schůzka s postavou (mimo priority měsíce, jedna týdně zdarma).
+  const meeting = meetingView(game); // W2: jedna osobní schůzka týdně zdarma
   const meet = (id: string, topic: string): ActionResult => {
-    const r = planAgendaAction(game, 'postava', `${id}|${topic}`);
+    const r = personalMeeting(game, id, topic);
     if (r.state !== game) managed(r.state);
     return r;
   };
@@ -328,7 +343,7 @@ export function App() {
 
   const weekKey = weekStart(game.date);
   const slots: WeekSlots = {
-    agenda: <WithResult game={game} onChange={onChangeHome}>{(apply) => <AgendaCard game={game} onResult={apply} />}</WithResult>,
+    agenda: <WithResult game={game} onChange={onChangeHome}>{(apply) => <PrioritiesCard game={game} onResult={apply} />}</WithResult>,
     advisor: <WithResult game={game} onChange={onChangeHome}>{(apply) => <AdvisorCard game={game} onResult={apply} onNavigate={(t) => go(t)} />}</WithResult>,
     cupBadge: <CupBadge game={game} onClick={() => go('liga/pohary')} />,
     cupCard: <CupProgressCard game={game} onOpenMatch={setOpenMatch} onOpen={() => go('liga/pohary')} />,
@@ -355,6 +370,7 @@ export function App() {
       <>
         {subNav('tym', TYM_TABS)}
         {s === 'kadr' && <Squad game={game} onChange={managed} />}
+        {s === 'slozeni' && <TeamShape game={game} onChange={managed} />}{/* W4 */}
         {s === 'trenink' && <WithResult game={game} onChange={managed}>{(apply) => <TrainingCard game={game} onResult={apply} />}</WithResult>}
         {s === 'vedeni' && (
           <div className="stack">
@@ -365,7 +381,7 @@ export function App() {
             <People game={game} onChange={managed} />
           </div>
         )}
-        {s === 'postavy' && <Contacts game={game} onMeet={meet} meetLabel="Domluvit schůzku (akce agendy)" meetNote={agendaLeft ? `Schůzka spotřebuje jednu akci agendy tohoto týdne (zbývá ${agendaLeft} z ${agenda.slots}).` : 'Agenda tohoto týdne je vyčerpaná. Schůzku domluvíte od pondělí.'} />}
+        {s === 'postavy' && <Contacts game={game} onMeet={meet} meetLabel="Domluvit osobní schůzku" meetNote={meeting.note} meetDisabled={!meeting.free} />}
       </>
     );
   } else if (tab === 'trh') {
@@ -414,6 +430,7 @@ export function App() {
               <OwnerLevelCard game={game} />
               <OwnerSummary game={game} />
             </div>
+            <WithResult game={game} onChange={managed}>{(apply) => <OwnerDecisionsCard game={game} onResult={apply} />}</WithResult>
             <Owner game={game} onChange={update} hide={['social', 'press', 'ultras', 'city']} />
           </div>
         )}
@@ -558,6 +575,7 @@ export function App() {
       )}
 
       <AchievementToast game={game} />
+      {playedId && !live && !matchOpen && modals.length === 0 && !game.gameOver && <MatchResultToast game={game} fixtureId={playedId} onOpen={() => { setModals([{ type: 'match', id: playedId }]); setPlayedId(null); }} onClose={() => setPlayedId(null)} />}
       {!live && !matchOpen && modals.length === 0 && !milestone && !report && !game.gameOver && <PostMatch game={game} onChange={update} />}{/* W2: krok po zápase */}
       {weekEnd && !live && !matchOpen && !milestone && !report && <WeekEndCard data={weekEnd} onClose={() => setWeekEnd(null)} />}
       {stopReason && !milestone && (
@@ -602,6 +620,7 @@ export function App() {
       {matchOpen && euro && !live && !game.gameOver && (
         <EuroMatchDialog
           game={game}
+          onChange={managed}
           onClose={() => setMatchOpen(false)}
           onResult={() => {
             setMatchOpen(false);

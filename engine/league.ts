@@ -1,4 +1,4 @@
-import { finalStandings } from './competitions';
+import { finalStandings, projectedOrder } from './competitions';
 import { playersByClub } from './players';
 import { createRng, type Rng } from './rng';
 import { clubStrength, coachOf, generateStaff, goalTarget, staffLevelForReputation } from './staff';
@@ -149,13 +149,15 @@ export function seasonOutlook(state: GameState, comp: Competition = competitionO
         pts.set(f.awayId, pts.get(f.awayId)! + 1);
       } else pts.set(f.awayId, pts.get(f.awayId)! + 3);
     }
-    const order = [...comp.clubIds].sort((a, b) => pts.get(b)! - pts.get(a)! || gd0.get(b)! - gd0.get(a)! || rng.next() - 0.5);
+    const order = projectedOrder(state, comp, pts, gd0, strength, rng); // W1 v0.29: nadstavba a play-off o umístění
+    const cupWinner = state.cups.pohar?.winner;
+    const europeSpots = cupWinner && order.slice(0, 4).includes(cupWinner) ? 5 : 4;
     order.forEach((id, i) => {
       const c = counts.get(id)!;
       const pos = i + 1;
       c.pos += pos;
       if (pos === 1) c.title++;
-      if (comp.tier === 1 && pos <= 4) c.europe++;
+      if (comp.tier === 1 && (pos <= europeSpots || id === cupWinner)) c.europe++;
       if (pos <= comp.promote) c.promote++;
       if (comp.playoff?.upper.includes(pos) || lowerPlayoff?.lower.includes(pos)) c.playoff++;
       if (pos > n - comp.relegate) c.relegate++;

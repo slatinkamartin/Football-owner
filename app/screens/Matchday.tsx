@@ -5,7 +5,7 @@
  * styl ho jen roztáhne na celou obrazovku.
  */
 import { useState, type ReactNode } from 'react';
-import { nextEuroMatch, nextOwnFixture, type GameState } from '../../engine';
+import { allFixtures, findEuroMatch, liveClubName, liveFixture, nextEuroMatch, nextOwnFixture, type GameState } from '../../engine';
 
 export function MatchdayStage({ game, children, kind }: { game: GameState; children: ReactNode; kind?: string }) {
   // Stadion v barvách domácího klubu (u evropského zápasu venku neutrální modrá).
@@ -77,6 +77,39 @@ export function MatchdayStage({ game, children, kind }: { game: GameState; child
       </svg>
       <div className="md-vignette" aria-hidden="true" />
       {children}
+    </div>
+  );
+}
+
+/**
+ * W3: krátký souhrn běžného zápasu, který posun odehrál sám (trenér hrál po svém, bez okna a rozhodnutí).
+ * Detail zápasu se otevře jen na požádání.
+ */
+export function MatchResultToast({ game, fixtureId, onOpen, onClose }: { game: GameState; fixtureId: string; onOpen: () => void; onClose: () => void }) {
+  const dom = allFixtures(game).find((y) => y.fixture.id === fixtureId);
+  const eu = dom ? undefined : findEuroMatch(game, fixtureId)?.match;
+  const fixture = dom?.fixture ?? liveFixture(game, fixtureId);
+  const x = fixture ? { fixture, name: dom?.name ?? eu?.stage ?? '' } : undefined;
+  const r = x?.fixture.result;
+  if (!x || !r) return null;
+  const own = game.owner.clubId;
+  const home = x.fixture.homeId === own;
+  const gf = home ? r.homeGoals : r.awayGoals;
+  const ga = home ? r.awayGoals : r.homeGoals;
+  const pen = r.penalties ? (home ? r.penalties[0] > r.penalties[1] : r.penalties[1] > r.penalties[0]) : undefined;
+  const tone = gf > ga || pen === true ? 'win' : gf < ga || pen === false ? 'loss' : 'draw';
+  const word = tone === 'win' ? 'Výhra' : tone === 'loss' ? 'Prohra' : 'Remíza';
+  return (
+    <div className={`toast result-toast result-${tone}`} role="status">
+      <span className="rt-head">{word} · {x.name}</span>
+      <strong>
+        {liveClubName(game, x.fixture.homeId)} – {liveClubName(game, x.fixture.awayId)} {r.homeGoals}:{r.awayGoals}
+        {r.penalties ? ` (pen. ${r.penalties[0]}:${r.penalties[1]})` : ''}
+      </strong>
+      <span className="buttons">
+        <button className="linkbtn" onClick={onOpen}>Souhrn zápasu ›</button>
+        <button className="linkbtn" onClick={onClose}>Zavřít</button>
+      </span>
     </div>
   );
 }

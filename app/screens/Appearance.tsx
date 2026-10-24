@@ -26,7 +26,7 @@ export function AppearanceCard({ game, theme, onTheme, onGuide }: { game: GameSt
         ))}
       </div>
       <h3>Průvodce prvními týdny</h3>
-      <p className="muted small">Krátké tipy k agendě, schránce rozhodnutí a posunu hry. Zobrazují se první tři týdny hry.</p>
+      <p className="muted small">Krátké tipy k prioritám měsíce, schránce rozhodnutí a posunu hry. Zobrazují se první tři týdny hry.</p>
       <button onClick={() => { setGuideEnabled(game, !guide); onGuide(); }}>{guide ? 'Vypnout nápovědy' : 'Zapnout nápovědy znovu'}</button>
     </section>
   );

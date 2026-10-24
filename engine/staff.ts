@@ -1,4 +1,5 @@
 import { noteTimeline, ownerTypeOf } from './league';
+import { easeAdd } from './ease'; // W2 kalibrace: tlumení zisků nad ~80
 import { book, departmentEffect } from './finance';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { newId, playersByClub, squadQualityForReputation, teamStrength } from './players';
@@ -451,9 +452,10 @@ export function seasonEndStaff(state: GameState, rng: Rng, position: number, com
   if (comp) {
     const target = goalTarget(state.owner.seasonGoal, comp);
     const met = position <= target;
-    const delta = met ? 12 : -Math.min(15, (position - target) * 1.5);
-    state.owner.trust.trener = clamp(state.owner.trust.trener + delta, 0, 100);
-    state.owner.trust.reditel = clamp(state.owner.trust.reditel + delta / 2, 0, 100);
+    // W2 kalibrace: mírná úprava podle výsledku (splněno o víc míst = víc), tlumená nad ~80 – žádný skok na 100.
+    const delta = met ? 4 + Math.min(6, (target - position) * 1.5) : -Math.min(15, (position - target) * 1.5);
+    state.owner.trust.trener = easeAdd(state.owner.trust.trener, delta);
+    state.owner.trust.reditel = easeAdd(state.owner.trust.reditel, delta / 2);
     addNews(state, {
       kind: met ? 'sezona' : 'varovani',
       title: met ? `Cíl sezóny splněn (${position}. místo)` : `Cíl sezóny nesplněn (${position}. místo, cíl do ${target}. místa)`,

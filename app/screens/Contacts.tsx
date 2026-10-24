@@ -1,7 +1,7 @@
 /**
  * V2 (B6): postavy jako kontakty. Nad V1 characters(): portrét z iniciál s kroužkem nálady,
  * vztah, potřeba, poslední rozhovor; detail s historií rozhovorů a tématy schůzky.
- * „Domluvit schůzku“ jde přes agendu týdne (spotřebuje akci), proto ji řeší App (onMeet).
+ * „Domluvit schůzku“: jedna osobní schůzka týdně zdarma (engine personalMeeting), řeší ji App (onMeet).
  */
 import { useState } from 'react';
 import { formatShortDate, type ActionResult, type GameState } from '../../engine';
@@ -25,7 +25,7 @@ function RelationBar({ value }: { value: number }) {
   );
 }
 
-export function Contacts({ game, onMeet, meetLabel = 'Domluvit schůzku', meetNote }: { game: GameState; onMeet: (id: string, topic: string) => ActionResult; meetLabel?: string; meetNote?: string }) {
+export function Contacts({ game, onMeet, meetLabel = 'Domluvit schůzku', meetNote, meetDisabled }: { game: GameState; onMeet: (id: string, topic: string) => ActionResult; meetLabel?: string; meetNote?: string; meetDisabled?: boolean }) {
   const list = characters(game);
   const [openId, setOpenId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -44,6 +44,7 @@ export function Contacts({ game, onMeet, meetLabel = 'Domluvit schůzku', meetNo
           c={open}
           meetLabel={meetLabel}
           meetNote={meetNote}
+          meetDisabled={meetDisabled}
           onClose={() => setOpenId(null)}
           onMeet={(topic) => {
             const r = onMeet(open.id, topic);
@@ -73,7 +74,7 @@ function ContactCard({ c, open, onToggle }: { c: Character; open: boolean; onTog
   );
 }
 
-function ContactDetail({ game, c, onMeet, onClose, meetLabel, meetNote }: { game: GameState; c: Character; onMeet: (topic: string) => void; onClose: () => void; meetLabel: string; meetNote?: string }) {
+function ContactDetail({ game, c, onMeet, onClose, meetLabel, meetNote, meetDisabled }: { game: GameState; c: Character; onMeet: (topic: string) => void; onClose: () => void; meetLabel: string; meetNote?: string; meetDisabled?: boolean }) {
   const topics = characterTopics(game, c.id);
   return (
     <section className="card contact-detail" aria-label={`Kontakt: ${c.name}`}>
@@ -94,7 +95,7 @@ function ContactDetail({ game, c, onMeet, onClose, meetLabel, meetNote }: { game
       {meetNote && <p className="muted small">{meetNote}</p>}
       <div className="decision-options">
         {topics.map((t) => (
-          <button key={t.id} disabled={!!t.disabledReason} title={t.disabledReason} onClick={() => onMeet(t.id)}>
+          <button key={t.id} disabled={!!t.disabledReason || meetDisabled} title={t.disabledReason ?? (meetDisabled ? meetNote : undefined)} onClick={() => onMeet(t.id)}>
             <strong>{t.label}</strong>
             <span>{t.disabledReason ?? t.hint}</span>
           </button>

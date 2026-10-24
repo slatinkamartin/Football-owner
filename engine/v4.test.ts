@@ -20,7 +20,8 @@ const start = newGame(czPack, { clubId: 'slavia', ownerName: 'T', difficulty: 's
 
 /** Posun na předvečer prvního evropského zápasu. */
 function euroEve(s: GameState): GameState {
-  for (let i = 0; i < 60 && !euroMatchTomorrow(s); i++) s = advanceDays(s, 1).state;
+  // v0.29: mistr hraje rovnou ligovou fázi (září), proto delší posun.
+  for (let i = 0; i < 100 && !euroMatchTomorrow(s); i++) s = advanceDays(s, 1).state;
   return s;
 }
 

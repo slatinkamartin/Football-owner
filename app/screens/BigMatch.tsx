@@ -6,7 +6,8 @@ import {
   euroMatchTomorrow,
   markEuroDrawSeen,
   pendingEuroDraw,
-  prepDecisions,
+  prepOpen,
+  prepSummary,
   prepValue,
   rivalryStory,
   setBigMatchPrep,
@@ -15,7 +16,7 @@ import {
   type PrepKey,
 } from '../../engine';
 import { Badge, Meter } from '../components';
-import { LiveMatch } from './MatchPrep'; // V4
+import { CoachAdviceChoice, LiveMatch } from './MatchPrep'; // V4, W3: rada trenérovi
 
 const KIND_ICON: Record<string, string> = { derby: '⚔', evropa: '★', titul: '♛', zachrana: '⚓', pohar: '🏆', baraz: '⚖' };
 
@@ -37,7 +38,8 @@ export function CrowdMeter({ level, label = 'Kotel' }: { level: number; label?: 
 
 /**
  * Odpočet velkého zápasu na Přehledu: napětí, lístky, kabina, město, výrok soupeře
- * a krátká rozhodnutí přípravy (výchozí volba platí sama, když majitel nic nezvolí).
+ * a W3: jedno souhrnné rozhodnutí o pojetí zápasu (výchozí volba platí sama; když se nevejde do týdenního
+ * limitu rozhodnutí, přípravu zařídí vedení).
  */
 export function BigMatchCard({ game, onChange }: { game: GameState; onChange: (g: GameState) => void }) {
   const [msg, setMsg] = useState<string | null>(null);
@@ -51,6 +53,8 @@ export function BigMatchCard({ game, onChange }: { game: GameState; onChange: (g
     setMsg(r.message);
   };
   const locked = game.date >= bm.date || !!game.owner.ousted;
+  const summary = prepSummary(game, bm);
+  const chosen = summary ? summary.options.find((o) => o.id === prepValue(game, bm, 'plan')) : undefined;
   return (
     <section className={`card bigmatch-card kind-${bm.kind}`}>
       <div className="bm-head">
@@ -96,26 +100,20 @@ export function BigMatchCard({ game, onChange }: { game: GameState; onChange: (g
         </blockquote>
       )}
       {story && <p className="small bm-story">{story}</p>}
-      {c.decisions.length > 0 && !locked && (
+      {summary && !locked && prepOpen(bm) && (
         <div className="bm-prep">
-          <h3>Příprava <span className="muted small">(když nic nezvolíte, platí zvýrazněná volba)</span></h3>
-          {c.decisions.map((d) => {
-            const cur = prepValue(game, bm, d.key) ?? d.def;
-            const hint = d.options.find((o) => o.id === cur)?.hint;
-            return (
-              <div key={d.key} className="bm-decision">
-                <span className="bm-dlabel">{d.title}</span>
-                <div className="segmented wrap">
-                  {d.options.map((o) => (
-                    <button key={o.id} className={cur === o.id ? 'active' : ''} aria-pressed={cur === o.id} onClick={() => choose(d.key, o.id)} title={o.hint}>{o.label}</button>
-                  ))}
-                </div>
-                {hint && <span className="muted small">{hint}</span>}
-              </div>
-            );
-          })}
+          <h3>{summary.title} <span className="muted small">(když nic nezvolíte, přípravu zařídí vedení)</span></h3>
+          <div className="bm-decision">
+            <div className="segmented wrap">
+              {summary.options.map((o) => (
+                <button key={o.id} className={chosen?.id === o.id ? 'active' : ''} aria-pressed={chosen?.id === o.id} onClick={() => choose('plan', o.id)} title={o.hint}>{o.label}</button>
+              ))}
+            </div>
+            {chosen && <span className="muted small">{chosen.hint}</span>}
+          </div>
         </div>
       )}
+      {summary && !prepOpen(bm) && <p className="muted small">Přípravu zápasu (lístky, kotel, choreo) zařizuje vedení s běžnými volbami.</p>}
       {msg && <p className="muted small">{msg}</p>}
     </section>
   );
@@ -125,7 +123,8 @@ export function BigMatchCard({ game, onChange }: { game: GameState; onChange: (g
 export function BigMatchBanner({ game, fixtureId }: { game: GameState; fixtureId: string }) {
   const bm = game.bigMatch;
   if (!bm || bm.id !== fixtureId || bm.settled) return null;
-  const parts = prepDecisions(game, bm).map((d) => `${d.title.replace(': s kým strávíte zápas', '')}: ${d.options.find((o) => o.id === prepValue(game, bm, d.key))?.label ?? ''}`);
+  const sum = prepSummary(game, bm);
+  const parts = sum ? [`${sum.title}: ${sum.options.find((o) => o.id === prepValue(game, bm, 'plan'))?.label ?? ''}${prepOpen(bm) ? '' : ' (vedení)'}`] : [];
   return (
     <div className={`bm-banner kind-${bm.kind}`}>
       <strong>{KIND_ICON[bm.kind] ?? '★'} {BIG_MATCH_LABEL[bm.kind as BigMatchKind] ?? 'Velký zápas'}</strong>
@@ -178,7 +177,7 @@ export function EuroDrawCard({ game, onChange }: { game: GameState; onChange: (g
 }
 
 /** Okno evropského zápasu v předvečer: jen výsledek, nebo přenos. */
-export function EuroMatchDialog({ game, onClose, onResult, onLive }: { game: GameState; onClose: () => void; onResult: () => void; onLive: () => void }) {
+export function EuroMatchDialog({ game, onChange, onClose, onResult, onLive }: { game: GameState; onChange?: (g: GameState) => void; onClose: () => void; onResult: () => void; onLive: () => void }) {
   const m = euroMatchTomorrow(game);
   if (!m) return null;
   const own = clubLabel(game, game.owner.clubId);
@@ -189,10 +188,16 @@ export function EuroMatchDialog({ game, onClose, onResult, onLive }: { game: Gam
         <h2>{m.home ? `${own} – ${m.opponent.name}` : `${m.opponent.name} – ${own}`}</h2>
         <BigMatchBanner game={game} fixtureId={m.id} />
         <p className="small">Soupeř: {m.opponent.name} ({m.opponent.country}), síla {m.opponent.rating}.</p>
-        <p className="muted small">Zápas se hraje po minutách s vaším kádrem. V přenosu rozhodujete o poločase a v koncovce, jako doma.</p>
+        {onChange && !game.owner.ousted && (
+          <>
+            <h3>Rada trenérovi</h3>
+            <CoachAdviceChoice game={game} fixtureId={m.id} onChange={onChange} />
+          </>
+        )}
+        <p className="muted small">Zápas se hraje po minutách s vaším kádrem. V přenosu pošlete trenérovi jeden vzkaz: o poločase, nebo v 75. minutě.</p>
         <div className="match-choice">
           <button onClick={onResult}>Jen výsledek<span>Zápas se odehraje hned.</span></button>
-          <button className="primary" onClick={onLive}>Sledovat zápas<span>Přenos s kotlem, poločasem a rozhodnutími v klíčových chvílích.</span></button>
+          <button className="primary" onClick={onLive}>Sledovat zápas<span>Přenos s kotlem a jedním vzkazem trenérovi.</span></button>
         </div>
         <button className="linkbtn" onClick={onClose}>Zatím zavřít</button>
       </div>

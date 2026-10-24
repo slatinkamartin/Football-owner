@@ -6,31 +6,47 @@ import { daysUntil } from './milestones';
 import type { DataPack, GameState } from './types';
 
 const start = newGame(pack as DataPack, { clubId: 'slavia', ownerName: 'T', difficulty: 'stredni', seed: 11 });
+// v0.29: Slavia (první podle pověsti = „mistr“) jde rovnou do ligové fáze LM, Sparta (2.) do 2. předkola LM.
+const sparta = newGame(pack as DataPack, { clubId: 'sparta', ownerName: 'T', difficulty: 'stredni', seed: 11 });
 const to = (s: GameState, date: string) => advanceDays(s, daysUntil(s, date)).state;
 
 describe('evropské večery', () => {
   it('klub v Evropě má los předkola se skutečným soupeřem a termíny', () => {
-    const run = europeRun(start)!;
+    const run = europeRun(sparta)!;
     expect(run).toBeDefined();
     expect(run.matches.length).toBe(2);
+    expect(run.slot).toBe(0);
+    expect(run.matches[0].stage).toBe('2. předkolo Ligy mistrů');
     expect(run.matches[0].opponent.name.length).toBeGreaterThan(2);
-    expect(run.matches.every((m) => m.date > start.date && m.date <= `${start.season}-08-27`)).toBe(true);
-    expect(nextEuroMatch(start)?.id).toBe(run.matches[0].id);
+    expect(run.matches.every((m) => m.date > sparta.date && m.date <= `${sparta.season}-08-27`)).toBe(true);
+    expect(nextEuroMatch(sparta)?.id).toBe(run.matches[0].id);
+  });
+
+  it('mistr jde přímo do ligové fáze Ligy mistrů (bez předkol)', () => {
+    const run = europeRun(start)!;
+    expect(start.europe!.entries.find((e) => e.clubId === 'slavia')?.stage).toBe('liga');
+    expect(run.phase).toBe('liga');
+    expect(run.leagueComp).toBe('LM');
+    expect(run.matches.filter((m) => m.tie !== undefined)).toHaveLength(0);
+    expect(run.matches).toHaveLength(8);
+    const s = to(start, `${start.season}-08-29`);
+    expect(s.europe!.entries.find((e) => e.clubId === 'slavia')!.result).toBe('LM');
   });
 
   it('předkola se odehrají do konce srpna a rozhodnou o ligové fázi', () => {
-    const s = to(start, `${start.season}-08-29`);
+    const s = to(sparta, `${sparta.season}-08-29`);
     const run = europeRun(s)!;
-    const qual = run.matches.filter((m) => m.stage.startsWith('Play-off') && m.tie !== undefined && m.date <= `${s.season}-08-27`);
-    expect(qual.length).toBeGreaterThanOrEqual(2);
+    const qual = run.matches.filter((m) => m.slot !== undefined && m.tie !== undefined && m.date <= `${s.season}-08-27`);
+    // 2. předkolo, 3. předkolo a play-off (s padáky) = vždy tři dvojzápasy, poražený v play-off hraje ligovou fázi nižší soutěže.
+    expect(qual.length).toBe(6);
     expect(qual.every((m) => m.result)).toBe(true);
-    const entry = s.europe!.entries.find((e) => e.clubId === 'slavia')!;
+    const entry = s.europe!.entries.find((e) => e.clubId === 'sparta')!;
     expect(entry.result).toBe(run.leagueComp ?? 'predkola');
     // Domácí evropský večer je vyprodaný a přinese vstupné.
     const home = qual.find((m) => m.home)!;
-    expect(home.result!.attendance).toBe(s.clubs.slavia.stadium.capacity);
+    expect(home.result!.attendance).toBe(s.clubs.sparta.stadium.capacity);
     expect(home.result!.gate).toBeGreaterThan(0);
-    expect(s.clubs.slavia.finance.transactions.some((t) => t.note.startsWith('Evropský večer'))).toBe(true);
+    expect(s.clubs.sparta.finance.transactions.some((t) => t.note.startsWith('Evropský večer'))).toBe(true);
     // Náhled zápasu najde výsledek, novinky na zápas odkazují.
     expect(findEuroMatch(s, home.id)?.match.result).toBeDefined();
     expect(s.news.some((n) => n.fixtureId === home.id)).toBe(true);

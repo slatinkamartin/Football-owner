@@ -10,6 +10,9 @@ import {
   euroKoRound,
   leaguePhaseChance,
   leaguePhaseRank,
+  qualifyingNext,
+  qualifyingOutcomeText,
+  qualifyingTieChance,
   tieAggregate,
   type EuroClub,
   type EuroMatch,
@@ -389,7 +392,24 @@ function simulateEurope(state: GameState, rng: Rng): { stages: StageChance[]; le
     let rank: number | undefined;
     let koStart = -1;
     let carried: { own: number; opp: number } | undefined;
-    if (run.phase === 'predkola') {
+    if (run.phase === 'predkola' && run.slot !== undefined) {
+      // W1 v0.29: cesta předkoly podle přístupového seznamu (víc dvojzápasů, padáky o soutěž níž).
+      let at: { comp: EuropeCompetition; slot: number } = { comp: run.comp, slot: run.slot };
+      let p = qualifyingTieChance(s, at.comp, at.slot);
+      const leg1 = ties.find((m) => m.leg === 1 && m.result);
+      if (leg1) p = 1 / (1 + Math.exp(-(Math.log(p / (1 - p)) + 0.9 * (leg1.result!.own - leg1.result!.opp))));
+      for (;;) {
+        const nx = qualifyingNext(at.comp, at.slot, rng.chance(p));
+        if (!nx) break;
+        if ('league' in nx) {
+          lc = nx.league;
+          break;
+        }
+        at = nx;
+        p = qualifyingTieChance(s, at.comp, at.slot);
+      }
+      if (lc) leagueBy[lc] = (leagueBy[lc] ?? 0) + 1;
+    } else if (run.phase === 'predkola') {
       let c: EuropeCompetition | undefined = run.comp;
       let p = leaguePhaseChance(s, run.comp);
       const leg1 = ties.find((m) => m.leg === 1 && m.result);
@@ -732,7 +752,8 @@ export function europeView(state: GameState): EuropeView | null {
     const v = tieView(state, run, t);
     const next = NEXT[v.comp];
     const slotOk = t + 1 <= 2;
-    v.parachute =
+    const slot = run.matches.find((m) => m.tie === t)?.slot;
+    v.parachute = slot !== undefined ? qualifyingOutcomeText(v.comp, slot, v.status) : // W1 v0.29
       v.status === 'postup'
         ? `Postup do ligové fáze: ${EUROPE_LABEL[v.comp]}`
         : next && slotOk
@@ -746,7 +767,7 @@ export function europeView(state: GameState): EuropeView | null {
   });
   const chain: EuropeView['chain'] = [];
   for (let c: EuropeCompetition | undefined = entry.entry; c; c = NEXT[c]) {
-    const tie = qualifying.find((q) => q.comp === c);
+    const tie = [...qualifying].reverse().find((q) => q.comp === c);
     const st: EuropeView['chain'][number]['state'] = tie ? (tie.status === 'hraje' ? 'hraje' : tie.status) : run.leagueComp || run.phase === 'konec' ? 'mimo' : 'padak';
     chain.push({ comp: c, label: EUROPE_LABEL[c], state: st });
   }

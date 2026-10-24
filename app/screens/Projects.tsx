@@ -13,7 +13,7 @@ export function ProjectsCard({ game, onResult }: { game: GameState; onResult: (r
       <h2>Strategické projekty</h2>
       {offers.length > 0 && (
         <>
-          <p className="muted small">Vedení nabízí projekty na sezónu. Vyberte 1–3; kroky splníte výsledky i akcemi agendy.</p>
+          <p className="muted small">Vedení nabízí projekty na sezónu. Vyberte 1–3; kroky splníte výsledky i prioritami měsíce.</p>
           <ul className="plain project-offers">
             {offers.map((o) => (
               <li key={o.id}>
@@ -74,7 +74,7 @@ export function OwnerLevelCard({ game }: { game: GameState }) {
         <>
           <Meter value={l.xp} max={l.next} tone="good" />
           <p className="muted small num">
-            {l.xp} / {l.next} XP (akce agendy, projekty, úspěchy v síni slávy)
+            {l.xp} / {l.next} XP (vaše priority měsíce, schůzky, projekty, úspěchy v síni slávy)
           </p>
         </>
       ) : (

@@ -27,14 +27,14 @@ import { satisfy } from './ownership';
 import { squadOf } from './players';
 import { financeFactor, goalTarget, staffAbility, STAFF_KEY, expectedPosition, type ActionResult } from './staff';
 import { matchdayExtras } from './stadium';
-import { CUP_FINALIST_PRIZE, CUP_ROUNDS } from './competitions';
+import { CUP_FINALIST_PRIZE, CUP_ROUNDS, nadstavbaShare, PLACEMENT_CUP_ID } from './competitions';
 import { EUROPE_BONUS_SHARE, europeRange } from './europe';
 import { goalBonusPoints, pointsBonusFactor } from './wages';
 import { overdraftLimit } from './financing';
 import { sponsorForecast, sponsorMonthly } from './sponsors';
 
 const sponsorMonthlyTotal = (state: GameState) => { const m = sponsorMonthly(state); return m.contracts + m.small; };
-import type { BudgetLine, BudgetPlan, BudgetPolicy, Club, FinanceCategory, GameState, StaffRole } from './types';
+import type { BudgetLine, BudgetPlan, BudgetPolicy, Club, FinanceCategory, Fixture, GameState, StaffRole } from './types';
 import { adminMonthly, campCost, communityReference, policyMoodDrift, ticketMoodPenalty, communitySpend, fanshopDetail, maintenanceMonthly, projectMood, securityPerMatch, TICKET_ANGER } from './operations';
 import { budgetRemaining } from './transfers';
 import { extrasEffect, extrasMonthly, scheduledEventIncome, sectorEffect } from './venue';
@@ -92,6 +92,12 @@ function staffWages(state: GameState): number {
 }
 
 /** Pořadí, kterému odpovídá mzdový strop klubu mezi soupeři v soutěži. */
+/** W1 v0.29: neodehrané zápasy klubu majitele v play-off o umístění. */
+function placementLeft(state: GameState): Fixture[] {
+  const own = state.owner.clubId;
+  return (state.cups[PLACEMENT_CUP_ID]?.fixtures ?? []).filter((f) => !f.result && f.date > state.date && (f.homeId === own || f.awayId === own));
+}
+
 export function wageRank(state: GameState): number {
   const comp = competitionOf(state, state.owner.clubId);
   if (!comp) return 1;
@@ -113,7 +119,8 @@ export function wagePlan(state: GameState): { cap: number; contracts: number; wa
   const size = comp?.clubIds.length ?? 16;
   // Body na zápas podle očekávaného umístění (lídr kolem 2,3, střed 1,3, chvost pod 1).
   const pointsPerMatch = clamp(1.35 + ((size / 2 - position) / size) * 2.2, 0.6, 2.4);
-  const matches = (comp ? comp.fixtures.filter((f) => f.homeId === club.id || f.awayId === club.id).length : 30) + (comp?.format === 'nadstavba' && !comp.groups ? 5 : 0);
+  // W1 v0.29: nadstavba – skupiny po 5 zápasech, play-off o umístění 2–4 zápasy.
+  const matches = (comp ? comp.fixtures.filter((f) => f.homeId === club.id || f.awayId === club.id).length : 30) + (comp?.format === 'nadstavba' && !comp.groups ? nadstavbaShare(position, size).matches : 0) + placementLeft(state).length;
   const cap = wageBudgetMonthly(club) * 12;
   const contracts = squadOf(state, club.id).reduce((a, p) => a + p.wage, 0) * 12;
   const goal = comp && position <= goalTarget(state.owner.seasonGoal, comp) ? goalBonusPoints(state) * bonusPerPoint(club) : 0;
@@ -196,7 +203,10 @@ export function forecastSeason(state: GameState): BudgetPlan {
   const league = comp?.fixtures.filter((f) => f.homeId === own || f.awayId === own) ?? [];
   const leftLeague = league.filter((f) => !f.result && f.date > state.date);
   const leftHome = leftLeague.filter((f) => f.homeId === own).map((f) => f.date);
-  if (comp?.format === 'nadstavba' && !comp.groups) for (let i = 0; i < 2.5; i++) leftHome.push(`${state.season + 1}-05-${String(5 + i * 7).padStart(2, '0')}`);
+  // W1 v0.29: domácí zápasy nadstavby podle očekávaného místa (1.–3. tři, 4.–6. dva, play-off 1–2, 11.–13. tři, 14.–16. dva).
+  const nadDates = comp?.reservedDates?.length ? comp.reservedDates : [5, 12, 19, 26].map((d) => `${state.season + 1}-05-${String(d).padStart(2, '0')}`);
+  if (comp?.format === 'nadstavba' && !comp.groups) for (let i = 0; i < nadstavbaShare(position, size).home; i++) leftHome.push(nadDates[(i * 2) % nadDates.length]);
+  for (const f of placementLeft(state)) if (f.homeId === own) leftHome.push(f.date);
   const sold = state.budget?.season === state.season && state.budget.seasonTickets !== undefined;
   const holders = sold ? state.budget!.seasonTickets! : seasonTicketDemand(state);
   // Nálada fanoušků se během sezóny posouvá podle cen a údržby: návštěva a fanshop s tím počítají.
@@ -239,7 +249,8 @@ export function forecastSeason(state: GameState): BudgetPlan {
   monthly('platy', -bill * scheme);
   const perMatch = bonusPerPoint(club) * wp.pointsPerMatch * pointsBonusFactor(state, own);
   for (const f of leftLeague) add('platy', f.date, -perMatch);
-  if (comp?.format === 'nadstavba' && !comp.groups) for (let i = 0; i < 5; i++) add('platy', `${state.season + 1}-05-${String(3 + i * 5).padStart(2, '0')}`, -perMatch);
+  if (comp?.format === 'nadstavba' && !comp.groups) for (let i = 0; i < nadstavbaShare(position, size).matches; i++) add('platy', nadDates[i % nadDates.length], -perMatch);
+  for (const f of placementLeft(state)) add('platy', f.date, -perMatch);
   add('platy', endDay, -wp.goal);
   months.forEach((d) => add('rezerva', d, -Math.max(0, wp.cap / 12 - bill), 'flex'));
   monthly('vedeni', -staffWages(state));
@@ -386,7 +397,7 @@ export function forecastSeason(state: GameState): BudgetPlan {
     worstMinDate,
     worstNeed,
     committedResult: Math.round(result - (lines.find((l) => l.key === 'rezerva')?.amount ?? 0)),
-    europeRange: eu && !state.europe!.resolved ? europeRange(eu.entry) : undefined,
+    europeRange: eu && !state.europe!.resolved ? europeRange(eu.entry, eu.stage) : undefined,
   };
 }
 

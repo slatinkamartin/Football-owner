@@ -1,4 +1,5 @@
 import { addDays } from './calendar';
+import { easeAdd } from './ease'; // W2 kalibrace: tlumení zisků nad ~80
 import { book, defaultTicketPrice } from './finance';
 import { greyAction } from './grey';
 import { clubValuation, satisfy } from './ownership';
@@ -158,7 +159,7 @@ export function cityPermit(state: GameState): string | undefined {
 
 export function changeCity(state: GameState, delta: number): void {
   const c = (state.city ??= cityOf(state));
-  c.relation = clamp(c.relation + delta, 0, 100);
+  c.relation = easeAdd(c.relation, delta);
 }
 
 /** Pozvat primátora na zápas do VIP (jednou za dva měsíce). */
@@ -206,7 +207,7 @@ export function ultrasOf(state: GameState) {
 
 export function changeUltras(state: GameState, delta: number): void {
   const u = (state.ultras ??= ultrasOf(state));
-  u.relation = clamp(u.relation + delta, 0, 100);
+  u.relation = easeAdd(u.relation, delta);
 }
 
 /** Měsíčně: kotel reaguje na ceny, výsledky a bezpečnost. */

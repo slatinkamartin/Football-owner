@@ -211,6 +211,8 @@ function GameSettingsCard({ game, onChange }: { game: GameState; onChange: (g: G
       </label>
       <label className="check"><input type="checkbox" checked={s.stops.injury} onChange={(e) => stop({ injury: e.target.checked })} /><span>zranění opory na víc než dva týdny</span></label>
       <label className="check"><input type="checkbox" checked={s.stops.milestone} onChange={(e) => stop({ milestone: e.target.checked })} /><span>milníku sezóny (start ligy, konec okna, licence…)</span></label>
+      {/* W3: okno před zápasem jen u klíčových zápasů, pokud hráč nechce jinak */}
+      <label className="check"><input type="checkbox" checked={!!s.stops.everyMatch} onChange={(e) => stop({ everyMatch: e.target.checked })} /><span>před každým zápasem (jinak jen před klíčovými: derby, Evropa, čelo, záchrana, pohár od čtvrtfinále, baráž, rozhodující zápasy nadstavby; běžné zápasy odehraje trenér po svém)</span></label>
     </section>
   );
 }
@@ -223,7 +225,7 @@ function HowToPlayCard() {
       <ol className="small">
         <li><strong>Jste majitel, ne trenér.</strong> Sestavu a taktiku řeší trenér, hráče shání sportovní ředitel. Vy rozhodujete o penězích, lidech a směru klubu.</li>
         <li><strong>Posouvejte čas</strong> tlačítkem posunu (v horní liště, na mobilu vpravo dole): hra jde k dalšímu milníku, nebo o týden. Zastaví se, když je potřeba vaše rozhodnutí (nastavíte níže).</li>
-        <li><strong>Týden</strong> ukáže, co je právě důležité: agendu týdne, schránku rozhodnutí, stav klubu, zprávy a nejbližší zápas.</li>
+        <li><strong>Týden</strong> ukáže, co je právě důležité: priority měsíce, schránku rozhodnutí, stav klubu, zprávy a nejbližší zápas.</li>
         <li><strong>Tým › Vedení</strong>: stanovte cíl sezóny, najměte a odvolávejte trenéra a ředitele.</li>
         <li><strong>Peníze</strong>: schvalte rozpočet, hlídejte výhled peněz a vyberte vedlejší cíle sezóny.</li>
         <li><strong>Klub › Stadion</strong>: stavby, velké investice a programy klubu zvedají příjmy i úroveň hráčů.</li>

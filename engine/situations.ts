@@ -1,4 +1,5 @@
 import { addDays, dayOfWeek, formatDate } from './calendar';
+import { easeAdd } from './ease'; // W2 kalibrace: tlumení zisků nad ~80
 import { freshOwnMatch, matchesWord, minutesSince, ownMatchesSince, seasonFacts, type OwnMatchFacts, type SeasonFacts } from './facts';
 import { annualCosts, bonusPerPoint, book } from './finance';
 import { fine, league, media } from './grey';
@@ -149,7 +150,7 @@ function morale(s: GameState, id: string | undefined, d: number): void {
   if (p) p.morale = clamp(p.morale + d, 0, 100);
 }
 function trust(s: GameState, d: number): void {
-  s.owner.trust.trener = clamp(s.owner.trust.trener + d, 0, 100);
+  s.owner.trust.trener = easeAdd(s.owner.trust.trener, d);
 }
 /** Měřítko částek podle velikosti klubu. */
 function scale(s: GameState): number {

@@ -7,12 +7,125 @@ import type { Competition, Cup, Fixture, GameState } from './types';
 import { addNews, clubLabel, tierOf } from './world';
 
 // ---------- Nadstavba ----------
+//
+// W1 v0.29: herní model Chance Ligy (2026/27). Po 30 kolech základní části:
+// - skupina o titul (1.–6.) a skupina o záchranu (11.–16.) hrají jednokolově 5 kol podle pevného rozpisu,
+//   body ze základní části zůstávají;
+// - 7.–10. hraje play-off o umístění (vyřazovací dvojzápasy, semifinále 10–7 a 9–8, pak finále);
+//   vítěz je 7., poražený finalista 8., poražení semifinalisté 9. a 10. (9. ten výše po základní části).
+// Termíny: víkendy v květnu. Starší uložené hry s dvoukolovou nadstavbou dohrají postaru.
 
-/** Konečné pořadí: při nadstavbě nejdřív skupina o titul, pak o umístění, pak o záchranu (body se sčítají). */
+/** Pevný rozpis skupiny o titul: čísla = místo po základní části, první je domácí. */
+export const TITLE_GROUP_SCHEDULE: [number, number][][] = [
+  [[2, 4], [3, 5], [6, 1]],
+  [[4, 5], [3, 6], [1, 2]],
+  [[5, 6], [1, 4], [2, 3]],
+  [[5, 1], [6, 2], [3, 4]],
+  [[1, 3], [2, 5], [4, 6]],
+];
+/** Pevný rozpis skupiny o záchranu (11.–16. po základní části). */
+export const RELEGATION_GROUP_SCHEDULE: [number, number][][] = [
+  [[16, 11], [12, 14], [13, 15]],
+  [[11, 12], [13, 16], [14, 15]],
+  [[11, 14], [12, 13], [15, 16]],
+  [[15, 11], [16, 12], [13, 14]],
+  [[11, 13], [12, 15], [14, 16]],
+];
+/** Klíč play-off o umístění v state.cups. */
+export const PLACEMENT_CUP_ID = 'umisteni';
+/** Odměny finalistům play-off o umístění. */
+export const PLACEMENT_PRIZE = { winner: 3_000_000, finalist: 1_500_000 };
+const PLACEMENT_ROUNDS = ['Semifinále, 1. zápas', 'Semifinále, odveta', 'Finále, 1. zápas', 'Finále, odveta'];
+
+function saturdays(from: string, to: string): string[] {
+  const out: string[] = [];
+  let d = from;
+  while (dayOfWeek(d) !== 6) d = addDays(d, 1);
+  for (; d <= to; d = addDays(d, 7)) out.push(d);
+  return out;
+}
+
+function spreadDates(slots: string[], count: number): string[] {
+  if (count <= slots.length) return Array.from({ length: count }, (_, i) => slots[Math.floor((i * slots.length) / count)]);
+  const extra = slots.slice(0, count - slots.length).map((s) => addDays(s, 4));
+  return [...slots, ...extra].sort();
+}
+
+/** Termíny základní části soutěže s nadstavbou: podzim 17 kol, jaro do konce dubna (květen patří nadstavbě). */
+export function nadstavbaBaseDates(season: number, rounds: number): string[] {
+  const autumnCount = Math.min(rounds, Math.ceil(rounds / 2) + 2);
+  const autumn = saturdays(`${season}-07-25`, `${season}-11-28`);
+  const spring = saturdays(`${season + 1}-02-01`, `${season + 1}-04-26`);
+  return [...spreadDates(autumn, autumnCount), ...spreadDates(spring, rounds - autumnCount)];
+}
+
+/** Pět termínů nadstavby: soboty 1.–30. 5. (když jsou v květnu jen čtyři, přidá se středa po první sobotě). */
+export function nadstavbaDates(season: number): string[] {
+  const sats = saturdays(`${season + 1}-05-01`, `${season + 1}-05-30`);
+  if (sats.length < 5) sats.push(addDays(sats[0], 4));
+  return sats.sort().slice(0, 5);
+}
+
+/** Je nadstavba podle pravidel v0.29 (play-off o umístění místo skupiny)? */
+export function isPlacementFormat(comp: Competition): boolean {
+  return !!comp.groups?.some((g) => g.playoff);
+}
+
+/** Play-off o umístění dané soutěže (pokud je rozlosované). */
+export function placementCup(state: GameState | undefined, comp: Competition): Cup | undefined {
+  const cup = state?.cups[PLACEMENT_CUP_ID];
+  return cup?.placement?.compId === comp.id ? cup : undefined;
+}
+
+/** Pořadí 7.–10. podle play-off: vítěz, (rozehraní), poražený finalista, poražení semifinalisté; shoda = místo po základní části. */
+function placementOrder(cup: Cup | undefined, seeds: string[]): string[] {
+  if (!cup?.ties) return seeds;
+  const final = cup.ties[2];
+  const stage = (id: string): number => {
+    if (final?.winner) return final.winner === id ? 0 : [final.upper, final.lower].includes(id) ? 2 : 3;
+    if (final && [final.upper, final.lower].includes(id)) return 1;
+    const semi = cup.ties!.slice(0, 2).find((t) => [t.upper, t.lower].includes(id));
+    return semi?.winner && semi.winner !== id ? 3 : 1;
+  };
+  return [...seeds].sort((a, b) => stage(a) - stage(b) || seeds.indexOf(a) - seeds.indexOf(b));
+}
+
+/**
+ * Konečné pořadí. Při nadstavbě nejdřív skupina o titul, pak 7.–10. (play-off podle výsledku,
+ * u starších her skupina o umístění), pak skupina o záchranu (body se sčítají).
+ */
 export function finalStandings(comp: Competition, state?: GameState): TableRow[] {
   const table = computeTable(comp, state);
   if (!comp.groups) return table;
-  return comp.groups.flatMap((g) => table.filter((r) => g.clubIds.includes(r.clubId)));
+  return comp.groups.flatMap((g) => {
+    if (!g.playoff) return table.filter((r) => g.clubIds.includes(r.clubId));
+    const cup = placementCup(state, comp);
+    const order = placementOrder(cup, cup?.placement?.seeds ?? g.clubIds);
+    return order.map((id) => table.find((r) => r.clubId === id)!).filter(Boolean);
+  });
+}
+
+/** Odhad zápasů a domácích zápasů v nadstavbě podle místa (rozpočet). */
+export function nadstavbaShare(position: number, size: number): { matches: number; home: number } {
+  if (size !== 16) return { matches: 5, home: 3 };
+  if (position <= 3 || (position >= 11 && position <= 13)) return { matches: 5, home: 3 };
+  if (position <= 6 || position >= 14) return { matches: 5, home: 2 };
+  // Play-off: dvojzápas semifinále a s poloviční šancí finále.
+  return { matches: 3, home: position <= 8 ? 2 : 1 };
+}
+
+function scheduleGroup(state: GameState, comp: Competition, ids: string[], schedule: [number, number][][], offset: number, base: number, dates: string[], next: () => number): void {
+  schedule.forEach((round, r) => {
+    for (const [h, a] of round) {
+      comp.fixtures.push({
+        id: `${comp.id}-${state.season}-n${next()}`,
+        round: base + r + 1,
+        date: dates[r] ?? addDays(dates[dates.length - 1], 7 * (r - dates.length + 1)),
+        homeId: ids[h - 1 - offset],
+        awayId: ids[a - 1 - offset],
+      });
+    }
+  });
 }
 
 /** Základní část odehrána: soutěž se rozdělí do skupin a rozlosuje se nadstavba. */
@@ -20,29 +133,162 @@ export function startGroups(state: GameState, comp: Competition, rng: Rng): void
   const ids = computeTable(comp, state).map((r) => r.clubId);
   const n = ids.length;
   if (n < 12 || !comp.reservedDates?.length) return;
-  comp.groups = [
-    { name: 'Skupina o titul', clubIds: ids.slice(0, 6) },
-    ...(n > 12 ? [{ name: 'Skupina o umístění', clubIds: ids.slice(6, n - 6) }] : []),
-    { name: 'Skupina o záchranu', clubIds: ids.slice(n - 6) },
-  ];
   const base = Math.max(...comp.fixtures.map((f) => f.round));
   let i = 0;
-  for (const group of comp.groups) {
-    for (const p of doubleRoundRobin(group.clubIds, rng)) {
-      comp.fixtures.push({
-        id: `${comp.id}-${state.season}-n${i++}`,
-        round: base + p.round,
-        date: comp.reservedDates[p.round - 1],
-        homeId: p.homeId,
-        awayId: p.awayId,
-      });
+  const next = () => i++;
+  if (n === 16) {
+    const dates = comp.reservedDates;
+    comp.groups = [
+      { name: 'Skupina o titul', clubIds: ids.slice(0, 6) },
+      { name: 'Play-off o umístění', clubIds: ids.slice(6, 10), playoff: true },
+      { name: 'Skupina o záchranu', clubIds: ids.slice(10) },
+    ];
+    scheduleGroup(state, comp, ids.slice(0, 6), TITLE_GROUP_SCHEDULE, 0, base, dates, next);
+    scheduleGroup(state, comp, ids.slice(10), RELEGATION_GROUP_SCHEDULE, 10, base, dates, next);
+    startPlacementPlayoff(state, comp, ids.slice(6, 10), dates);
+  } else {
+    // Jiná velikost soutěže: starší model (dvoukolové skupiny).
+    comp.groups = [
+      { name: 'Skupina o titul', clubIds: ids.slice(0, 6) },
+      ...(n > 12 ? [{ name: 'Skupina o umístění', clubIds: ids.slice(6, n - 6) }] : []),
+      { name: 'Skupina o záchranu', clubIds: ids.slice(n - 6) },
+    ];
+    for (const group of comp.groups) {
+      for (const p of doubleRoundRobin(group.clubIds, rng)) {
+        comp.fixtures.push({ id: `${comp.id}-${state.season}-n${next()}`, round: base + p.round, date: comp.reservedDates[p.round - 1], homeId: p.homeId, awayId: p.awayId });
+      }
     }
   }
   const own = comp.groups.find((g) => g.clubIds.includes(state.owner.clubId));
   addNews(state, {
     kind: 'sezona',
     title: `${comp.name}: začíná nadstavba`,
-    text: own ? `Váš klub hraje ve skupině „${own.name}“. Body ze základní části se započítávají.` : undefined,
+    text: own
+      ? own.playoff
+        ? 'Váš klub hraje play-off o umístění (7.–10. místo): semifinále na dva zápasy, pak finále. Vítěz získá volný los do 2. kola poháru a odměnu.'
+        : `Váš klub hraje ve skupině „${own.name}“. ${n === 16 ? 'Hraje se jednokolově, 5 kol. ' : ''}Body ze základní části se započítávají.`
+      : undefined,
+  });
+}
+
+function placementLegs(state: GameState, cup: Cup, upper: string, lower: string, round: number): void {
+  // 1. zápas doma hůře umístěný po základní části, odveta doma lépe umístěný.
+  cup.fixtures.push({ id: `${PLACEMENT_CUP_ID}-${state.season}-${round}-${cup.fixtures.length}`, round, date: cup.rounds[round - 1].date, homeId: lower, awayId: upper });
+  cup.fixtures.push({ id: `${PLACEMENT_CUP_ID}-${state.season}-${round + 1}-${cup.fixtures.length}`, round: round + 1, date: cup.rounds[round].date, homeId: upper, awayId: lower });
+}
+
+/** Play-off o umístění: semifinále 10–7 a 9–8 (odvety 7–10 a 8–9). */
+function startPlacementPlayoff(state: GameState, comp: Competition, seeds: string[], dates: string[]): void {
+  const day = (k: number) => dates[k] ?? addDays(dates[dates.length - 1], 7 * (k - dates.length + 1));
+  const cup: Cup = {
+    id: PLACEMENT_CUP_ID,
+    name: `Play-off o umístění: ${comp.name}`,
+    kind: 'umisteni',
+    fixtures: [],
+    rounds: PLACEMENT_ROUNDS.map((name, k) => ({ name, date: day(k) })),
+    alive: [...seeds],
+    nextRound: 2,
+    ties: [
+      { upper: seeds[0], lower: seeds[3] },
+      { upper: seeds[1], lower: seeds[2] },
+    ],
+    placement: { compId: comp.id, seeds: [...seeds] },
+  };
+  for (const t of cup.ties!) placementLegs(state, cup, t.upper, t.lower, 1);
+  state.cups[PLACEMENT_CUP_ID] = cup;
+}
+
+function resolvePlacement(state: GameState, cup: Cup, rng: Rng): void {
+  const ties = cup.ties ?? [];
+  const seeds = cup.placement?.seeds ?? [];
+  const legsOf = (t: { upper: string; lower: string }) => cup.fixtures.filter((f) => [f.homeId, f.awayId].includes(t.upper) && [f.homeId, f.awayId].includes(t.lower));
+  const own = state.owner.clubId;
+  for (const t of ties) {
+    const legs = legsOf(t);
+    if (t.winner || legs.length < 2 || !legs.every((f) => f.result)) continue;
+    t.winner = decideTie(rng, legs, t.upper, t.lower);
+    const loser = t.winner === t.upper ? t.lower : t.upper;
+    cup.alive = cup.alive.filter((id) => id !== loser);
+    const final = ties.indexOf(t) === 2;
+    if (final) {
+      cup.winner = t.winner;
+      book(state, t.winner, 'tv', PLACEMENT_PRIZE.winner, 'Play-off o umístění: vítěz (7. místo)');
+      book(state, loser, 'tv', PLACEMENT_PRIZE.finalist, 'Play-off o umístění: finalista (8. místo)');
+      state.cupBye = { season: state.season + 1, clubId: t.winner };
+      const mine = [t.winner, loser].includes(own);
+      addNews(state, {
+        kind: mine ? 'sezona' : 'info',
+        title: t.winner === own ? 'Play-off o umístění vyhráno: 7. místo!' : `Play-off o umístění: vyhrál ${clubLabel(state, t.winner)}`,
+        text: `${clubLabel(state, t.winner)} končí 7., ${clubLabel(state, loser)} 8. Vítěz dostane ${(PLACEMENT_PRIZE.winner / 1e6).toLocaleString('cs-CZ')} mil. Kč a v příští sezóně volný los do 2. kola poháru, finalista ${(PLACEMENT_PRIZE.finalist / 1e6).toLocaleString('cs-CZ')} mil. Kč.`,
+      });
+    } else if ([t.upper, t.lower].includes(own)) {
+      addNews(state, {
+        kind: t.winner === own ? 'sezona' : 'info',
+        title: t.winner === own ? 'Play-off o umístění: postup do finále' : 'Play-off o umístění: konec v semifinále',
+        text: t.winner === own ? 'Ve finále hrajete o 7. místo, volný los v poháru a odměnu.' : 'Sezónu končíte na 9. nebo 10. místě: z poražených semifinalistů je 9. ten, kdo byl po základní části výš.',
+      });
+    }
+  }
+  if (ties.length === 2 && ties.every((t) => t.winner)) {
+    // Finále: 1. zápas doma hůře umístěný po základní části.
+    const [a, b] = ties.map((t) => t.winner!).sort((x, y) => seeds.indexOf(x) - seeds.indexOf(y));
+    const fin = { upper: a, lower: b };
+    ties.push(fin);
+    placementLegs(state, cup, a, b, 3);
+    cup.nextRound = 4;
+    if ([a, b].includes(own)) {
+      const opp = a === own ? b : a;
+      addNews(state, { kind: 'info', title: `Finále play-off o umístění: ${clubLabel(state, b)} – ${clubLabel(state, a)}`, text: `Soupeř: ${clubLabel(state, opp)}. 1. zápas ${cup.rounds[2].date.split('-').slice(1).reverse().map(Number).join('. ')}., odveta ${cup.rounds[3].date.split('-').slice(1).reverse().map(Number).join('. ')}.` });
+    }
+  }
+}
+
+/**
+ * W1 v0.29: odhad konečného pořadí v jedné simulaci zbytku sezóny (výhled šancí). Body `pts` už obsahují
+ * nasimulované zbývající zápasy soutěže; nadstavba, která ještě není rozlosovaná, a play-off o umístění se dosimulují.
+ */
+export function projectedOrder(state: GameState, comp: Competition, pts: Map<string, number>, gd: Map<string, number>, strength: Map<string, number>, rng: Rng): string[] {
+  const byPts = (ids: string[]) => [...ids].sort((a, b) => pts.get(b)! - pts.get(a)! || gd.get(b)! - gd.get(a)! || rng.next() - 0.5);
+  const str = (id: string) => strength.get(id) ?? 50;
+  const tie = (upper: string, lower: string) => (rng.next() < 1 / (1 + Math.exp(-(str(upper) - str(lower) + 1.5) * 0.14)) ? upper : lower);
+  const playoff = (seeds: string[], cup?: Cup): string[] => {
+    const ties = cup?.ties ?? [];
+    const semis = [0, 1].map((i) => ties[i]?.winner ?? tie(seeds[i], seeds[3 - i]));
+    const [a, b] = [...semis].sort((x, y) => seeds.indexOf(x) - seeds.indexOf(y));
+    const champ = ties[2]?.winner ?? tie(a, b);
+    const losers = seeds.filter((id) => !semis.includes(id));
+    return [champ, champ === a ? b : a, ...losers];
+  };
+  const n = comp.clubIds.length;
+  if (comp.format !== 'nadstavba' || n < 12) return byPts(comp.clubIds);
+  if (!comp.groups) {
+    if (!comp.reservedDates?.length) return byPts(comp.clubIds);
+    const ids = byPts(comp.clubIds);
+    if (n !== 16) return ids;
+    const sim = (schedule: [number, number][][]) => {
+      for (const round of schedule) {
+        for (const [h, a] of round) {
+          const home = ids[h - 1];
+          const away = ids[a - 1];
+          const d = (str(home) - str(away) + 4) * 0.11;
+          const ph = 0.74 / (1 + Math.exp(-d));
+          const x = rng.next();
+          if (x < ph) pts.set(home, pts.get(home)! + 3);
+          else if (x < ph + 0.26) {
+            pts.set(home, pts.get(home)! + 1);
+            pts.set(away, pts.get(away)! + 1);
+          } else pts.set(away, pts.get(away)! + 3);
+        }
+      }
+    };
+    sim(TITLE_GROUP_SCHEDULE);
+    sim(RELEGATION_GROUP_SCHEDULE);
+    return [...byPts(ids.slice(0, 6)), ...playoff(ids.slice(6, 10)), ...byPts(ids.slice(10))];
+  }
+  return comp.groups.flatMap((g) => {
+    if (!g.playoff) return byPts(g.clubIds);
+    const cup = placementCup(state, comp);
+    return playoff(cup?.placement?.seeds ?? g.clubIds, cup);
   });
 }
 
@@ -230,6 +476,14 @@ export function setupCup(state: GameState, rng: Rng): void {
     .filter((id) => !state.clubs[id].reserveOf)
     .sort((a, b) => state.clubs[b].reputation - state.clubs[a].reputation);
   const byes = Math.max(0, 64 - participants.length);
+  // W1 v0.29: vítěz play-off o umístění má volný los do 2. kola.
+  const bye = state.cupBye?.season === state.season ? state.cupBye.clubId : undefined;
+  if (bye && participants.includes(bye) && byes > 0) {
+    const had = participants.indexOf(bye) < byes;
+    participants.splice(participants.indexOf(bye), 1);
+    participants.unshift(bye);
+    if (bye === state.owner.clubId) addNews(state, { kind: 'info', title: 'Pohár: volný los do 2. kola', text: had ? 'Za vítězství v play-off o umístění máte volný los (ten byste měli i podle pověsti).' : 'Za vítězství v play-off o umístění nehrajete 1. kolo poháru.' });
+  }
   const cup: Cup = {
     id: 'pohar',
     name: 'Domácí pohár',
@@ -306,6 +560,8 @@ export function afterMatchday(state: GameState, rng: Rng): void {
   const playoff = state.cups.baraz;
   if (playoff && playoff.fixtures.some((f) => f.date === state.date)) resolvePlayoffs(state, playoff, rng);
   for (const c of Object.values(state.cups)) if (c.pool && c.fixtures.some((f) => f.date === state.date)) resolvePoolPlayoff(state, c, rng); // V4
+  const placement = state.cups[PLACEMENT_CUP_ID];
+  if (placement?.kind === 'umisteni' && placement.fixtures.some((f) => f.date === state.date)) resolvePlacement(state, placement, rng); // W1 v0.29
 }
 
 export function allFixtures(state: GameState): { fixture: Fixture; name: string; tier: number; cup?: Cup; comp?: Competition }[] {

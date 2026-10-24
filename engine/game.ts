@@ -24,6 +24,8 @@ import {
 import { completeProjects, effectiveCapacity, licenseCheck, monthlyBuildingDepreciation } from './facilities';
 import { defaultFacilities, matchdayExtras } from './stadium';
 import { createEvent, expireEvents, maybeCreateEvent, resolveEvent } from './events';
+import { chemistryMatchBonus, dailyChemistry } from './chemistry'; // W4
+import { decisionBudgetLeft as chemBudgetLeft } from './situations'; // W4
 import { checkBan, media, monthlyGrey } from './grey';
 import { approveBudget, adjustForNewTier, monthlyReport, TICKET_ANGER, BUDGET_DEADLINE, budgetDeadline, defaultSeasonTicketPrice, forecastSeason, prepareBudget, seasonTicketHolders } from './budget';
 import { homeAdvantage, ownTeamSpirit } from './atmosphere';
@@ -35,7 +37,7 @@ import { dailyEurope } from './europe';
 import { dailyStars } from './stars';
 import { boardCoversLoss, clubValuation, createShareholders, monthlyShareholders } from './ownership';
 import { recordCupHistory } from './cupview'; // V3
-import { afterMatchday, allFixtures, baseSeasonDone, finalStandings, setupCup, startGroups, startPlayoffs } from './competitions';
+import { afterMatchday, allFixtures, baseSeasonDone, finalStandings, nadstavbaBaseDates, nadstavbaDates, PLACEMENT_CUP_ID, setupCup, startGroups, startPlayoffs } from './competitions';
 import { poolPlayoffKey, startPoolPlayoffs } from './competitions'; // V4
 import { monthlyDevelopment, moraleNews, recordCareers, recordTimeline, recordTrend } from './development';
 import { doubleRoundRobin } from './fixtures';
@@ -79,9 +81,9 @@ import { buildSeasonReport, evaluateScenario, scenarioSeasonEnd } from './meta';
 import { createSideGoals, seasonFfp, seasonRating, settleSideGoals, sideGoalsTick } from './finplus';
 import { dailyDeadline, deadlineDay, monthlyAgents, monthlyWatch, settleConditionals, weeklyReleaseClauses } from './market';
 import { autoSponsors, checkPromises, closeYouthIntake, createYouthIntake, delegationOf, monthlyDelegation } from './people';
-import { afterOwnMatch, halftimeAdjust, nextOwnFixture, pendingPrematch, planEffect, type OwnFixture } from './matchday';
+import { afterOwnMatch, halftimeAdjust, matchWindowTomorrow, nextOwnFixture, opensMatchWindow, pendingPrematch, planEffect, type OwnFixture } from './matchday'; // W3: okno jen u klíčových zápasů
 import { dailyPress } from './press'; // R3
-import { applyBigMatchPlan, bigMatchWeekStarted, dailyBigMatch, euroMatchTomorrow, liveChanges } from './matchexperience'; // W1
+import { applyBigMatchPlan, bigMatchWeekStarted, dailyBigMatch, euroPlayedToday, euroWindowTomorrow, liveChanges } from './matchexperience'; // W1, W3
 import { makeRoundReport, noteTimeline, ownerTypeOf, publishRoundReport, weeklyRivalOwners } from './league';
 import { dailyRivals } from './rivals';
 import { dailySocial } from './social'; // W2: sociální sítě a krok po zápase
@@ -99,9 +101,11 @@ import { fillFromRoster, rostersByClub, type RosterRow } from './rosters';
 import { seasonAchievements, weeklyAchievements } from './achievements'; // W3
 import { challengesTick, createChallenges, settleChallenges } from './challenges'; // W3
 import { monthlyLongEffects, weeklyBigDecisions } from './bigdecisions'; // W3
+import { competitionPriorityEdge, dailyOwnerDecisions, startOwnerDecisions } from './ownerdecisions'; // W5: strategická rozhodnutí majitele
 import { dailySituations } from './situations'; // R1: situace z dat, sliby, týdenní limit
 import { awayTripEdge, dailyFans } from './fans'; // W3: fanoušci průběžně
 import { dailyAgenda } from './agenda'; // V1
+import { easeAdd } from './ease'; // W2 kalibrace
 
 export const START_SEASON = 2026;
 const MAX_SQUAD = 26;
@@ -269,6 +273,7 @@ export function newGame(pack: DataPack, opts: NewGameOptions): GameState {
   prepareBudget(state);
   createSideGoals(state);
   createChallenges(state); // W3: výzvy první sezóny
+  startOwnerDecisions(state, createEvent); // W5: vize klubu ve schránce (výchozí „vyvážená“)
   addNews(state, {
     kind: 'info',
     title: `Vítejte v klubu ${own.name}`,
@@ -333,9 +338,10 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
     const rounds = Math.max(0, ...pairings.map((p) => p.round));
     // Nadstavba potřebuje dalších až 10 termínů po základní části.
     const extra = comp.format === 'nadstavba' && comp.clubIds.length >= 12 ? 10 : 0;
-    const dates = roundDates(state.season, rounds + extra);
+    // W1 v0.29: základní část do konce dubna, nadstavba o květnových víkendech.
+    const dates = extra ? nadstavbaBaseDates(state.season, rounds) : roundDates(state.season, rounds);
     comp.groups = undefined;
-    comp.reservedDates = extra ? dates.slice(rounds) : undefined;
+    comp.reservedDates = extra ? nadstavbaDates(state.season) : undefined;
     comp.fixtures = pairings.map((p, i) => ({
       id: `${comp.id}-${state.season}-${i}`,
       round: p.round,
@@ -351,6 +357,7 @@ function setupSeason(state: GameState, rng: Rng, summerWindow: boolean): void {
   generateProposals(state);
   state.timeline = [];
   delete state.cups.baraz;
+  delete state.cups[PLACEMENT_CUP_ID]; // W1 v0.29: play-off o umístění
   for (const [k, c] of Object.entries(state.cups)) if (c.pool) delete state.cups[k]; // V4: baráž vítězů skupin
   setupCup(state, rng);
   const own = state.clubs[state.owner.clubId];
@@ -417,11 +424,13 @@ function isEligibleFor(state: GameState, clubId: string, targetTier: number, exc
   return tierOf(state, club.reserveOf) !== targetTier;
 }
 
-function lowerCompFor(state: GameState, tier: number, region: Club['region'], planned: { to: Competition }[] = []): Competition | undefined {
+function lowerCompFor(state: GameState, tier: number, region: Club['region'], planned: { to: Competition; clubId?: string }[] = [], clubId?: string): Competition | undefined {
   const lower = Object.values(state.competitions).filter((c) => c.tier === tier + 1);
   // Víc skupin pro stejný region (ČFL A a B): sestupující jde do menší skupiny (včetně už naplánovaných přesunů).
   const size = (c: Competition) => c.clubIds.length + planned.filter((m) => m.to === c).length;
-  const fit = lower.filter((c) => !c.region || c.region === region).sort((a, b) => size(a) - size(b));
+  // W1 v0.29: klub nejde do skupiny, kde hraje jeho B-tým (nebo mateřský klub), pokud je jiná možnost.
+  const related = (c: Competition) => !!clubId && [...c.clubIds, ...planned.filter((m) => m.to === c && m.clubId).map((m) => m.clubId!)].some((id) => id !== clubId && (state.clubs[id]?.reserveOf === clubId || state.clubs[clubId]?.reserveOf === id));
+  const fit = lower.filter((c) => !c.region || c.region === region).sort((a, b) => Number(related(a)) - Number(related(b)) || size(a) - size(b));
   return fit[0] ?? lower[0];
 }
 
@@ -508,7 +517,7 @@ function endSeason(state: GameState, rng: Rng): void {
     const upperTable = tables.get(upper.id)!;
     for (const row of upperTable.slice(upperTable.length - upper.relegate)) {
       const club = state.clubs[row.clubId];
-      const to = lowerCompFor(state, upper.tier, club.region, moves)!;
+      const to = lowerCompFor(state, upper.tier, club.region, moves, row.clubId)!;
       moves.push({ clubId: row.clubId, from: upper, to, up: false });
       moved.add(row.clubId);
     }
@@ -550,7 +559,7 @@ function endSeason(state: GameState, rng: Rng): void {
     const upperComp = comps.find((c) => c.clubIds.includes(t.upper));
     const lowerComp = comps.find((c) => c.clubIds.includes(t.lower));
     if (!upperComp || !lowerComp || moved.has(t.upper) || moved.has(t.lower)) continue;
-    const down = lowerCompFor(state, upperComp.tier, state.clubs[t.upper].region) ?? lowerComp;
+    const down = lowerCompFor(state, upperComp.tier, state.clubs[t.upper].region, moves, t.upper) ?? lowerComp;
     moves.push({ clubId: t.lower, from: lowerComp, to: upperComp, up: true });
     moves.push({ clubId: t.upper, from: upperComp, to: down, up: false });
     moved.add(t.lower);
@@ -559,8 +568,8 @@ function endSeason(state: GameState, rng: Rng): void {
   for (const m of moves) {
     if (m.clubId === state.owner.clubId && m.up) {
       // Postup: vedení i trenér mají radost.
-      state.owner.trust.trener = Math.min(100, state.owner.trust.trener + 10);
-      state.owner.trust.reditel = Math.min(100, state.owner.trust.reditel + 10);
+      state.owner.trust.trener = easeAdd(state.owner.trust.trener, 10); // W2 kalibrace
+      state.owner.trust.reditel = easeAdd(state.owner.trust.reditel, 10);
     }
     m.from.clubIds = m.from.clubIds.filter((id) => id !== m.clubId);
     m.to.clubIds.push(m.clubId);
@@ -583,8 +592,29 @@ function endSeason(state: GameState, rng: Rng): void {
     for (const id of [...comp.clubIds]) {
       const parent = state.clubs[id].reserveOf;
       if (!parent || !comp.clubIds.includes(parent)) continue;
-      const to = lowerCompFor(state, comp.tier, state.clubs[id].region);
-      if (!to) continue;
+      const to = lowerCompFor(state, comp.tier, state.clubs[id].region, [], id);
+      if (!to) {
+        // W1 v0.29: nejnižší modelovaná úroveň – B-tým si vymění místo s klubem z jiné skupiny stejné úrovně,
+        // a když taková není, jde do divize (místo doplní klub z divize).
+        const alt = comps.find((c) => c !== comp && c.tier === comp.tier && (!c.region || c.region === state.clubs[id].region) && !c.clubIds.includes(parent));
+        const swap = alt && [...tables.get(alt.id)!].reverse().find((r) => alt.clubIds.includes(r.clubId) && r.clubId !== state.owner.clubId && !state.clubs[r.clubId].reserveOf);
+        if (alt && swap) {
+          alt.clubIds = alt.clubIds.filter((c) => c !== swap.clubId);
+          comp.clubIds = comp.clubIds.filter((c) => c !== id);
+          alt.clubIds.push(id);
+          comp.clubIds.push(swap.clubId);
+          addNews(state, { kind: 'info', title: `${state.clubs[id].name} musí kvůli mateřskému klubu do soutěže ${alt.name}` });
+        } else {
+          comp.clubIds = comp.clubIds.filter((c) => c !== id);
+          state.pool.push(id);
+          for (const p of squadOf(state, id)) delete state.players[p.id];
+          const outCoach = coachOf(state, id);
+          if (outCoach) outCoach.clubId = FREE;
+          state.clubs[id].staff.coachId = '';
+          addNews(state, { kind: 'info', title: `${state.clubs[id].name} musí kvůli mateřskému klubu do divize` });
+        }
+        continue;
+      }
       comp.clubIds = comp.clubIds.filter((c) => c !== id);
       to.clubIds.push(id);
       const replacement = tables
@@ -619,7 +649,7 @@ function endSeason(state: GameState, rng: Rng): void {
     while (comp.clubIds.length < comp.targetSize) {
       const candidates = state.pool
         .map((id) => state.clubs[id])
-        .filter((c) => !comp.region || c.region === comp.region)
+        .filter((c) => (!comp.region || c.region === comp.region) && !(c.reserveOf && comp.clubIds.includes(c.reserveOf)))
         .sort((a, b) => b.reputation - a.reputation);
       const club = candidates[0] ?? createPoolClub(state, rng, comp.region ?? 'cechy');
       state.pool = state.pool.filter((id) => id !== club.id);
@@ -633,8 +663,8 @@ function endSeason(state: GameState, rng: Rng): void {
   // Titul a pohár: bonus k důvěře nad rámec splněného cíle.
   if (ownIndex === 0 || state.cups.pohar?.winner === state.owner.clubId) {
     const bonus = (ownIndex === 0 ? 6 : 0) + (state.cups.pohar?.winner === state.owner.clubId ? 6 : 0);
-    state.owner.trust.trener = Math.min(100, state.owner.trust.trener + bonus);
-    state.owner.trust.reditel = Math.min(100, state.owner.trust.reditel + bonus);
+    state.owner.trust.trener = easeAdd(state.owner.trust.trener, bonus); // W2 kalibrace
+    state.owner.trust.reditel = easeAdd(state.owner.trust.reditel, bonus);
   }
   seasonEndStaff(state, rng, ownIndex + 1, ownComp);
   if (ownComp) {
@@ -748,7 +778,9 @@ function playMatchesOn(state: GameState, rng: Rng): void {
     const involvesOwner = f.homeId === ownId || f.awayId === ownId;
     // Plán majitele (taktika, prémie, levné vstupné, choreo) platí jen pro jeho zápas.
     const plan = involvesOwner ? planEffect(state, f) : { bonus: 0, ticketFactor: 1, homeEdge: 0 };
+    if (involvesOwner) plan.bonus += chemistryMatchBonus(state); // W4: týmová chemie
     if (involvesOwner) applyBigMatchPlan(state, f, plan); // W1: lístky, kotel a choreo velkého zápasu
+    if (involvesOwner) plan.bonus += competitionPriorityEdge(state, cup ? 'pohar' : 'liga'); // W5: priorita soutěží (rotace)
     if (involvesOwner) plan.homeEdge -= awayTripEdge(state, f); // W3: výjezd fanoušků ubere domácím výhodu
     const ticketPrice = home.policy.ticketPrice;
     if (plan.ticketFactor !== 1) home.policy.ticketPrice = Math.round(ticketPrice * plan.ticketFactor);
@@ -1091,7 +1123,9 @@ function processDay(state: GameState, rng: Rng): void {
   dailyFans(state); // W3: fanouškovská rada, ankety, výjezdy, oslavy
   dailySituations(state, rng); // R1: situace z dat den po zápase, sliby majitele
   dailyPress(state); // R3: navazující příběhy a tisková konference po zápase
+  dailyChemistry(state, rng, createEvent, chemBudgetLeft); // W4: týmová chemie, kapitán
   dailyAgenda(state, rng); // V1: týdenní agenda, trénink, projekty, požadavky postav, rutina
+  dailyOwnerDecisions(state, createEvent); // W5: strategická rozhodnutí majitele
   for (const comp of Object.values(state.competitions)) {
     if (comp.format === 'nadstavba' && !comp.groups && comp.reservedDates && baseSeasonDone(comp)) startGroups(state, comp, rng);
   }
@@ -1233,6 +1267,8 @@ export function nextStep(state: GameState): { kind: StepKind; days: number; labe
   const eve = next ? daysBetween(state.date, next.fixture.date) - 1 : 99;
   const m = stops.milestone ? nextMilestone(state) : undefined;
   const md = m ? daysBetween(state.date, m.date) : 99;
+  // W3: běžný zápas posun rovnou odehraje (bez okna), před klíčovým zápasem se zastaví v předvečer.
+  if (next && eve >= 0 && eve <= 6 && eve < md && !opensMatchWindow(state, next)) return { kind: 'zapas', days: eve + 1, label: 'Odehrát zápas' };
   if (eve >= 1 && eve <= 7 && eve <= md) return { kind: 'zapas', days: eve, label: 'Do zápasu' };
   if (m && md <= 7) return { kind: 'milnik', days: md, label: `Do ${m.short}` };
   return { kind: 'tyden', days: 7, label: 'Týden' };
@@ -1248,7 +1284,7 @@ function daysBetween(a: string, b: string): number {
  * (nová situace k rozhodnutí, výhodná nabídka, zranění opory, začátek deadline day).
  * Samotný zápas se hraje až po volbě majitele (jen výsledek, nebo živý přenos).
  */
-export function advanceStep(prev: GameState): { state: GameState; reason?: string } {
+export function advanceStep(prev: GameState): { state: GameState; reason?: string; fixtureId?: string } {
   if (prev.gameOver) return { state: prev };
   const state = structuredClone(prev);
   const rng = createRng(state.rngState);
@@ -1261,10 +1297,16 @@ export function advanceStep(prev: GameState): { state: GameState; reason?: strin
   const deadlineAtStart = !!deadlineDay(state);
   const bigAtStart = state.bigMatch?.id; // W1
   let reason: string | undefined;
+  let fixtureId: string | undefined;
   for (let i = 0; i < plan.days && !state.gameOver; i++) {
-    stepDay(state, rng, own);
+    const played = stepDay(state, rng, own) ?? euroPlayedToday(state);
+    if (played) {
+      // W3: běžný zápas se odehrál sám (trenér hrál po svém), posun se zastaví na výsledku.
+      fixtureId = played;
+      break;
+    }
     const bigWeek = bigMatchWeekStarted(state, bigAtStart); // W1: zastavit jen na začátku týdne velkého zápasu
-    if (ownMatchTomorrow(state) || euroMatchTomorrow(state) || bigWeek) {
+    if (matchWindowTomorrow(state) || euroWindowTomorrow(state) || bigWeek) {
       reason = bigWeek;
       break;
     }
@@ -1293,7 +1335,7 @@ export function advanceStep(prev: GameState): { state: GameState; reason?: strin
     }
   }
   state.rngState = rng.state();
-  return { state, reason };
+  return { state, reason, fixtureId };
 }
 
 /** Hrát do příštího zápasu klubu majitele (nejvýš 60 dní). */

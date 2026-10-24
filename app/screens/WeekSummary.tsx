@@ -1,4 +1,4 @@
-import type { WeekSummary } from '../../engine';
+import type { MonthSummary as WeekSummary } from '../../engine';
 import { money } from '../format';
 
 /** V1 (A10): karta konce týdne. V2 ji zobrazí (animace) po přechodu do nového týdne. */

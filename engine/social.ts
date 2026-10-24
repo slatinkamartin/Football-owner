@@ -386,6 +386,7 @@ const KIND_LOC: Record<PostMatchKind, string> = {
   zachrana: 'zápase o záchranu',
   pohar: 'pohárové bitvě',
   baraz: 'baráži',
+  playoff: 'finále o umístění', // W3
   trofej: 'sezóně',
 };
 
@@ -463,7 +464,9 @@ function createPostMatch(state: GameState, bm: BigMatch, r: OwnResult): void {
   // Hra má zůstat plynulá: derby a baráž mají krok po zápase vždy, ostatní velké zápasy (Evropa, pohár,
   // souboje o čelo a o záchranu) jen při výhře nebo prohře a nejvýš jednou za 4 týdny. Jinak jen titulky ve zprávách.
   const always = bm.kind === 'derby' || bm.kind === 'baraz';
-  if (!always && ((s.lastPostMatch && addDays(s.lastPostMatch, 28) > state.date) || res === 'R')) {
+  // W3: krok po zápase jen u klíčových zápasů (velký zápas) a nejvýš jednou týdně, i u derby a baráže.
+  const thisWeek = !!s.lastPostMatch && addDays(s.lastPostMatch, 7) > state.date;
+  if (thisWeek || (!always && ((s.lastPostMatch && addDays(s.lastPostMatch, 28) > state.date) || res === 'R'))) {
     const mf0 = matchById(state, bm.id);
     const h = headlines(state, bm.kind, res, r, hero, moments, mf0, mf0 ? seasonFactsCached(state) : undefined);
     addNews(state, { kind: 'info', title: `Titulky po zápase: ${h[0].title}`, text: h.slice(1).map((x) => `${x.paper}: ${x.title}`).join(' · '), fixtureId: bm.id.startsWith('eu-') ? undefined : bm.id });

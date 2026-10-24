@@ -1,4 +1,5 @@
 import { addDays } from './calendar';
+import { easeAdd } from './ease'; // W2 kalibrace: tlumení zisků nad ~80
 import { media } from './grey';
 import { FOREIGN_CLUBS } from './names';
 import { squadOf } from './players';
@@ -79,7 +80,7 @@ const morale = (state: GameState, id: string | undefined, delta: number) => {
 };
 const teamMorale = (state: GameState, delta: number) => squad(state).forEach((p) => (p.morale = clamp(p.morale + delta, 0, 100)));
 const fans = (state: GameState, delta: number) => (own(state).fanMood = clamp(own(state).fanMood + delta, 0, 100));
-const trust = (state: GameState, role: 'trener' | 'reditel', delta: number) => (state.owner.trust[role] = clamp(state.owner.trust[role] + delta, 0, 100));
+const trust = (state: GameState, role: 'trener' | 'reditel', delta: number) => (state.owner.trust[role] = easeAdd(state.owner.trust[role], delta));
 
 // ---------- Spuštění ----------
 

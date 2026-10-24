@@ -48,6 +48,7 @@ export * from './ownerRating';
 export * from './achievements';
 export * from './challenges';
 export * from './bigdecisions';
+export * from './ownerdecisions'; // W5
 export * from './bigmatch';
 export * from './social'; // W2
 export * from './fans'; // W3
@@ -67,3 +68,4 @@ export * from './training'; // V1
 export * from './ownerlevel'; // V1
 export * from './hunt'; // V1
 export * from './euromatch'; // V4
+export * from './chemistry'; // W4

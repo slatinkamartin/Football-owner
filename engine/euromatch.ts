@@ -1,9 +1,11 @@
 import { homeAdvantage, ownTeamSpirit } from './atmosphere';
 import { allFixtures } from './competitions';
 import { europeRun, type EuroMatch, type EuroRun } from './europe';
+import { competitionPriorityEdge } from './ownerdecisions'; // W5
 import { matchFacts, type OwnMatchFacts } from './facts';
 import { simulateMatch } from './match';
 import { halftimeAdjust, planEffect, nextOwnFixture } from './matchday';
+import { chemistryMatchBonus } from './chemistry'; // W4
 import { liveChanges } from './matchexperience';
 import { REGION_NAMES } from './names';
 import { squadOf } from './players';
@@ -137,6 +139,8 @@ export function simulateEuroMatch(state: GameState, rng: Rng, run: EuroRun, m: E
   const discipline = new Map(squad.map((p) => [p.id, { s: p.suspension, y: p.yellows, r: p.reds }]));
   for (const p of squad) p.suspension = 0;
   const plan = planEffect(state, f);
+  if (clubId === state.owner.clubId) plan.bonus += chemistryMatchBonus(state); // W4: týmová chemie
+  if (clubId === state.owner.clubId) plan.bonus += competitionPriorityEdge(state, 'evropa'); // W5: priorita soutěží
   const coach = coachOf(state, clubId);
   const half = halftimeAdjust(state, f);
   const ownSide = {

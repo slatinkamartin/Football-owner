@@ -1,4 +1,5 @@
 import { addDays } from './calendar';
+import { easeAdd } from './ease'; // W2 kalibrace: tlumení zisků nad ~80
 import { annualCosts, bonusPerPoint, book, commercialMonthly, defaultTicketPrice } from './finance';
 import { generatePlayer, playerAge, squadOf, squadQualityForReputation } from './players';
 import type { Rng } from './rng';
@@ -22,6 +23,8 @@ import { decisionBudgetLeft, decisionsLastWeek, situationTemplates } from './sit
 import { freshOwnMatch, matchesWord, seasonFacts } from './facts'; // R1
 import { ultrasOf } from './surroundings'; // R1
 import { characterTemplates } from './characters'; // V1
+import { noteProfit, ownerDecisionTemplates, reinvestOption, reinvestProfit } from './ownerdecisions'; // W5: strategická rozhodnutí majitele
+import { chemistryTemplates } from './chemistry'; // W4
 
 /**
  * Situace, na které musí majitel zareagovat. Každá šablona umí událost vytvořit (pokud dává smysl)
@@ -48,7 +51,7 @@ function teamMorale(state: GameState, delta: number): void {
 function trust(state: GameState, role: 'trener' | 'reditel', delta: number): void {
   // Když majitel nerozhodne, platí dopad výchozí volby naplno (dřív se tlumil a pasivita se vyplácela).
   const d = delta;
-  state.owner.trust[role] = clamp(state.owner.trust[role] + d, 0, 100);
+  state.owner.trust[role] = easeAdd(state.owner.trust[role], d);
 }
 
 function fans(state: GameState, delta: number): void {
@@ -115,6 +118,8 @@ export const TEMPLATES: Record<string, Template> = {
   // R1: situace z dat (engine/situations.ts, vznikají den po zápase z faktů, nikdy náhodně).
   ...situationTemplates(),
   ...characterTemplates(), // V1: požadavky postav
+  ...ownerDecisionTemplates(), // W5: strategická rozhodnutí majitele (plánuje je dailyOwnerDecisions)
+  ...chemistryTemplates(), // W4: kapitán na novou sezónu
   // Tisková konference po výjimečném zápase (vzniká po zápase, ne náhodně).
   'tiskovka-zapas': {
     weight: () => 0,
@@ -1089,7 +1094,8 @@ export const TEMPLATES: Record<string, Template> = {
           ? [
               { id: 'nic', label: partners ? 'Bez dividendy' : 'Nechat zisk v klubu', hint: partners ? 'Zisk zůstane v klubu. Patrioti +3, investor a spekulant nespokojení' : 'Zisk zůstane v klubu.' },
               { id: 'ctvrt', label: `${partners ? 'Dividenda' : 'Vybrat'} 25 % zisku (${mil(profit * 0.25)})`, hint: `Vám ${mil(profit * 0.25 * s.owner.share)}${partners ? ', investor a spekulant spokojenější' : ''}` },
-              { id: 'pul', label: `${partners ? 'Dividenda' : 'Vybrat'} 50 % zisku (${mil(profit * 0.5)})`, hint: `Vám ${mil(profit * 0.5 * s.owner.share)}${partners ? ', investor velmi spokojený, patrioti ne' : ''}` },
+              { id: 'pul', label: `${partners ? 'Dividenda' : 'Vybrat'} 50 % zisku (${mil(profit * 0.5)})`, hint: `Vám ${mil(profit * 0.5 * s.owner.share)}${partners ? ', investor velmi spokojený, patrioti ne' : ''} · fanoušci −2, média −2` },
+              reinvestOption(s, profit), // W5: dividenda vs. reinvestice
             ]
           : [
               { id: 'nic', label: 'Bez dividendy', hint: 'Klub zisk nemá. Investor a spekulant nespokojení' },
@@ -1106,9 +1112,16 @@ export const TEMPLATES: Record<string, Template> = {
       };
     },
     resolve: (s, e, o) => {
+      if (o === 'reinvest') {
+        // W5: reinvestice zisku místo dividendy.
+        const msg = reinvestProfit(s, e.amount ?? 0);
+        confidenceVote(s, 0);
+        return msg;
+      }
       const share = o === 'ctvrt' ? 0.25 : o === 'pul' ? 0.5 : o === 'rezervy' ? 1 : 0;
       const total = Math.round((e.amount ?? 0) * share);
       payDividend(s, total);
+      noteProfit(s, o, total); // W5
       if (o === 'nic') {
         satisfy(s, -8, ['investor']);
         satisfy(s, -4, ['spekulant']);

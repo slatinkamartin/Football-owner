@@ -61,9 +61,15 @@ describe('W1: týden velkého zápasu', () => {
   });
 
   it('volby přípravy se po zápase vyúčtují (choreo stojí peníze a potěší kotel)', () => {
-    const paid = setBigMatchPrep(week, 'choreo', 'zaplatit');
+    // W3: příprava je volba majitele jen když se vešla do týdenního limitu rozhodnutí; jinak ji zařídí vedení.
+    const closed = structuredClone(week);
+    closed.bigMatch!.prepOffered = false;
+    expect(setBigMatchPrep(closed, 'plan', 'svatek').ok).toBe(false);
+    const open = structuredClone(week);
+    open.bigMatch!.prepOffered = true;
+    const paid = setBigMatchPrep(open, 'choreo', 'zaplatit');
     expect(paid.ok).toBe(true);
-    expect(setBigMatchPrep(week, 'choreo', 'nesmysl').ok).toBe(false);
+    expect(setBigMatchPrep(open, 'choreo', 'nesmysl').ok).toBe(false);
     const days = Math.round((new Date(`${week.bigMatch!.date}T00:00:00Z`).getTime() - new Date(`${week.date}T00:00:00Z`).getTime()) / 86_400_000);
     const a = advanceDays(paid.state, days).state;
     const b = advanceDays(week, days).state;

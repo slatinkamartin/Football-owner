@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { AGENDA_ACTIONS, planAgendaAction, routineView, setRoutine, weekAgenda, weeklyAdvice, type ActionResult, type AgendaOption, type GameState } from '../../engine';
+import { formatShortDate, monthAdvice, monthPriorities, PRIORITIES, priorityTitle, routineView, setMonthPriorities, setRoutine, type ActionResult, type GameState, type PriorityId } from '../../engine';
 import { Badge } from '../components';
 import { Icon } from '../icons'; // V2: SVG ikony místo emoji
 
-/** V1 (A1): týdenní agenda majitele. V2 ji umístí na domov „Týden“. */
+/** v0.29 (W2): měsíční priority majitele (místo týdenní agendy V1) na domově „Týden“. */
 
 export function AgendaIcon({ icon }: { icon: string }) {
   return (
@@ -13,113 +13,158 @@ export function AgendaIcon({ icon }: { icon: string }) {
   );
 }
 
-function OptionRow({ game, o, onResult }: { game: GameState; o: AgendaOption; onResult: (r: ActionResult) => void }) {
-  const [target, setTarget] = useState('');
-  const t = o.targets?.some((x) => x.id === target) ? target : o.targets?.[0]?.id;
-  return (
-    <li className={`agenda-option${o.disabledReason ? ' disabled' : ''}`}>
-      <div className="agenda-option-head">
-        <AgendaIcon icon={o.icon} />
-        <div>
-          <strong>{o.title}</strong>
-          <p className="muted small">{o.disabledReason ?? o.effectHint}</p>
-        </div>
-      </div>
-      {!o.disabledReason && (
-        <div className="inline-form wrap">
-          {o.targets && o.targets.length > 0 && (
-            <select value={t} onChange={(e) => setTarget(e.target.value)} aria-label={`Cíl: ${o.title}`}>
-              {o.targets.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-          )}
-          <button className="primary" onClick={() => onResult(planAgendaAction(game, o.id, t))}>
-            Provést
-          </button>
-        </div>
-      )}
-    </li>
-  );
-}
+const iconOf = (id: string) => PRIORITIES.find((p) => p.id === id)?.icon ?? 'projekt';
 
-export function AgendaCard({ game, onResult, compact }: { game: GameState; onResult: (r: ActionResult) => void; compact?: boolean }) {
-  const ag = weekAgenda(game);
-  const [open, setOpen] = useState(!compact);
-  const own = ag.used.filter((u) => !u.routine);
-  const left = Math.max(0, ag.slots - own.length);
-  const title = (id: string) => AGENDA_ACTIONS.find((a) => a.id === id)?.title ?? id;
+function PriorityPicker({ game, onResult, onDone }: { game: GameState; onResult: (r: ActionResult) => void; onDone: () => void }) {
+  const mp = monthPriorities(game);
+  const adv = monthAdvice(game);
+  const [sel, setSel] = useState<PriorityId[]>(mp.priorities);
+  const [keep, setKeep] = useState(mp.keep);
+  const recommended = new Map(adv.priorities.map((p) => [p.id, p.reason]));
+  const toggle = (id: PriorityId) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : sel.length >= mp.max ? sel : [...sel, id]);
+  const changed = mp.by === 'vedeni' || sel.length !== mp.priorities.length || sel.some((x) => !mp.priorities.includes(x));
+  const canSave = sel.length >= mp.min && sel.length <= mp.max && (changed || keep !== mp.keep);
   return (
-    <section className="card agenda-card">
-      <div className="row-between">
-        <h2>Agenda týdne</h2>
-        <Badge tone={left ? 'good' : 'neutral'}>{left ? `zbývá ${left} z ${ag.slots}` : 'vyčerpáno'}</Badge>
-      </div>
-      <ol className="agenda-slots plain">
-        {Array.from({ length: ag.slots }, (_, i) => {
-          const u = own[i];
+    <div className="prio-picker">
+      <p className="muted small">Vyberte {mp.min}–{mp.max} oblasti. Konkrétní kroky pak každý týden udělá vedení samo.</p>
+      <ul className="plain prio-options">
+        {PRIORITIES.map((p) => {
+          const on = sel.includes(p.id);
+          const rec = recommended.get(p.id);
           return (
-            <li key={i} className={`agenda-slot${u ? ' done' : ''}`}>
-              {u ? (
-                <>
-                  <AgendaIcon icon={u.actionId} /> <strong>{title(u.actionId)}</strong>
-                  <p className="small">{u.result}</p>
-                </>
-              ) : (
-                <span className="muted small">Volná akce {i + 1}</span>
-              )}
+            <li key={p.id}>
+              <button className={`prio-option${on ? ' on' : ''}${rec ? ' rec' : ''}`} aria-pressed={on} disabled={!on && sel.length >= mp.max} onClick={() => toggle(p.id)}>
+                <AgendaIcon icon={p.icon} />
+                <span>
+                  <strong>{p.title}</strong>
+                  {rec && <Badge tone="good">doporučeno</Badge>}
+                  <span className="small muted prio-detail">{rec ?? p.detail}</span>
+                </span>
+              </button>
             </li>
           );
         })}
-        {ag.used.filter((u) => u.routine).map((u, i) => (
-          <li key={`r${i}`} className="agenda-slot routine small muted">
-            {u.result}
-          </li>
-        ))}
-      </ol>
-      {left > 0 && (
+      </ul>
+      <label className="small prio-keep">
+        <input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} /> Ponechat i na další měsíce
+      </label>
+      <p className={`small ${mp.changeCost === 'tyden' ? 'neg' : 'muted'}`}>{mp.changeNote}</p>
+      <div className="buttons">
+        <button
+          className="primary"
+          disabled={!canSave}
+          onClick={() => {
+            const r = setMonthPriorities(game, sel, { keep });
+            onResult(r);
+            if (r.ok) onDone();
+          }}
+        >
+          {mp.by === 'vedeni' ? 'Potvrdit priority' : mp.changeCost === 'tyden' ? 'Změnit (spálí týden)' : 'Uložit změnu'}
+        </button>
+        {mp.by === 'majitel' && <button className="linkbtn" onClick={onDone}>Zrušit</button>}
+      </div>
+    </div>
+  );
+}
+
+export function PrioritiesCard({ game, onResult, compact }: { game: GameState; onResult: (r: ActionResult) => void; compact?: boolean }) {
+  const mp = monthPriorities(game);
+  const early = Number(game.date.slice(8, 10)) <= 7;
+  const [open, setOpen] = useState(!compact && mp.by === 'vedeni' && early);
+  const [all, setAll] = useState(false);
+  const log = [...mp.log].reverse();
+  if (game.owner.ousted || game.gameOver) return null;
+  return (
+    <section className="card agenda-card prio-card" aria-label="Priority měsíce">
+      <div className="row-between">
+        <h2>Priority: {mp.label}</h2>
+        <Badge tone={mp.by === 'majitel' ? 'good' : 'warn'}>{mp.by === 'majitel' ? 'vybrali jste' : 'návrh vedení'}</Badge>
+      </div>
+      {!open && (
         <>
-          <button className="linkbtn" onClick={() => setOpen(!open)} aria-expanded={open}>
-            {open ? 'Skrýt nabídku akcí' : 'Vybrat akci'}
+          <ul className="plain prio-current">
+            {mp.priorities.map((id) => (
+              <li key={id} className="prio-chip">
+                <AgendaIcon icon={iconOf(id)} /> <strong>{priorityTitle(id)}</strong>
+                <span className="muted small num">{mp.counts[id] ?? 0}×</span>
+              </li>
+            ))}
+          </ul>
+          {mp.by === 'vedeni' && <p className="small">Vedení zatím jede podle vlastního návrhu s polovičním účinkem. Potvrďte nebo upravte priority – pak mají plný účinek.</p>}
+          {mp.burnUntil && <p className="small neg">Vedení přestavuje plán po změně priorit: do {formatShortDate(mp.burnUntil)} se na prioritách nepracuje.</p>}
+          <button className={mp.by === 'vedeni' ? 'primary' : 'linkbtn'} onClick={() => setOpen(true)} aria-expanded={false}>
+            {mp.by === 'vedeni' ? 'Vybrat priority' : 'Změnit priority'}
           </button>
-          {open && (
-            <ul className="plain agenda-options">
-              {ag.options.map((o) => (
-                <OptionRow key={o.id} game={game} o={o} onResult={onResult} />
-              ))}
-            </ul>
+        </>
+      )}
+      {open && <PriorityPicker game={game} onResult={onResult} onDone={() => setOpen(false)} />}
+      {log.length > 0 && (
+        <>
+          <h3 className="small">Co vedení tento měsíc udělalo</h3>
+          <ul className="plain small prio-log">
+            {(all ? log : log.slice(0, 3)).map((u, i) => (
+              <li key={i} className={u.routine ? 'muted' : ''}>
+                <span className="muted">{u.date ? formatShortDate(u.date) : ''}</span> {u.result}
+              </li>
+            ))}
+          </ul>
+          {log.length > 3 && (
+            <button className="linkbtn small" onClick={() => setAll(!all)} aria-expanded={all}>
+              {all ? 'Méně' : `Všech ${log.length} kroků`}
+            </button>
           )}
         </>
       )}
-      <p className="muted small">Nevyužité akce s koncem týdne (v neděli) propadnou.</p>
+      {!log.length && !open && <p className="muted small">První kroky udělá vedení v nejbližších dnech (každá priorita jednou týdně).</p>}
     </section>
   );
 }
 
-/** V1 (A2): rádce „Co teď“ – nejvýš 3 kroky s důvodem. */
+/** @deprecated V1 název: karta agendy je teď karta priorit měsíce. */
+export const AgendaCard = PrioritiesCard;
+
+/** Rádce „Co teď“: doporučené priority měsíce z dat a nejvýš 2 další kroky. */
 export function AdvisorCard({ game, onResult, onNavigate }: { game: GameState; onResult: (r: ActionResult) => void; onNavigate?: (tab: string) => void }) {
-  const list = weeklyAdvice(game);
-  if (!list.length) return null;
+  const adv = monthAdvice(game);
+  const mp = monthPriorities(game);
+  if (!adv.priorities.length && !adv.other.length) return null;
   return (
     <section className="card advisor-card">
       <h2>Co teď</h2>
-      <ol className="plain advisor-list">
-        {list.map((a) => (
-          <li key={a.id}>
-            <strong>{a.title}</strong>
-            <p className="muted small">{a.reason}</p>
-            {a.actionId ? (
-              <button onClick={() => onResult(planAgendaAction(game, a.actionId!, a.target))}>Provést teď</button>
-            ) : a.tab && onNavigate ? (
-              <button className="linkbtn" onClick={() => onNavigate(a.tab!)}>
-                Otevřít
-              </button>
-            ) : null}
-          </li>
-        ))}
-      </ol>
+      {adv.priorities.length > 0 && (
+        <>
+          <h3 className="small">Doporučené priority na {mp.label}</h3>
+          <ol className="plain advisor-list">
+            {adv.priorities.map((p) => (
+              <li key={p.id}>
+                <AgendaIcon icon={iconOf(p.id)} /> <strong>{p.title}</strong>
+                {mp.priorities.includes(p.id) && mp.by === 'majitel' && <> <Badge tone="good">máte</Badge></>}
+                <p className="muted small">{p.reason}</p>
+              </li>
+            ))}
+          </ol>
+          {adv.differs && (
+            <button onClick={() => onResult(setMonthPriorities(game, adv.priorities.map((p) => p.id)))}>
+              {mp.by === 'vedeni' ? 'Nastavit doporučené priority' : mp.changeCost === 'tyden' ? 'Nastavit doporučené (spálí týden)' : 'Nastavit doporučené priority'}
+            </button>
+          )}
+        </>
+      )}
+      {adv.other.length > 0 && (
+        <ol className="plain advisor-list advisor-other">
+          {adv.other.map((a) => (
+            <li key={a.id}>
+              <strong>{a.title}</strong>
+              <p className="muted small">{a.reason}</p>
+              {a.tab && onNavigate && (
+                <button className="linkbtn" onClick={() => onNavigate(a.tab!)}>
+                  Otevřít
+                </button>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
     </section>
   );
 }
@@ -142,7 +187,7 @@ export function RoutineCard({ game, onResult }: { game: GameState; onResult: (r:
           </li>
         ))}
       </ul>
-      {r.handledThisWeek > 0 && <p className="muted small">Tento týden vedení vyřídilo {r.handledThisWeek}× za vás.</p>}
+      {r.handledThisWeek > 0 && <p className="muted small">Tento měsíc vedení vyřídilo {r.handledThisWeek}× za vás.</p>}
       <p className="muted small">Pravomoci ředitelů nastavíte v Týmu → Vedení.</p>
     </section>
   );

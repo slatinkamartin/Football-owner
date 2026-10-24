@@ -1,6 +1,6 @@
 /**
  * V2 (B1): domov „Týden“. Na jedné obrazovce: příští zápas s odpočtem (a velký zápas / los),
- * agenda týdne a rádce (V1), schránka rozhodnutí, stav klubu ve 4 číslech, štítek poháru (V3)
+ * priority měsíce a rádce (V1, W2), schránka rozhodnutí, stav klubu ve 4 číslech, štítek poháru (V3)
  * a krátké zprávy. Desktop ve třech sloupcích, mobil v pořadí podle priority.
  */
 import type { ReactNode } from 'react';

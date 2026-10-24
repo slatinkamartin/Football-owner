@@ -3,11 +3,12 @@ import { allFixtures } from './competitions';
 import { annualCosts, book } from './finance';
 import { changeSponsorRelation } from './finplus';
 import { fine, league, media } from './grey';
-import { BIG_MATCH_LABEL, daysToBigMatch, upcomingBigMatch, type BigMatch, type BigMatchKind } from './bigmatch';
+import { BIG_MATCH_LABEL, daysToBigMatch, isKeyEuroMatch, upcomingBigMatch, type BigMatch, type BigMatchKind } from './bigmatch';
 import { dressingRoom } from './atmosphere';
-import { findEuroMatch, nextEuroMatch, type EuroMatch } from './europe';
+import { europeRun, findEuroMatch, nextEuroMatch, type EuroMatch } from './europe';
 import type { MatchOptions } from './match';
-import { choreoCost, type PlanEffect } from './matchday';
+import { choreoCost, liveAccepted, stopBeforeEveryMatch, type PlanEffect } from './matchday';
+import { decisionBudgetLeft, situationsOf } from './situations'; // W3: týdenní limit rozhodnutí
 import { natureOf, rivalBoard, touchRival } from './rivals';
 import type { ActionResult } from './staff';
 import { changeCity, changeUltras, cityOf, ultrasOf } from './surroundings';
@@ -45,7 +46,7 @@ export function hasOwnerBox(bm: BigMatchState): boolean {
   return !!bm.home && (bm.kind === 'derby' || bm.kind === 'evropa');
 }
 
-const BASE_HYPE: Record<BigMatchKind, number> = { derby: 58, evropa: 62, titul: 55, zachrana: 48, pohar: 44, baraz: 60 };
+const BASE_HYPE: Record<BigMatchKind, number> = { derby: 58, evropa: 62, titul: 55, zachrana: 48, pohar: 44, baraz: 60, playoff: 42 };
 
 /** Napětí před zápasem 0–100: druh zápasu, rivalita, nálada fanoušků a blížící se termín. */
 export function computeHype(state: GameState, bm: BigMatchState): number {
@@ -70,7 +71,7 @@ export function securityCost(state: GameState): number {
   return roundTo(annualCosts(club, tierOf(state, club.id)) * 0.0015, 10_000);
 }
 
-export type PrepKey = 'tickets' | 'alloc' | 'guests' | 'choreo' | 'security' | 'box';
+export type PrepKey = 'tickets' | 'alloc' | 'guests' | 'choreo' | 'security' | 'box' | 'plan';
 
 export interface PrepOption {
   id: string;
@@ -166,18 +167,65 @@ export function prepDecisions(state: GameState, bm: BigMatchState): PrepDecision
   return out;
 }
 
+// ---------- W3: jedno souhrnné rozhodnutí o přípravě ----------
+
+export type PrepPlan = 'svatek' | 'vedeni' | 'byznys';
+
+/** Co která souhrnná volba nastaví (ostatní body přípravy zůstávají na výchozí hodnotě). */
+const PREP_PRESETS: Record<PrepPlan, Partial<Record<PrepKey, string>>> = {
+  svatek: { tickets: 'lidove', alloc: 'kotel', choreo: 'zaplatit', guests: 'minimum', box: 'legenda' },
+  vedeni: {},
+  byznys: { tickets: 'zdrazit', alloc: 'rodiny', choreo: 'zakaz', security: 'posilit', guests: 'plny', box: 'sponzor' },
+};
+
+/**
+ * Jediné rozhodnutí v týdnu domácího velkého zápasu: pojetí zápasu (svátek pro kotel / nechat na vedení /
+ * klid a výdělek). Rozkládá se na lístky, kapacitu, choreo, bezpečnost a lóži. Venku nic.
+ */
+export function prepSummary(state: GameState, bm: BigMatchState): PrepDecision | undefined {
+  const all = prepDecisions(state, bm);
+  if (!all.length) return undefined;
+  const has = (k: PrepKey) => all.some((d) => d.key === k);
+  const risky = has('security');
+  return {
+    key: 'plan',
+    title: 'Pojetí zápasu',
+    def: 'vedeni',
+    options: [
+      { id: 'svatek', label: 'Svátek pro kotel', hint: `Lidové ceny, víc místa pro kotel, klub zaplatí choreo (${mil(choreoCost(state))})${has('box') ? `, v lóži legenda ${clubLegend(state)}` : ''}. Hlasitější stadion, ale víc pyra a menší tržba.` },
+      { id: 'vedeni', label: 'Nechat na vedení', hint: `Běžné ceny i rozdělení kapacity, choreo ze sbírky fanoušků${has('box') ? ', v lóži generální partner' : ''}.` },
+      { id: 'byznys', label: 'Klid a výdělek', hint: `Vstupné +35 %, víc místa pro rodiny, zákaz pyra${risky ? `, posílení pořadatelé (${mil(securityCost(state))})` : ''}${has('guests') ? ', plný příděl pro hosty' : ''}. Kotel bude reptat.` },
+    ],
+  };
+}
+
 /** Zvolená (nebo výchozí) hodnota přípravy. */
 export function prepValue(state: GameState, bm: BigMatchState, key: PrepKey): string | undefined {
+  if (key === 'plan') {
+    const d = prepSummary(state, bm);
+    if (!d) return undefined;
+    const v = bm.prep?.plan;
+    return typeof v === 'string' && d.options.some((o) => o.id === v) ? v : d.def;
+  }
   const d = prepDecisions(state, bm).find((x) => x.key === key);
   if (!d) return undefined;
   const v = bm.prep?.[key];
-  return typeof v === 'string' && d.options.some((o) => o.id === v) ? v : d.def;
+  if (typeof v === 'string' && d.options.some((o) => o.id === v)) return v;
+  const plan = bm.prep?.plan;
+  const preset = typeof plan === 'string' ? PREP_PRESETS[plan as PrepPlan]?.[key] : undefined;
+  return preset && d.options.some((o) => o.id === preset) ? preset : d.def;
+}
+
+/** Smí majitel přípravu zvolit sám (rozhodnutí se vešlo do týdenního limitu)? Staré hry: ano. */
+export function prepOpen(bm: BigMatchState): boolean {
+  return bm.prepOffered !== false;
 }
 
 export function setBigMatchPrep(prev: GameState, key: PrepKey, value: string): ActionResult {
   const bm = prev.bigMatch;
   if (!bm || bm.settled || prev.date >= bm.date) return { state: prev, ok: false, message: 'Příprava už skončila.' };
-  const d = prepDecisions(prev, bm).find((x) => x.key === key);
+  if (!prepOpen(bm)) return { state: prev, ok: false, message: 'Přípravu tohoto zápasu zařizuje vedení.' };
+  const d = key === 'plan' ? prepSummary(prev, bm) : prepDecisions(prev, bm).find((x) => x.key === key);
   const o = d?.options.find((x) => x.id === value);
   if (!d || !o) return { state: prev, ok: false, message: 'Tuhle volbu teď nejde udělat.' };
   const state = structuredClone(prev);
@@ -362,7 +410,11 @@ function startBigMatch(state: GameState, up: BigMatch): void {
   const firstLeague = !!euro && euro.tie === undefined && !findEuroMatch(state, up.id)?.run.matches.some((m) => m.tie === undefined && m.result);
   const major = up.kind === 'derby' || up.kind === 'baraz' || (!!euro && (euro.tie !== undefined || firstLeague));
   const rested = !prev?.lastStop || prev.lastStop <= addDays(state.date, -12);
-  bm.lastStop = major && rested ? state.date : prev?.lastStop;
+  // W3: jedno souhrnné rozhodnutí o přípravě, jen doma a jen když se vejde do týdenního limitu rozhodnutí.
+  const hasPrep = prepDecisions(state, bm).length > 0;
+  bm.prepOffered = hasPrep && decisionBudgetLeft(state) > 0;
+  if (bm.prepOffered) situationsOf(state).log.push({ id: `priprava-${up.id}`, date: state.date, template: 'velky-zapas-priprava' });
+  bm.lastStop = major && rested && bm.prepOffered ? state.date : prev?.lastStop;
   bm.hype = computeHype(state, bm);
   state.bigMatch = bm;
   const days = daysToBigMatch(state, up);
@@ -371,7 +423,7 @@ function startBigMatch(state: GameState, up: BigMatch): void {
   if (up.home) {
     const d = ticketDemand(state, bm);
     parts.push(`Předprodej: ${demandText(d)}.`);
-    parts.push('Lístky, choreo a bezpečnost nastavíte na kartě odpočtu na domově Týden (jinak platí výchozí volby).');
+    parts.push(bm.prepOffered ? 'Pojetí zápasu (lístky, kotel, choreo) zvolíte na kartě odpočtu na domově Týden, jinak přípravu zařídí vedení.' : 'Přípravu (lístky, kotel, choreo) zařídí vedení s běžnými volbami.');
   }
   addNews(state, { kind: 'info', title: `Začíná týden: ${kind.toLowerCase()} ${pairing(state, up)}`, text: parts.join(' ') });
 }
@@ -426,15 +478,26 @@ export function dailyBigMatch(state: GameState): void {
 /** Důvod zastavení posunu: právě začal týden velkého zápasu (jen jednou za zápas). */
 export function bigMatchWeekStarted(state: GameState, prevId: string | undefined): string | undefined {
   const bm = state.bigMatch;
-  if (!bm || bm.id === prevId || bm.started !== state.date || bm.lastStop !== state.date || bm.settled) return undefined;
+  if (!bm || bm.id === prevId || bm.started !== state.date || bm.lastStop !== state.date || bm.settled || !prepOpen(bm)) return undefined;
   const kind = BIG_MATCH_LABEL[bm.kind as BigMatchKind] ?? 'Velký zápas';
-  return `Začíná týden: ${kind.toLowerCase()} ${pairing(state, bm)}. Přípravu najdete na domově Týden.`;
+  return `Začíná týden: ${kind.toLowerCase()} ${pairing(state, bm)}. Pojetí zápasu zvolíte na domově Týden.`;
 }
 
 /** Evropský zápas klubu majitele, který se hraje zítra (hra stojí na jeho předvečeru). */
 export function euroMatchTomorrow(state: GameState): EuroMatch | undefined {
   const e = nextEuroMatch(state);
   return e && e.date === addDays(state.date, 1) && !state.owner.ousted ? e : undefined;
+}
+
+/** W3: evropský zápas zítra, před kterým se otevře okno (klíčový, nebo nastavení „před každým zápasem“). */
+export function euroWindowTomorrow(state: GameState): EuroMatch | undefined {
+  const e = euroMatchTomorrow(state);
+  return e && (stopBeforeEveryMatch(state) || isKeyEuroMatch(state, e)) ? e : undefined;
+}
+
+/** W3: evropský zápas klubu majitele odehraný dnes (pro krátký souhrn po posunu). */
+export function euroPlayedToday(state: GameState): string | undefined {
+  return europeRun(state)?.matches.find((m) => m.date === state.date && m.result)?.id;
 }
 
 // ---------- Body zlomu v přenosu ----------
@@ -450,8 +513,37 @@ export interface LiveMoment {
   def: string;
 }
 
-/** Nejvýš dvě rozhodnutí za zápas (navíc k poločasu). */
-export const MAX_LIVE_DECISIONS = 2;
+/** W3: v přenosu nejvýš jeden zásah majitele (podle stavu buď poločas, nebo 75. minuta). */
+export const MAX_LIVE_DECISIONS = 1;
+/** Předem dané události zápasu (pyro, sporný verdikt): běží samy s výchozí volbou, bez zastavení přenosu. */
+export const MAX_SCHEDULED_MOMENTS = 2;
+
+/**
+ * Kdy se v přenosu majitel rozhoduje: o poločase, když klub nevede; jinak v 75. minutě.
+ * Rozhoduje stav zápasu v té minutě (do bodu zlomu je zápas stejný, takže volba je poctivá).
+ */
+export function liveDecisionMinute(ownGoalsAtHalf: number, oppGoalsAtHalf: number): 45 | 75 {
+  return ownGoalsAtHalf > oppGoalsAtHalf ? 75 : 45;
+}
+
+/** Zásah v 75. minutě podle skóre: prohra/remíza → vabank, vedení → bránit náskok. */
+export function lateMoment(gf: number, ga: number): LiveMoment {
+  if (gf > ga) {
+    return {
+      kind: 'vabank',
+      minute: 75,
+      title: '75. minuta a vedete',
+      text: 'Soupeř tlačí. Trenér se otáčí k lóži, čeká, jestli něco vzkážete.',
+      def: 'nechat',
+      options: [
+        { id: 'branit', label: 'Bránit náskok', hint: 'Zatáhnout se a hlídat skóre: méně šancí pro soupeře, ale i pro vás.' },
+        { id: 'nechat', label: 'Nechat to na trenérovi', hint: 'Trenér ví, co dělá.' },
+      ],
+    };
+  }
+  const m = vabankMoment();
+  return gf === ga ? { ...m, title: '75. minuta a je nerozhodně', text: 'Zápas se láme. Trenér se otáčí k lóži, čeká, jestli něco vzkážete.', options: [{ id: 'vabank', label: 'Jít na vítězství', hint: 'Všechno dopředu: víc šancí, ale i riziko inkasovaného gólu.' }, m.options[1]] } : m;
+}
 
 function avoidHalf(m: number): number {
   return m >= 43 && m <= 47 ? m + 5 : m;
@@ -491,7 +583,7 @@ export function scheduledMoments(state: GameState, bm: BigMatchState): LiveMomen
       ],
     });
   }
-  return out.sort((a, b) => a.minute - b.minute).slice(0, MAX_LIVE_DECISIONS);
+  return out.sort((a, b) => a.minute - b.minute).slice(0, MAX_SCHEDULED_MOMENTS);
 }
 
 /** 75. minuta a prohráváte: vzkázat trenérovi vabank (jen když zbývá místo na rozhodnutí). */
@@ -531,11 +623,17 @@ function coachSentOff(bm: BigMatchState): boolean {
 
 /** Hák do zápasu (engine/game.ts): změny od bodů zlomu (volby majitele, nebo výchozí). */
 export function liveChanges(state: GameState, f: Fixture): MatchOptions['changes'] {
-  const bm = state.bigMatch;
-  if (!bm || bm.id !== f.id) return undefined;
+  const big = state.bigMatch;
+  const bm = big && big.id === f.id ? big : undefined;
   const ownHome = f.homeId === state.owner.clubId;
-  const side = (change: { style?: 'utocny'; bonus?: number }) => (ownHome ? { home: change } : { away: change });
+  const side = (change: { style?: 'utocny' | 'defenzivni'; bonus?: number }) => (ownHome ? { home: change } : { away: change });
   const out: NonNullable<MatchOptions['changes']> = [];
+  // W3: zásah v 75. minutě z plánu zápasu (i bez velkého zápasu, např. evropský nebo běžný zápas v přenosu).
+  const plan = state.matchPlan?.fixtureId === f.id ? state.matchPlan : undefined;
+  if (plan?.late && plan.late !== 'nechat' && !bm?.live?.some((x) => x.kind === 'vabank') && liveAccepted(state, f.id, `pozde-${plan.late}`)) {
+    out.push({ minute: 75, ...side(plan.late === 'vabank' ? { style: 'utocny', bonus: 0.5 } : { style: 'defenzivni', bonus: 0.2 }) });
+  }
+  if (!bm) return out.length ? out : undefined;
   for (const m of scheduledMoments(state, bm)) {
     const c = liveChoice(bm, m);
     if (m.kind === 'pyro') {
@@ -547,6 +645,7 @@ export function liveChanges(state: GameState, f: Fixture): MatchOptions['changes
   }
   const vab = bm.live?.find((x) => x.kind === 'vabank');
   if (vab?.choice === 'vabank') out.push({ minute: vab.minute, ...side({ style: 'utocny', bonus: 0.5 }) });
+  if (vab?.choice === 'branit') out.push({ minute: vab.minute, ...side({ style: 'defenzivni', bonus: 0.2 }) });
   return out.length ? out : undefined;
 }
 
@@ -594,6 +693,7 @@ const INTRO: Record<BigMatchKind, string[]> = {
   zachrana: ['Nervózní ticho, pak kotel zavelí: „Bojovat, bojovat!“', 'O záchranu se hraje srdcem. Fanoušci to týmu dávají najevo od první minuty.'],
   pohar: ['Pohárový večer pod světly. Kotel chystá chorál o cestě do finále.', 'Nástup týmů, „Pohár je náš!“ zní z kotle.'],
   baraz: ['Baráž: všechno, nebo nic. Stadion je nabitý k prasknutí.', 'Nástup týmů za bubnů a bengálů v dálce.'],
+  playoff: ['Finále play-off o umístění: vítěz bere sedmé místo a bonus. Tribuny to berou vážně.', 'Nástup týmů. Kotel: „Ještě jeden zápas, ještě jedno vítězství!“'],
 };
 
 /** Texty nástupu: chorál, znělka u Evropy, host v lóži. */
@@ -810,6 +910,9 @@ export function settleBigMatch(state: GameState, bm: BigMatchState): void {
   if (vab?.choice === 'vabank') {
     state.owner.trust.trener = clamp(state.owner.trust.trener + (lost ? -2 : 1), 0, 100);
     moments.push(lost ? 'Vabank v závěru nevyšel' : 'Vabank od 75. minuty se vyplatil');
+  } else if (vab?.choice === 'branit') {
+    state.owner.trust.trener = clamp(state.owner.trust.trener + (won ? 1 : -2), 0, 100);
+    moments.push(won ? 'Náskok uhájen po vzkazu z lóže' : 'Zatažení do obrany od 75. minuty nevyšlo');
   }
   // Výtržnosti (deterministicky podle zápasu a rizika).
   const risk = prepEffect(state, bm).risk * (lost ? 1.3 : won ? 0.8 : 1);

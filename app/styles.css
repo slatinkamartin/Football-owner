@@ -1759,3 +1759,126 @@ button.inbox-title:hover { color: var(--accent); }
 /* --- Integrace 0.28: krátké názvy kol podle šířky karty (úzký sloupec na Týdnu) --- */
 .cv-card { container-type: inline-size; }
 @container (max-width: 520px) { .cv-step .cv-long { display: none; } .cv-step .cv-short { display: inline; } }
+
+/* --- W3: méně zásahů do zápasů (souhrn běžného zápasu, rada trenérovi) --- */
+.result-toast { display: flex; flex-direction: column; gap: 2px; background: var(--accent-soft); color: var(--text); top: calc(var(--head-h, 64px) + 8px); bottom: auto; min-width: min(320px, calc(100% - 32px)); }
+.result-toast .rt-head { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.result-toast.result-win .rt-head { color: var(--pos); }
+.result-toast.result-loss .rt-head { color: var(--neg); }
+.result-toast .buttons { display: flex; gap: 12px; justify-content: flex-end; }
+.coach-advice { display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 600px) { .result-toast { top: calc(var(--head-h, 56px) + 8px); bottom: auto; } }
+
+/* --- W2: měsíční priority majitele --- */
+.prio-current { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.prio-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); border: 1px solid var(--accent); }
+.prio-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 6px; margin: 8px 0; }
+.prio-option { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: inherit; min-height: 44px; }
+.prio-option > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.prio-option strong { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.prio-option.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.prio-option:disabled { opacity: 0.5; }
+.prio-option .badge { align-self: flex-start; }
+.prio-detail { overflow-wrap: anywhere; }
+.prio-keep { display: flex; gap: 6px; align-items: center; margin: 4px 0; }
+.prio-log { display: grid; gap: 4px; margin: 4px 0; }
+.prio-log li { overflow-wrap: anywhere; }
+.prio-card h3, .advisor-card h3 { margin: 10px 0 4px; }
+.advisor-other { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+@media (max-width: 600px) { .prio-option:not(.on):not(.rec) .prio-detail { display: none; } .prio-option { padding: 6px 8px; } }
+/* --- /W2 --- */
+
+/* --- W4: Tým › Složení (chemie, rozestavení, hloubka kádru, kapitán) --- */
+.ts .ts-chem-head { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 6px; }
+.ts .ts-chem-num { font-size: 40px; font-weight: 700; line-height: 1; }
+.ts-parts { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.ts-parts li { border-top: 1px solid var(--line); padding-top: 6px; }
+.ts-parts p { margin: 2px 0 0; }
+.ts-part-val { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.ts-part-val .num { min-width: 2ch; text-align: right; font-weight: 600; }
+.ts-chips { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.ts-chips li { background: var(--card-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 13px; white-space: nowrap; }
+.ts-chips li.ts-starter { font-weight: 700; border-color: var(--accent); }
+.ts-chips li.ts-out { text-decoration: line-through; color: var(--muted); }
+.ts-chips label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.ts-depth { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); margin-top: 8px; }
+.ts-line { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.ts-line.ts-weak { border-color: var(--tone-warn); background: var(--warn-bg); }
+.ts-ribbon { margin: 4px 0 0; font-size: 12px; font-weight: 700; color: var(--warn); }
+.ts-pitch { max-width: 420px; }
+.ts-pt-weak { fill: rgba(224, 160, 48, 0.28); stroke: #f3c46b; stroke-width: 0.5; stroke-dasharray: 1.5 1; }
+.ts-pt-weak-text { font-size: 3px; fill: #ffe7b3; font-weight: 700; }
+.ts-pt-line { font-size: 2.8px; fill: rgba(255, 255, 255, 0.85); text-anchor: end; }
+.ts-pt-cap { fill: #f5c518; stroke: #3a2c00; stroke-width: 0.3; }
+.ts-pt-lead { fill: #ffffff; stroke: #2f3833; stroke-width: 0.3; }
+.ts-pt-cap-text { font-size: 2.6px; font-weight: 800; text-anchor: middle; fill: #17201b; }
+.ts-field { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.ts-field select { max-width: 100%; }
+.ts-leaders { border: none; padding: 0; margin: 6px 0 10px; min-width: 0; }
+.ts-ages { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.ts-ages li, .ts-wages li { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 8px; }
+.ts-age-bar, .ts-wage-bar { height: 12px; background: var(--line); border-radius: 6px; overflow: hidden; }
+.ts-age-bar span, .ts-wage-bar span { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+.ts-wage-bar span.bad { background: var(--tone-bad); }
+.ts-wages { padding: 0; margin: 8px 0 0; list-style: none; display: grid; gap: 8px; }
+.ts-wages li { grid-template-columns: minmax(0, 1.2fr) minmax(40px, 1fr) auto; }
+.ts-wage-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 480px) {
+  .ts-wages li { grid-template-columns: minmax(0, 1fr) auto; }
+  .ts-wages .ts-wage-bar { display: none; }
+}
+.ts-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* --- /W4 --- */
+/* --- W5: Strategická rozhodnutí majitele --- */
+.w5-strategy .w5-head { flex-wrap: wrap; }
+.w5-vision, .w5-goals { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin: 8px 0; min-width: 0; }
+.w5-vision .meter { display: block; margin: 6px 0 4px; }
+.w5-list { margin: 8px 0 0; display: grid; gap: 0; }
+.w5-row { display: grid; grid-template-columns: minmax(120px, 0.8fr) minmax(0, 2fr); gap: 4px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.w5-row dt { color: var(--muted); font-size: 13px; }
+.w5-row dd { margin: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.w5-row dd button { margin-top: 4px; }
+.w5-next { color: var(--muted); }
+@media (max-width: 480px) {
+  .w5-row { grid-template-columns: 1fr; }
+}
+/* --- /W5 --- */
+
+/* --- W1: liga podle pravidel (evropská místa, nadstavba, play-off o umístění) --- */
+tr.zone-lm-liga td:first-child { box-shadow: inset 4px 0 0 #1f4fd1; }
+tr.zone-lm-q td:first-child { box-shadow: inset 4px 0 0 #7b98f2; }
+tr.zone-el-po td:first-child { box-shadow: inset 4px 0 0 #d9480f; }
+tr.zone-el-q td:first-child { box-shadow: inset 4px 0 0 #f59f62; }
+tr.zone-kl td:first-child { box-shadow: inset 4px 0 0 #2e9e5b; }
+.legend.zone-lm-liga { background: #1f4fd1; }
+.legend.zone-lm-q { background: #7b98f2; }
+.legend.zone-el-po { background: #d9480f; }
+.legend.zone-el-q { background: #f59f62; }
+.legend.zone-kl { background: #2e9e5b; }
+.league-legend { margin-top: 8px; }
+.league-legend-list { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; }
+.league-legend-list li { display: inline-flex; align-items: center; }
+.league-legend-list .legend { margin: 0 6px 0 0; flex: none; }
+.league-legend-own { margin: 4px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--card-2); }
+.nadstavba-groups { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
+.nadstavba-groups li.own strong { color: var(--accent); }
+.po-bracket { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; }
+.po-col { display: grid; gap: 10px; min-width: 0; }
+.po-tie { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--card-2); min-width: 0; }
+.po-team { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 2px 0; }
+.po-team .po-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.po-team .po-seed { color: var(--muted); font-variant-numeric: tabular-nums; }
+.po-team .po-score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.po-team.won .po-name { font-weight: 700; }
+.po-team.lost { opacity: 0.6; }
+.po-team.own .po-name { color: var(--accent); }
+.po-legs { margin-top: 4px; overflow-wrap: anywhere; }
+.po-empty { border-style: dashed; }
+@media (max-width: 560px) {
+  .po-bracket { grid-template-columns: minmax(0, 1fr); }
+}
+/* --- W5: výběr vize --- */
+.w5-pick { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin: 8px 0; }
+.w5-choices { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.w5-choices .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; min-width: 0; white-space: normal; }
+/* --- /W5 --- */

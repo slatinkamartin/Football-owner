@@ -17,6 +17,7 @@ import {
   formatShortDate,
   resolveEvent,
   sideGoalsPending,
+  visionPickPending,
   type GameEvent,
   type GameState,
 } from '../../engine';
@@ -75,6 +76,8 @@ export function inboxItems(game: GameState, extra: InboxItem[] = []): InboxItem[
   }
   const sgp = sideGoalsPending(game);
   if (sgp) out.push({ id: 'vedlejsi-cile', title: 'Vyberte vedlejší cíle sezóny', due: sgp.pickBy, icon: 'projekt', link: 'klub/projekty', linkLabel: 'Vybrat', fallback: 'cíle vybere vedení' });
+  const vpick = visionPickPending(game); // W5: vize klubu v prvních krocích
+  if (vpick) out.push({ id: 'vize', title: 'Vize klubu na 3 roky', text: 'Podle vize vedení nastaví cíle, nákupy ředitele a nabídku projektů.', due: vpick.deadline, fallback: 'Vyvážená cesta', icon: 'projekt', link: 'klub/majitel', linkLabel: 'Vybrat vizi' });
   out.push(...extra);
   return out.sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'));
 }
@@ -103,7 +106,7 @@ export function InboxCard({ game, onChange, onNavigate, extra, limit = 4 }: { ga
       </div>
       <Notice message={message} />
       {items.length === 0 ? (
-        <p className="muted inbox-empty"><Icon name="check" size={16} /> Nic nečeká. Můžete se věnovat agendě nebo hrát dál.</p>
+        <p className="muted inbox-empty"><Icon name="check" size={16} /> Nic nečeká. Vedení pracuje na prioritách měsíce, můžete hrát dál.</p>
       ) : (
         <ul className="plain inbox-list">
           {shown.map((it) => {

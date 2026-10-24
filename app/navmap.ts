@@ -6,7 +6,7 @@
 import type { FinanceTab } from './screens/Finance';
 
 export type MainTab = 'tyden' | 'tym' | 'trh' | 'klub' | 'penize' | 'liga' | 'hra';
-export type TymSub = 'kadr' | 'trenink' | 'vedeni' | 'postavy';
+export type TymSub = 'kadr' | 'slozeni' | 'trenink' | 'vedeni' | 'postavy'; // W4: slozeni
 export type TrhSub = 'prestupy' | 'lov' | 'agenti' | 'zahranici';
 export type KlubSub = 'stadion' | 'fanousci' | 'forum' | 'site' | 'majitel' | 'projekty' | 'odznaky';
 export type LigaSub = 'tabulky' | 'zapasy' | 'pohary' | 'historie';
@@ -52,6 +52,10 @@ export function resolveTarget(tab: string | undefined, sub?: string): Target {
     case 'kadr':
     case 'soupiska':
       return { main: 'tym', sub: 'kadr' };
+    case 'slozeni': // W4
+    case 'chemie':
+    case 'kapitan':
+      return { main: 'tym', sub: 'slozeni' };
     case 'trenink':
     case 'training':
       return { main: 'tym', sub: 'trenink' };

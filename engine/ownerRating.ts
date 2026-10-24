@@ -4,6 +4,7 @@ import { annualCosts } from './finance';
 import type { Grade } from './finplus';
 import type { Competition, FinanceCategory, GameState } from './types';
 import { addNews, clamp, clubLabel, competitionOf } from './world';
+import { ownerDecisionsRatingBonus } from './ownerdecisions'; // W5
 
 /**
  * Hodnocení majitele: známka A–F a pořadí mezi majiteli soutěže. Všichni majitelé se hodnotí stejně
@@ -101,7 +102,7 @@ export function rateOwners(state: GameState, comp: Competition): OwnerRatingRow[
       fans: Math.round(clamp(fans, 0, 100)),
       reputation: Math.round(clamp(reputation, 0, 100)),
     };
-    const score = Math.round((Object.keys(parts) as (keyof OwnerRatingParts)[]).reduce((a, k) => a + parts[k] * OWNER_RATING_WEIGHTS[k], 0));
+    const score = Math.round((Object.keys(parts) as (keyof OwnerRatingParts)[]).reduce((a, k) => a + parts[k] * OWNER_RATING_WEIGHTS[k], 0)) + ownerDecisionsRatingBonus(state, row.clubId); // W5: vize a reinvestice
     return { clubId: row.clubId, score, grade: gradeOf(score), parts, position, expected, played: row.played };
   });
   return rows.sort((a, b) => b.score - a.score || a.position - b.position);

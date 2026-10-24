@@ -1,4 +1,5 @@
 import { addDays } from './calendar';
+import { easeAdd } from './ease'; // W2 kalibrace: tlumení zisků nad ~80
 import { allFixtures } from './competitions';
 import { freshOwnMatch, matchesWord, seasonFacts, type OwnMatchFacts, type SeasonFacts } from './facts';
 import { fine, league, media } from './grey';
@@ -575,7 +576,7 @@ export function maybePressConference(state: GameState, m: OwnMatchFacts): PressC
 function applyEffect(state: GameState, e: PressEffect, playerId: string | undefined, key: string): string | undefined {
   const own = state.owner.clubId;
   if (e.media) media(state, e.media);
-  if (e.coach) state.owner.trust.trener = clamp(state.owner.trust.trener + e.coach, 0, 100);
+  if (e.coach) state.owner.trust.trener = easeAdd(state.owner.trust.trener, e.coach);
   if (e.team) for (const p of squadOf(state, own)) p.morale = clamp(p.morale + e.team, 0, 100);
   if (e.fans) state.clubs[own].fanMood = clamp(state.clubs[own].fanMood + e.fans, 0, 100);
   if (e.league) league(state, e.league);

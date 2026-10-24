@@ -60,14 +60,16 @@ describe('V3: domácí pohár', () => {
 
 describe('V3: Evropa', () => {
   it('předkola s padáky a šance na ligovou fázi', () => {
-    const v = europeView(start)!;
+    // v0.29: Slavia jako mistr hraje rovnou ligovou fázi, předkola hraje Sparta (2. předkolo LM).
+    const sparta = newGame(pack as DataPack, { clubId: 'sparta', ownerName: 'T', difficulty: 'stredni', seed: 11 });
+    const v = europeView(sparta)!;
     expect(v.qualifying).toHaveLength(1);
     expect(v.qualifying[0].parachute).toMatch(/padák|konec/i);
     expect(v.chain[0].comp).toBe(v.entry);
     const p = v.chances.filter((c) => c.key.startsWith('liga-')).reduce((a, c) => a + c.p, 0);
     expect(p).toBeGreaterThan(0);
     expect(p).toBeLessThanOrEqual(1);
-    expect(drawPreview(start).some((d) => d.key === 'liga')).toBe(true);
+    expect(drawPreview(sparta).some((d) => d.key === 'liga')).toBe(true);
   });
 
   it('ligová fáze: tabulka 36 s pásmy, karty soupeřů, konečné pořadí sedí s hrou', () => {

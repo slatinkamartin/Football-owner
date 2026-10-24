@@ -33,8 +33,8 @@ const QUALIFYING: Record<EuropeCompetition, number> = { LM: 25_000_000, EL: 15_0
 export const EUROPE_BONUS_SHARE = 0.15;
 
 /** Rozsah evropských peněz před předkoly: jen předkola, nebo ligová fáze s nejlepšími výsledky. */
-export function europeRange(entry: EuropeCompetition): { low: number; high: number } {
-  return { low: QUALIFYING[entry], high: QUALIFYING[entry] + LEAGUE_PHASE[entry] * 1.5 };
+export function europeRange(entry: EuropeCompetition, stage?: EuroStage): { low: number; high: number } {
+  return { low: QUALIFYING[entry] + (stage === 'liga' ? LEAGUE_PHASE[entry] : 0), high: QUALIFYING[entry] + LEAGUE_PHASE[entry] * 1.5 };
 }
 
 /** Síla kádru, při které má klub poloviční šanci projít do ligové fáze. */
@@ -51,17 +51,153 @@ export function leaguePhaseChance(strength: number, comp: EuropeCompetition): nu
   return 1 / (1 + Math.exp(-(strength - THRESHOLD[comp]) / 2));
 }
 
-/** Konec sezóny: kdo z 1. ligy hraje příští rok Evropu (1. a 2. LM, 3. a vítěz poháru EL, 4. KL). */
+// ---------- W1 v0.29: přístupový seznam UEFA ----------
+//
+// Vstupy českých klubů podle pozice Česka v žebříčku koeficientů UEFA (10. místo → platí pro 2027/28):
+// - mistr → Liga mistrů, přímo ligová fáze;
+// - 2. místo → Liga mistrů, 2. předkolo (ligová cesta);
+// - 3. místo → Evropská liga, 2. předkolo;
+// - 4. místo → Konferenční liga, 2. předkolo;
+// - vítěz domácího poháru (MOL Cup) → Evropská liga, play-off.
+// Když vítěz poháru už má místo z ligy (skončil 1.–4.), vstupy se posunou nahoru:
+// 3. místo → EL play-off, 4. místo → EL 2. předkolo, 5. místo → KL 2. předkolo.
+// Kdo v předkolech vypadne, padá o soutěž níž (LM → EL → KL) do dalšího předkola;
+// poražený v play-off LM/EL hraje ligovou fázi nižší soutěže.
+
+/** Pozice Česka v žebříčku asociací UEFA (určuje přístupový seznam). */
+export const CZ_ASSOCIATION_RANK = 10;
+
+/** Vstupní fáze: přímo ligová fáze, 2. předkolo, 3. předkolo (jen po pádu), play-off. */
+export type EuroStage = 'liga' | 'Q2' | 'Q3' | 'PO';
+export const EURO_STAGE_LABEL: Record<EuroStage, string> = { liga: 'ligová fáze', Q2: '2. předkolo', Q3: '3. předkolo', PO: 'play-off' };
+/** Termín předkola (0 = 2. předkolo, 1 = 3. předkolo, 2 = play-off). */
+const STAGE_SLOT: Record<Exclude<EuroStage, 'liga'>, number> = { Q2: 0, Q3: 1, PO: 2 };
+const STAGE_GEN: Record<EuroStage, string> = { liga: 'ligové fáze', Q2: '2. předkola', Q3: '3. předkola', PO: 'play-off' };
+const SLOT_NAME = ['2. předkolo', '3. předkolo', 'Play-off'];
+/** Počet dvojzápasů do ligové fáze podle vstupní fáze. */
+export const TIES_TO_LEAGUE: Record<EuroStage, number> = { liga: 0, Q2: 3, Q3: 2, PO: 1 };
+
+export interface AccessSlot {
+  comp: EuropeCompetition;
+  stage: EuroStage;
+}
+
+/** Přístupový seznam pro danou pozici asociace: místa podle ligy (1., 2., …) a místo pro vítěze poháru. */
+export const ACCESS_LIST: Record<number, { league: AccessSlot[]; cup: AccessSlot }> = {
+  10: {
+    league: [
+      { comp: 'LM', stage: 'liga' },
+      { comp: 'LM', stage: 'Q2' },
+      { comp: 'EL', stage: 'Q2' },
+      { comp: 'KL', stage: 'Q2' },
+    ],
+    cup: { comp: 'EL', stage: 'PO' },
+  },
+};
+
+/** Popisek vstupu, např. „Liga mistrů – 2. předkolo“. */
+export function accessLabel(slot: AccessSlot): string {
+  return `${EUROPE_LABEL[slot.comp]} – ${EURO_STAGE_LABEL[slot.stage]}`;
+}
+
+const STAGE_RANK: Record<EuroStage, number> = { liga: 0, PO: 1, Q3: 2, Q2: 3 };
+/** Hodnota vstupu (menší = lepší): soutěž, pak fáze (play-off je blíž ligové fázi než 2. předkolo). */
+const slotValue = (x: AccessSlot) => ['LM', 'EL', 'KL'].indexOf(x.comp) * 10 + STAGE_RANK[x.stage];
+
+/**
+ * Evropská místa podle konečného pořadí a vítěze poháru. Vrací místa v pořadí (index = místo − 1)
+ * a místo vítěze poháru, pokud do Evropy jde mimo ligová místa.
+ */
+export function europeAllocation(order: string[], cupWinner?: string, rank = CZ_ASSOCIATION_RANK): { clubId: string; slot: AccessSlot; viaCup?: boolean }[] {
+  const access = ACCESS_LIST[rank] ?? ACCESS_LIST[CZ_ASSOCIATION_RANK];
+  const n = access.league.length;
+  const top = order.slice(0, n);
+  if (!cupWinner || !top.includes(cupWinner)) {
+    const out: { clubId: string; slot: AccessSlot; viaCup?: boolean }[] = top.map((clubId, i) => ({ clubId, slot: access.league[i] }));
+    if (cupWinner) out.push({ clubId: cupWinner, slot: access.cup, viaCup: true });
+    return out;
+  }
+  // Vítěz poháru má místo z ligy: místa LM zůstávají, ostatní (i pohárové) se posunou nahoru o jedno místo.
+  const fixed = access.league.filter((x) => x.comp === 'LM');
+  const rest = [...access.league.filter((x) => x.comp !== 'LM'), access.cup].sort((a, b) => slotValue(a) - slotValue(b));
+  return [...fixed, ...rest].map((slot, i) => ({ clubId: order[i], slot })).filter((x) => x.clubId);
+}
+
+/** Evropská pásma tabulky 1. ligy podle (průběžného) konečného pořadí a vítěze poháru, pokud už je znám. */
+export function europeZones(state: GameState, order: string[]): Map<string, AccessSlot & { viaCup?: boolean }> {
+  const winner = state.cups.pohar?.winner;
+  const cup = winner && state.clubs[winner] && !state.clubs[winner].reserveOf ? winner : undefined;
+  return new Map(europeAllocation(order, cup).map((x) => [x.clubId, { ...x.slot, viaCup: x.viaCup }]));
+}
+
+/** Konec sezóny: kdo z 1. ligy hraje příští rok Evropu (přístupový seznam UEFA). */
 export function qualifyEurope(state: GameState, table: { clubId: string }[], cupWinner?: string): void {
   if (!table.length) return;
-  const slots: EuropeCompetition[] = ['LM', 'LM', 'EL', 'KL'];
-  const entries: EuropeEntry[] = table.slice(0, 4).map((r, i) => ({ season: state.season + 1, clubId: r.clubId, entry: slots[i], result: 'predkola', revenue: 0 }));
-  if (cupWinner && !entries.some((e) => e.clubId === cupWinner) && table.some((r) => r.clubId === cupWinner)) {
-    entries.push({ season: state.season + 1, clubId: cupWinner, entry: 'EL', result: 'predkola', revenue: 0 });
-  } else if (table[4]) {
-    entries.push({ season: state.season + 1, clubId: table[4].clubId, entry: 'KL', result: 'predkola', revenue: 0 });
-  }
+  const order = table.map((r) => r.clubId);
+  const cup = cupWinner && state.clubs[cupWinner] && !state.clubs[cupWinner].reserveOf ? cupWinner : undefined;
+  const entries: EuropeEntry[] = europeAllocation(order, cup).map((x) => ({ season: state.season + 1, clubId: x.clubId, entry: x.slot.comp, stage: x.slot.stage, result: 'predkola', revenue: 0 }));
   state.europe = { season: state.season + 1, entries };
+}
+
+/** Prahy síly pro výhru dvojzápasu předkola (0 = 2. předkolo, 1 = 3. předkolo, 2 = play-off). */
+const TIE_THRESHOLD: Record<EuropeCompetition, [number, number, number]> = {
+  LM: [64, 67, 70.5],
+  EL: [60.5, 63.5, 66.5],
+  KL: [57, 60, 63],
+};
+
+/** Šance vyhrát dvojzápas předkola podle síly kádru. */
+export function qualifyingTieChance(strength: number, comp: EuropeCompetition, slot: number): number {
+  return 1 / (1 + Math.exp(-(strength - TIE_THRESHOLD[comp][Math.max(0, Math.min(2, slot))]) / 2));
+}
+
+/** Co následuje po dvojzápasu předkola: další předkolo, ligová fáze, nebo konec. */
+export function qualifyingNext(comp: EuropeCompetition, slot: number, won: boolean): { comp: EuropeCompetition; slot: number } | { league: EuropeCompetition } | undefined {
+  if (won) return slot >= 2 ? { league: comp } : { comp, slot: slot + 1 };
+  const next = NEXT[comp];
+  if (!next) return undefined;
+  return slot >= 2 ? { league: next } : { comp: next, slot: slot + 1 };
+}
+
+/** Text padáku / postupu k dvojzápasu předkola (pro kartu Evropy). */
+export function qualifyingOutcomeText(comp: EuropeCompetition, slot: number, status: 'postup' | 'vyrazeni' | 'hraje'): string {
+  const win = qualifyingNext(comp, slot, true)!;
+  const lose = qualifyingNext(comp, slot, false);
+  const describe = (x: ReturnType<typeof qualifyingNext>) =>
+    !x ? 'konec v Evropě' : 'league' in x ? `ligová fáze ${COMP_GEN[x.league]}` : `${SLOT_NAME[x.slot].toLowerCase()} ${COMP_GEN[x.comp]}`;
+  if (status === 'postup') return `Postup: ${describe(win)}`;
+  if (status === 'vyrazeni') return lose ? `Padák: ${describe(lose)}` : 'Konec evropské sezóny';
+  return `Výhra: ${describe(win)} · při vyřazení ${lose ? `padák: ${describe(lose)}` : 'konec v Evropě'}`;
+}
+
+/** Pravděpodobnosti ligové fáze jednotlivých soutěží z dané vstupní fáze (a šance na výhru prvního dvojzápasu). */
+export function pathChances(strength: number, comp: EuropeCompetition, stage: EuroStage, firstTie?: number): Partial<Record<EuropeCompetition, number>> {
+  const out: Partial<Record<EuropeCompetition, number>> = {};
+  if (stage === 'liga') return { [comp]: 1 };
+  const walk = (c: EuropeCompetition, slot: number, p: number, first: boolean) => {
+    if (p < 1e-6) return;
+    const w = first && firstTie !== undefined ? firstTie : qualifyingTieChance(strength, c, slot);
+    for (const [won, q] of [[true, w], [false, 1 - w]] as const) {
+      const nx = qualifyingNext(c, slot, won);
+      if (!nx) continue;
+      if ('league' in nx) out[nx.league] = (out[nx.league] ?? 0) + p * q;
+      else walk(nx.comp, nx.slot, p * q, false);
+    }
+  };
+  walk(comp, STAGE_SLOT[stage], 1, true);
+  return out;
+}
+
+/** Simulace cesty předkoly pro kluby mimo klub majitele. */
+function simulatePath(rng: Rng, strength: number, comp: EuropeCompetition, stage: EuroStage): EuropeCompetition | 'predkola' {
+  if (stage === 'liga') return comp;
+  let at: { comp: EuropeCompetition; slot: number } = { comp, slot: STAGE_SLOT[stage] };
+  for (;;) {
+    const nx = qualifyingNext(at.comp, at.slot, rng.chance(qualifyingTieChance(strength, at.comp, at.slot)));
+    if (!nx) return 'predkola';
+    if ('league' in nx) return nx.league;
+    at = nx;
+  }
 }
 
 // ---------- Evropské kluby (skutečné názvy, síla v měřítku hry) ----------
@@ -113,6 +249,17 @@ export const EURO_CLUBS: EuroClub[] = [
   C('Rīgas FS', 'Lotyšsko', 4, 63), C('Žalgiris Vilnius', 'Litva', 4, 62), C('FK Astana', 'Kazachstán', 4, 64),
 ];
 
+/** W1 v0.29: slabší mistři a pohárníci menších lig – soupeři jen v raných předkolech (2. a 3. předkolo). */
+export const EURO_QUAL_CLUBS: EuroClub[] = [
+  C('Levski Sofie', 'Bulharsko', 4, 62), C('Borac Banja Luka', 'Bosna a Hercegovina', 4, 61), C('Zrinjski Mostar', 'Bosna a Hercegovina', 4, 61),
+  C('FC Noah', 'Arménie', 4, 60), C('Sabah FK', 'Ázerbájdžán', 4, 60), C('Dinamo Minsk', 'Bělorusko', 4, 59),
+  C('Ballkani', 'Kosovo', 4, 59), C('Dinamo Tbilisi', 'Gruzie', 4, 59), C('Flora Tallinn', 'Estonsko', 4, 58),
+  C('Shkëndija', 'Severní Makedonie', 4, 58), C('Iberia 1999', 'Gruzie', 4, 58), C('Víkingur Reykjavík', 'Island', 4, 57),
+  C('The New Saints', 'Wales', 4, 57), C('Budućnost Podgorica', 'Černá Hora', 4, 57), C('Valmiera FC', 'Lotyšsko', 4, 57),
+  C('KÍ Klaksvík', 'Faerské ostrovy', 4, 56), C('Petrocub Hîncești', 'Moldavsko', 4, 56), C('KF Egnatia', 'Albánie', 4, 56),
+  C('Larne FC', 'Severní Irsko', 4, 55), C('Lincoln Red Imps', 'Gibraltar', 4, 54), C('FC Differdange 03', 'Lucembursko', 4, 54),
+];
+
 // ---------- Evropská cesta klubu majitele ----------
 
 export interface EuroOpponent {
@@ -148,6 +295,8 @@ export interface EuroMatch {
   opponent: EuroOpponent;
   tie?: number;
   leg?: 1 | 2;
+  /** W1 v0.29: termín předkola (0 = 2. předkolo, 1 = 3. předkolo, 2 = play-off); chybí u starších her. */
+  slot?: number;
   result?: EuroMatchResult;
   /** Starší uložené hry: předem daný výsledek předkola (nové zápasy se hrají po minutách, V4). */
   planned?: { own: number; opp: number; ownPens?: boolean };
@@ -171,6 +320,8 @@ export interface EuroRun {
   /** Ligová fáze, kam klub postoupil z předkol. */
   leagueComp?: EuropeCompetition;
   nextTie: number;
+  /** W1 v0.29: aktuální termín předkol podle přístupového seznamu; chybí = starší model (jeden dvojzápas o ligovou fázi). */
+  slot?: number;
 }
 
 const COMP_GEN: Record<EuropeCompetition, string> = { LM: 'Ligy mistrů', EL: 'Evropské ligy', KL: 'Konferenční ligy' };
@@ -239,9 +390,9 @@ function usedNames(run: EuroRun): Set<string> {
   return new Set(run.matches.map((m) => m.opponent.name));
 }
 
-function drawClub(rng: Rng, run: EuroRun, levels: (1 | 2 | 3 | 4)[], near?: number, exclude: Set<string> = new Set()): EuroOpponent {
+function drawClub(rng: Rng, run: EuroRun, levels: (1 | 2 | 3 | 4)[], near?: number, exclude: Set<string> = new Set(), early = false): EuroOpponent {
   const used = new Set([...usedNames(run), ...exclude]);
-  let pool = EURO_CLUBS.filter((c) => levels.includes(c.level) && !used.has(c.name));
+  let pool = (early ? [...EURO_CLUBS, ...EURO_QUAL_CLUBS] : EURO_CLUBS).filter((c) => levels.includes(c.level) && !used.has(c.name));
   if (near !== undefined) {
     const close = pool.filter((c) => Math.abs(c.rating - near) <= 3);
     if (close.length >= 2) pool = close;
@@ -256,10 +407,10 @@ function newMatchId(state: GameState, run: EuroRun): string {
   return `eu-${run.season}-${++state.nextId}`;
 }
 
-function addTie(state: GameState, run: EuroRun, comp: EuropeCompetition, stage: string, dates: [string, string], opponent: EuroOpponent, homeFirst: boolean): void {
+function addTie(state: GameState, run: EuroRun, comp: EuropeCompetition, stage: string, dates: [string, string], opponent: EuroOpponent, homeFirst: boolean, slot?: number): void {
   const tie = run.nextTie++;
-  run.matches.push({ id: newMatchId(state, run), date: freeDate(state, dates[0]), comp, stage, home: homeFirst, opponent, tie, leg: 1 });
-  run.matches.push({ id: newMatchId(state, run), date: freeDate(state, dates[1]), comp, stage, home: !homeFirst, opponent, tie, leg: 2 });
+  run.matches.push({ id: newMatchId(state, run), date: freeDate(state, dates[0]), comp, stage, home: homeFirst, opponent, tie, leg: 1, slot });
+  run.matches.push({ id: newMatchId(state, run), date: freeDate(state, dates[1]), comp, stage, home: !homeFirst, opponent, tie, leg: 2, slot });
 }
 
 /** Úroveň soupeře v předkolech podle soutěže. */
@@ -269,9 +420,13 @@ const QUAL_LEVELS: Record<EuropeCompetition, (1 | 2 | 3 | 4)[]> = { LM: [3, 4], 
 function addQualifyingTie(state: GameState, rng: Rng, run: EuroRun, comp: EuropeCompetition, slot: number): EuroOpponent {
   // V4: nasazení – silnější klub losuje slabšího soupeře; o postupu pak rozhodne poctivý dvojzápas.
   const s = europeStrength(state, run.clubId);
-  const near = THRESHOLD[comp] - 0.6 * (s - THRESHOLD[comp]) + rng.normal(0, 1.5);
-  const opponent = drawClub(rng, run, QUAL_LEVELS[comp], near);
-  addTie(state, run, comp, `Play-off ${COMP_GEN[comp]}`, qualifyingSlots(run.season, comp)[slot], opponent, rng.chance(0.5));
+  // W1 v0.29: s přístupovým seznamem má každé předkolo vlastní práh (dřívější předkola = slabší soupeři).
+  const modern = run.slot !== undefined;
+  const t = modern ? TIE_THRESHOLD[comp][slot] : THRESHOLD[comp];
+  const near = t - 0.6 * (s - t) + rng.normal(0, 1.5);
+  const opponent = drawClub(rng, run, QUAL_LEVELS[comp], near, undefined, modern && slot < 2);
+  const stage = modern ? `${SLOT_NAME[slot]} ${COMP_GEN[comp]}` : `Play-off ${COMP_GEN[comp]}`;
+  addTie(state, run, comp, stage, qualifyingSlots(run.season, comp)[slot], opponent, rng.chance(0.5), modern ? slot : undefined);
   return opponent;
 }
 
@@ -282,9 +437,29 @@ export function startEurope(state: GameState, rng: Rng): void {
   const own = eu.entries.find((e) => e.clubId === state.owner.clubId);
   if (own) {
     // Odhad do rozpočtu: peníze za předkola plus vážená šance na ligovou fázi.
-    own.revenue = expectedRevenue(state, own.clubId, own.entry);
+    own.revenue = expectedRevenue(state, own.clubId, own.entry, own.stage);
     const run: EuroRun = { season: state.season, clubId: own.clubId, comp: own.entry, phase: 'predkola', matches: [], points: 0, gf: 0, ga: 0, best: 'předkola', nextTie: 0 };
     eu.run = run;
+    if (own.stage === 'liga') {
+      // W1 v0.29: mistr ligy jde rovnou do ligové fáze Ligy mistrů.
+      addNews(state, { kind: 'sezona', title: `Přímo do ligové fáze: ${EUROPE_LABEL[own.entry]}`, text: 'Jako mistr ligy nehrajete předkola. Ligová fáze začíná v září, domácí večery budou vyprodané.' });
+      startLeaguePhase(state, rng, run, own.entry);
+      return;
+    }
+    if (own.stage) {
+      const slot = STAGE_SLOT[own.stage];
+      run.slot = slot;
+      const opp = addQualifyingTie(state, rng, run, own.entry, slot);
+      const first = run.matches[0];
+      noteDraw(state, first.stage, [opp]);
+      const p = pathChances(europeStrength(state, own.clubId), own.entry, own.stage);
+      addNews(state, {
+        kind: 'sezona',
+        title: `Los: ${first.stage}`,
+        text: `Vstupujete do ${STAGE_GEN[own.stage]} (${EUROPE_LABEL[own.entry]}), do ligové fáze ${TIES_TO_LEAGUE[own.stage] === 1 ? 'zbývá 1 dvojzápas' : `vedou ${TIES_TO_LEAGUE[own.stage]} dvojzápasy`}. První zápas ${formatShortDate(first.date)} ${first.home ? 'doma' : 'venku'} se soupeřem ${opp.name}. Šance na ligovou fázi ${EUROPE_LABEL[own.entry]} asi ${Math.round((p[own.entry] ?? 0) * 100)} %, na některou ligovou fázi asi ${Math.round(Object.values(p).reduce((a, b) => a + (b ?? 0), 0) * 100)} %. Kdo vypadne, padá do nižší soutěže.`,
+      });
+      return;
+    }
     const slot = own.entry === 'LM' ? 0 : own.entry === 'EL' ? 1 : 2;
     const opp = addQualifyingTie(state, rng, run, own.entry, slot);
     const first = run.matches[0];
@@ -297,10 +472,14 @@ export function startEurope(state: GameState, rng: Rng): void {
   }
 }
 
-function expectedRevenue(state: GameState, clubId: string, entry: EuropeCompetition): number {
+function expectedRevenue(state: GameState, clubId: string, entry: EuropeCompetition, stage?: EuroStage): number {
   const s = europeStrength(state, clubId);
-  let left = 1;
   let total = QUALIFYING[entry];
+  if (stage) {
+    for (const [c, p] of Object.entries(pathChances(s, entry, stage)) as [EuropeCompetition, number][]) total += p * LEAGUE_PHASE[c] * 1.2;
+    return Math.round(total / 1_000_000) * 1_000_000;
+  }
+  let left = 1;
   for (let c: EuropeCompetition | undefined = entry; c; c = NEXT[c]) {
     const p = leaguePhaseChance(s, c);
     total += left * p * LEAGUE_PHASE[c] * 1.2;
@@ -323,6 +502,8 @@ export function resolveEurope(state: GameState, rng: Rng): void {
     if (run) {
       // Klub majitele: rozhodly odehrané dvojzápasy.
       result = run.leagueComp ?? 'predkola';
+    } else if (e.stage) {
+      result = simulatePath(rng, s, e.entry, e.stage); // W1 v0.29
     } else {
       for (let c: EuropeCompetition | undefined = e.entry; c; c = NEXT[c]) {
         if (rng.chance(leaguePhaseChance(s, c))) {
@@ -332,7 +513,7 @@ export function resolveEurope(state: GameState, rng: Rng): void {
       }
     }
     e.result = result;
-    book(state, e.clubId, 'evropa', QUALIFYING[e.entry], `Evropské poháry: předkola (${EUROPE_LABEL[e.entry]})`);
+    book(state, e.clubId, 'evropa', QUALIFYING[e.entry], e.stage === 'liga' ? `Evropské poháry: vstupní prémie (${EUROPE_LABEL[e.entry]})` : `Evropské poháry: předkola (${EUROPE_LABEL[e.entry]})`);
     book(state, e.clubId, 'platy', -QUALIFYING[e.entry] * EUROPE_BONUS_SHARE, 'Prémie hráčům za evropské poháry');
     e.revenue = QUALIFYING[e.entry];
     if (result !== 'predkola') {
@@ -608,6 +789,31 @@ function koRound(m: EuroMatch): number {
 function afterMatch(state: GameState, rng: Rng, run: EuroRun, m: EuroMatch): void {
   const club = state.clubs[run.clubId];
   const season = `${run.season}/${String(run.season + 1).slice(2)}`;
+  if (run.phase === 'predkola' && m.leg === 2 && run.slot !== undefined) {
+    // W1 v0.29: předkola podle přístupového seznamu (2. předkolo → 3. předkolo → play-off), padáky o soutěž níž.
+    const won = tieWinner(state, rng, run, m);
+    const slot = m.slot ?? run.slot;
+    const nx = qualifyingNext(m.comp, slot, won);
+    if (!nx) {
+      run.phase = 'konec';
+      addNews(state, { kind: 'info', title: `Konec v Evropě: ${m.stage.toLowerCase()} s ${m.opponent.name}`, text: 'Nižší soutěž už není, evropská sezóna končí.' });
+      return;
+    }
+    if ('league' in nx) {
+      if (!won) addNews(state, { kind: 'info', title: `Padák: ligová fáze ${COMP_GEN[nx.league]}`, text: `Play-off se nepovedlo, ale vyřazení z play-off znamená jistou ligovou fázi ${COMP_GEN[nx.league]}.` });
+      startLeaguePhase(state, rng, run, nx.league);
+      return;
+    }
+    run.slot = nx.slot;
+    run.comp = nx.comp;
+    const opp = addQualifyingTie(state, rng, run, nx.comp, nx.slot);
+    const stage = `${SLOT_NAME[nx.slot]} ${COMP_GEN[nx.comp]}`;
+    noteDraw(state, stage, [opp]);
+    addNews(state, won
+      ? { kind: 'sezona', title: `Postup! Los: ${stage}`, text: `Soupeř: ${opp.name} (${opp.country}). ${nx.slot === 2 ? 'Vítěz jde do ligové fáze, poražený padá o soutěž níž.' : 'Do ligové fáze zbývají dva dvojzápasy.'}` }
+      : { kind: 'info', title: `Druhá šance: ${stage}`, text: `Po vyřazení pokračujete v nižší soutěži. Soupeř: ${opp.name} (${opp.country}).` });
+    return;
+  }
   if (run.phase === 'predkola' && m.leg === 2) {
     const won = tieWinner(state, rng, run, m);
     if (won) {

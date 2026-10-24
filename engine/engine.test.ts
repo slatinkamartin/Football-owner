@@ -153,7 +153,8 @@ describe('průběh hry', () => {
     const table = computeTable(comp, almostDone);
     for (const row of table) {
       const group = comp.groups!.find((g) => g.clubIds.includes(row.clubId))!;
-      expect(row.played).toBe(30 + (group.clubIds.length - 1) * 2);
+      // v0.29: skupiny o titul a o záchranu jednokolově (5 kol), 7.–10. hraje play-off mimo ligovou tabulku.
+      expect(row.played).toBe(30 + (group.playoff ? 0 : group.clubIds.length - 1));
     }
     const draws = table.reduce((s, r) => s + r.drawn, 0) / 2;
     const matches = comp.fixtures.length;

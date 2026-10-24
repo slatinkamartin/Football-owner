@@ -15,6 +15,7 @@ import type { GameState, IncomingOffer, Negotiation, Player, Position, TransferP
 import { addNews, clamp, clubLabel, FOREIGN_PREFIX, FREE, hash01, isForeign, plural, tierOf, transferWindow } from './world';
 import { intlValueFactor } from './stars';
 import { rivalOverbid } from './rivals';
+import { visionMaxAge, wageCapBlock } from './ownerdecisions'; // W5
 
 const MIN_SQUAD = 18;
 /** Velikost kádru, kterou drží sportovní ředitel. */
@@ -738,6 +739,8 @@ export function renewContract(prev: GameState, playerId: string, wage: number, y
   if (!Number.isFinite(wage) || !Number.isFinite(years)) return { state: prev, ok: false, message: 'Zadejte platnou částku a délku smlouvy.' };
   const demand = renewalDemand(prev, p);
   if (wage < demand) return { state: prev, ok: false, message: `${playerName(p)} chce aspoň ${demand.toLocaleString('cs-CZ')} Kč měsíčně.` };
+  const capBlock = wageCapBlock(prev, p, wage); // W5: platový strop
+  if (capBlock) return { state: prev, ok: false, message: capBlock };
   const state = structuredClone(prev);
   const player = state.players[playerId];
   player.wage = roundMoney(wage, 1_000);
@@ -916,7 +919,7 @@ export function directorSignings(state: GameState, rng: Rng): void {
   const gain = lower ? 2 : 4;
   const repGap = lower ? 10 : 3;
   const candidates = Object.values(state.players)
-    .filter((p) => p.position === position && p.clubId !== own && !isForeign(p.clubId) && p.overall >= bar + gain && playerAge(p, state.season) <= (lower ? 32 : 30))
+    .filter((p) => p.position === position && p.clubId !== own && !isForeign(p.clubId) && p.overall >= bar + gain && playerAge(p, state.season) <= visionMaxAge(state, lower ? 32 : 30)) // W5: vize klubu
     .filter((p) => p.clubId === FREE || (state.clubs[p.clubId] && state.clubs[p.clubId].reputation <= club.reputation + repGap && !keys.has(p.id)))
     .map((p) => ({ p, fee: askingPrice(state, p, keys), wage: wageDemand(state, p, own) }))
     .filter((x) => x.fee <= remaining * 0.6 && interest(state, x.p, own).ok && wageBill(state, own) + x.wage <= wageBudgetMonthly(club))

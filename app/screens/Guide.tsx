@@ -10,7 +10,7 @@ import { Icon } from '../icons';
 export type GuideTipId = 'agenda' | 'inbox' | 'step';
 
 const TIPS: { id: GuideTipId; title: string; text: string }[] = [
-  { id: 'agenda', title: 'Agenda týdne', text: 'Každý týden máte několik akcí: porada s trenérem, oběd se sponzorem, cesta za hráčem… Vyberte, čemu se tento týden věnujete. Nevyužité akce v neděli propadnou.' },
+  { id: 'agenda', title: 'Priority měsíce', text: 'Na začátku měsíce vyberte 2–3 oblasti (trenér a kabina, sponzoři, skauting…). Konkrétní kroky pak každý týden udělá vedení samo – během měsíce nemusíte nic klikat. Když nevyberete, vedení zvolí samo s polovičním účinkem.' },
   { id: 'inbox', title: 'Schránka rozhodnutí', text: 'Všechno, co čeká na vaše slovo, je tady seřazené podle termínu. Když nerozhodnete, platí výchozí volba – nic se nezasekne.' },
   { id: 'step', title: 'Posun hry', text: 'Tlačítkem posunu jdete na další zápas, milník nebo o týden dál. V předvečer zápasu otevře přípravu a přenos.' },
 ];

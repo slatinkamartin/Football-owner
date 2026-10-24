@@ -5,6 +5,7 @@ import { agentOf, agentsOf, changeAgentRelation } from './market';
 import { FIRST_NAMES, LAST_NAMES } from './names';
 import { addOwnerXp, XP } from './ownerlevel';
 import { playerAge, squadOf } from './players';
+import { currentCaptain } from './chemistry'; // W4: zvolený kapitán
 import { addPromise, decisionBudgetLeft, situationsOf } from './situations';
 import { contracts } from './sponsors';
 import { coachOf, directorOf, type ActionResult } from './staff';
@@ -81,6 +82,8 @@ function fictionalName(state: GameState, key: string): string {
 
 /** Kapitán: nejzkušenější z nejlepších hráčů kádru (skutečný hráč – jen sportovní témata). */
 export function captainOf(state: GameState): Player | undefined {
+  const chosen = currentCaptain(state); // W4: kapitán zvolený majitelem (nebo návrh trenéra)
+  if (chosen) return chosen;
   const list = [...squad(state)].sort((a, b) => b.overall - a.overall).slice(0, 8);
   return list.sort((a, b) => playerAge(b, state.season) + b.overall / 4 - (playerAge(a, state.season) + a.overall / 4) || a.id.localeCompare(b.id))[0];
 }
